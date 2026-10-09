@@ -2,6 +2,14 @@
 
 ## Unreleased — 2026-10-09
 
+### Phase 2 publication and documentation
+
+- Merge the validated Phase 2 work into main following owner approval.
+- Organize the English and Traditional Chinese READMEs around current results,
+  architecture, modes, build/run instructions, recovery and evidence links.
+- Update publication status and correct the derived registration-name summary
+  to `scx_lertick`, matching all 240 final Lertick trials. Raw data is unchanged.
+
 ### Phase 2 correctness and reproducible measurement
 
 - Include pending actual CPU service when selecting continuation budgets,

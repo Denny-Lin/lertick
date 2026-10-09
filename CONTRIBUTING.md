@@ -1,15 +1,15 @@
 # Contributing to Lertick
 
-Lertick is an experimental CPU scheduler focused on online machine learning in Linux sched_ext and eBPF. Phase 1 implements and validates a minimal Linux scheduler. Contributions can improve correctness, compatibility, reproducibility, and documentation. Current maintainership belongs to the repository owner, Denny-Lin; this is a new project with no claimed external contributor community yet.
+Lertick is an experimental CPU scheduler focused on online machine learning in Linux sched_ext and eBPF. Phase 1 established the minimal Linux scheduler; published Phase 2 adds correctness validation and reproducible benchmarks. Contributions can improve correctness, compatibility, reproducibility, and documentation. Current maintainership belongs to the repository owner, Denny-Lin; this is a new project with no claimed external contributor community yet.
 
 Active work covers CPU-burst prediction, bounded adaptive time slices, CPU scheduling decisions, fairness, starvation prevention, low overhead, and reproducible benchmarks. Memory allocation, reclaim, DAMON/DAMOS control, NUMA memory placement, and joint CPU/memory management are outside the project scope. The [Phase 0 archive](docs/planning/README.md) preserves their historical research value without making them development alternatives.
 
 ## Workflow
 
-1. Read the [current results](docs/PHASE1_RESULTS.md), [deployment guide](docs/DEPLOYMENT.md), and historical [prior art](docs/planning/PRIOR_ART.md).
+1. Read the [current results](docs/PHASE2_RESULTS.md), [deployment guide](docs/DEPLOYMENT.md), and historical [prior art](docs/planning/PRIOR_ART.md).
 2. For a design change, open a focused proposal with the problem, alternatives, primary references, and falsifiable validation. Small documentation fixes may go directly to a pull request.
 3. Fork and create a topic branch. Keep one logical change per commit; use an imperative subject and explain why the change is needed.
-4. Run `python3 tests/check_docs.py`, `make test-model`, and `git diff --check`. Changes to scheduling or loading also need actual Linux verifier, execution, and recovery evidence from the [validation runner](tests/README.md). Document checks you could not run.
+4. Run `python3 tests/check_docs.py`, `make test-model test-accounting`, and `git diff --check`. Changes to scheduling or loading also need actual Linux verifier, execution, and recovery evidence from the [validation runner](tests/README.md). Document checks you could not run.
 5. Submit a pull request with scope, evidence, tests, compatibility, recovery implications, and licensing provenance. Do not invent measurements.
 
 Contributions are submitted under the applicable file's license. No CLA is currently required. Do not contribute material you cannot license. Preserve authorship and upstream SPDX identifiers. Review the implemented [license boundaries and provenance](THIRD_PARTY.md) before C/eBPF contributions.
@@ -44,4 +44,4 @@ The recorded Ubuntu ARM64 kernel `7.0.0-38-generic` passed actual runtime valida
 - Are licenses and copied code provenance correct?
 - Does the change keep the MVP small and independently reproducible?
 
-See [good first issue proposals](docs/GOOD_FIRST_ISSUES.md). Performance submissions use the benchmark issue template, [current workload guide](benchmarks/README.md), and CPU sections of the [historical protocol](docs/planning/BENCHMARK_PLAN.md). Phase 2 has not been approved; proposals do not authorize a new implementation phase.
+See [good first issue proposals](docs/GOOD_FIRST_ISSUES.md). Performance submissions use the benchmark issue template, [current workload guide](benchmarks/README.md), and CPU sections of the [historical protocol](docs/planning/BENCHMARK_PLAN.md). Phase 2A and Phase 2B are completed and published, with their merge into `main` approved. Further policy or model optimization requires separate approval; proposals do not authorize a new implementation phase.

@@ -1,61 +1,75 @@
 # Lertick — Linux 自我學習 CPU 排程器
 
-**Lertick 是實驗性的 Linux CPU 排程器，在 eBPF 內根據工作的歷史 CPU burst 線上學習，並透過 sched_ext 選擇有界限的時間片。**
+Lertick 是實驗性的 Linux CPU 排程器，在 eBPF 內根據工作的歷史 CPU burst 線上學習，並透過 sched_ext 選擇有界限的時間片。
 
-[English](README.md) · [部署與重現](docs/DEPLOYMENT.md) · [Phase 1 結果](docs/PHASE1_RESULTS.md) · [命名研究](docs/NAMING.md)
+[![CI](https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml)
+[English](README.md) · [部署指南](docs/DEPLOYMENT.md) · [Phase 2 結果](docs/PHASE2_RESULTS.md) · [基準測試](benchmarks/README.md)
 
-專案只研究 **使用 sched_ext 與 eBPF 的 Linux CPU 排程線上機器學習**，
-包括 burst 預測、自適應時間片、排程決策、公平性、避免飢餓、低排程成本，以及
-可重現的基準測試。訓練與推論都在核心內執行；userspace loader 只控制載入生命
-週期並讀取遙測。
+## 目前狀態
 
-**目前為已通過實際 Linux 部署的 Phase 1 實驗原型，尚非正式生產排程器。**
-Phase 2A 已在相同 Linux 客體通過正確性與安全測試；Phase 2B 完成 280 個基準
-trial 與 80 個成本／觀測控制 trial。線性模型未顯示相對 fixed 的可靠吞吐量
-增益，兩類 workload 的喚醒延遲反而退步。參閱
-[Phase 2 結果](docs/PHASE2_RESULTS.md)。不宣稱普遍優於 Linux EEVDF 或其他排程器。
+**Phase 2A 正確性驗證與 Phase 2B 基準測試已完成。目前是研究原型，實際驗證涵蓋一個 ARM64 Linux VM。** 編譯、BPF verifier、sched_ext 註冊、真實工作執行、核心內更新、自適應時間片及排程器回復皆已通過。
 
-## 技術功能與架構
+| 驗證項目 | 實際結果 |
+| --- | --- |
+| 環境 | Ubuntu 24.04.5 ARM64、Linux `7.0.0-38-generic`、QEMU 10.2.1/HVF、4 vCPU、4 GiB RAM |
+| 正確性與生命週期 | 19 個案例、156 個獨立使用量檢查、4,200-task churn，以及並行 fork 父程序建立的 8,000 個子工作皆通過 |
+| 回復 | SIGINT、SIGTERM、SIGKILL、SysRq-S 與 watchdog fallback，共 15 個測試通過 |
+| 基準測試 | 7 個策略 × 8 類工作負載 × 5 輪隨機順序，另加 80 個成本／觀測控制 trial；共 360 個 trial 全數通過 |
 
-- 以 C/eBPF 實作 struct_ops，參考固定版本的官方 sched_ext C 範例。
-- 保留共享 weighted virtual-time 佇列，以 `sum_exec_runtime` 計算實際 CPU
-  使用量；預測不決定排序，也不取代公平性使用量計算。
-- 跨搶占及時間片到期累積 CPU 執行量；只有經確認的喚醒至睡眠事件提供訓練
-  標籤，初始載入與退出事件會排除。
-- 每個工作使用五個因果特徵與 Q16 定點線性模型，在 eBPF callback 內執行
-  有界限、誤差裁切的 LMS 更新與推論，不需要 userspace trainer。
-- 八個有效標籤後可依預測選擇 0.5–5 ms 的時間片；無效或耗盡的預測回到固定值。
-- 有限時間的 libbpf loader、核心相容性檢查、JSONL 遙測、真實 CPU 工作負載與
-  獨立數值測試。
+**尚未證明線上學習能提供有用的排程效能增益。** 所有 online/fixed 吞吐量信賴區間都包含零變化。相對 fixed 時間片，online 的喚醒 p99 在 mixed 與 multicore 競爭中分別增加約 **214%** 與 **147%**。六類有有效標籤的工作負載，線性模型的同 episode MAE 均高於 EWMA。每策略五次的 VM 比較屬探索性結果，不能據此宣稱普遍優於 Linux EEVDF 或其他 sched_ext 排程器。
 
-| 模式 | 模型 | 新派送時間片 |
+[完整結果、不確定性與成本](docs/PHASE2_RESULTS.md) · [原始證據與分析指令](results/phase2/README.md)
+
+Phase 2C 最佳化暫緩。下一個研究重點是先理解預測值如何影響回應延遲，再決定是否調整模型。
+
+## 功能與模式
+
+- 以 C/eBPF struct_ops 實作，源自固定版本的[官方 sched_ext C 範例](THIRD_PARTY.md)。
+- weighted virtual-time 派送根據實際 CPU 使用量計費，與預測值分離。
+- 跨搶占及時間片到期累積 CPU burst；經確認的喚醒至睡眠事件提供標籤，初始載入與退出事件排除。
+- 每個工作使用五個特徵的 Q16 定點線性模型與有界限 LMS 更新：bias、上一個 burst、burst EWMA、睡眠間隔、佇列深度。
+- 訓練與推論在 eBPF 內完成；C/libbpf loader 管理載入與 JSONL 遙測。
+- 八個有效標籤後，依預測新派送的預設預算為 0.5–5 ms，固定回退值為 2 ms。界限適用新派送預算，不保證精確執行時間或恢復時的剩餘預算。
+
+| 模式 | 學習或預測 | 新派送時間片（預設） |
 | --- | --- | --- |
-| `fixed` | 停用 | 預設固定 2 ms |
-| `shadow` | eBPF 內訓練與推論 | 預設固定 2 ms |
-| `online` | eBPF 內訓練與推論 | 暖身後依預測設定有界限時間片 |
-| `ewma` | 歷史 burst EWMA；不訓練線性模型 | 暖身後依 EWMA 設定有界限時間片 |
+| `fixed` | 停用 | 固定 2 ms |
+| `shadow` | eBPF 內線性模型訓練與推論 | 固定 2 ms |
+| `ewma` | 歷史 burst EWMA；不訓練線性模型 | 暖身後依 EWMA 選擇有界限時間片 |
+| `online` | eBPF 內線性模型訓練與推論 | 暖身後依模型預測選擇有界限時間片 |
 
-架構流程為：喚醒時擷取歷史特徵 → eBPF 預測 → 暖身／固定值回退／時間片裁切
-→ weighted virtual-time 派送 → 實際 CPU 執行量累積 → 確認睡眠後完成 burst
-標籤 → eBPF 更新模型。特徵包含 bias、上一個 burst、burst EWMA、睡眠間隔與
-佇列深度。預設追蹤 `lertick` 名稱前綴，亦可用 `--tracked-tgid PID` 指定程序。
+模型預設追蹤名稱以 `lertick` 開頭的工作；`--tracked-tgid PID` 指定程序，`--track-all` 則對所有工作啟用學習。追蹤條件只決定模型資格，不限制 sched_ext 排程哪些工作。僅接管特定排程類別是另一個 `--partial` 選項。
 
-## 編譯與部署
+## 架構
 
-macOS 或 Linux 可執行可攜式檢查：
+```mermaid
+flowchart LR
+    W[工作喚醒：歷史特徵] --> P[eBPF 預測]
+    M[每工作 Q16 模型] --> P
+    P --> B[暖身、回退、有界限預算]
+    B --> D[Weighted virtual-time 派送]
+    D --> R[實際 CPU 執行]
+    R --> S[Stopping：提交 CPU 使用量]
+    S --> Q[確認睡眠：完成 burst]
+    Q --> T[eBPF 線上更新]
+    T --> M
+    L[C/libbpf loader] -. 載入與觀測 .-> D
+```
+
+持續執行工作的決策納入已提交及尚未提交的 CPU 使用量；只有 `stopping` 提交執行量與公平性費用。真正的 task/model storage 與有界限的 LRU 遙測 map 分離。預測影響時間片預算；派送順序與 CPU 選擇仍遵循既有策略。參閱[正確性與核心假設](docs/PHASE2_CORRECTNESS.md)。
+
+## 編譯與執行
+
+排程器需要支援 `CONFIG_SCHED_CLASS_EXT=y`、BPF syscall/JIT 與 live BTF 的 Linux 核心。請依照[部署指南](docs/DEPLOYMENT.md)準備已驗證的 Ubuntu QEMU 客體與固定版本依賴，並根據運行中的客體核心編譯。容器共享主機核心，不能取代這項部署驗證。
+
+取得原始碼：
 
 ```sh
 git clone https://github.com/Denny-Lin/lertick.git
 cd lertick
-make test-model
-python3 tests/check_docs.py
 ```
 
-實際排程器必須使用支援 `CONFIG_SCHED_CLASS_EXT`、BPF、BTF 的 Linux 核心。
-請依照[部署指南](docs/DEPLOYMENT.md)建立 QEMU 客體，安裝固定依賴並依運行中
-核心的 BTF 編譯。Docker 共享主機核心，不能取代 QEMU 驗證。
-
-在準備好的 Ubuntu 客體中：
+在準備好的 Linux 客體中：
 
 ```sh
 scripts/preflight.sh
@@ -63,99 +77,74 @@ scripts/build_libbpf.sh
 export PKG_CONFIG_PATH="$PWD/build/deps/install/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 make clean
 make CLANG=clang-18
-make test-model
+make test-model test-accounting
 sudo build/scx_lertick --check
-sudo build/scx_lertick --mode online --duration 10 \
-  --sample-ms 250 --stats-json /tmp/lertick.jsonl
+mkdir -p results/local
 ```
 
-[終端範例](examples/README.md)說明如何在載入期間執行具名 CPU 工作負載。
+在一個客體終端啟動有限時間排程器：
 
-## Phase 1 實際結果與基準狀態
+```sh
+sudo build/scx_lertick --mode online --duration 30 --sample-ms 1000 \
+  --stats-json results/local/scheduler.jsonl
+```
 
-原始驗證於 2026-10-09 使用 Ubuntu 24.04.5 ARM64、Linux `7.0.0-38-generic`、
-QEMU 10.2.1 與 HVF 硬體加速，配置四個 vCPU 及 4 GiB RAM。編譯、verifier、
-註冊、真實執行、線上更新、時間片影響及回復皆通過。online 記錄 1,345 次更新與
-1,355 個自適應執行區段；shadow 更新 1,348 次，fixed 不訓練。
+運行期間，在另一個客體終端確認註冊並執行學習工作負載：
 
-這些原始資料在舊名稱 ScxSprout 下取得，所有 [Phase 1 證據](results/phase1/README.md)
-逐位元保留；另以[重新命名回歸驗證](docs/REBRAND_VALIDATION.md)檢查新名稱。
-重新命名不改變原有排程策略。
+```sh
+cat /sys/kernel/sched_ext/state     # enabled
+cat /sys/kernel/sched_ext/root/ops  # scx_lertick
+build/burst_workload --duration 8 --cpu 0 --burst-us 1000 --sleep-us 2000 \
+  --phase-burst-us 6000 > results/local/workload.jsonl
+```
 
-原始基準比較每個策略執行三次、每次四秒，burst 工作及兩個 CPU 競爭工作都固定
-在客體 CPU 0。各次完成延遲百分位數的中位數如下：
+排程器遙測記錄標籤、模型係數、預測及選定時間片；請與工作負載獨立測得的 CPU 使用量一併保留。其他實驗見[終端範例](examples/README.md)及[基準協定](docs/PHASE2_BENCHMARKS.md)。
 
-| 排程器 | p95（ms） | p99（ms） |
-| --- | ---: | ---: |
-| Linux 預設 | 3.259 | 3.350 |
-| 官方非 ML `scx_simple` | 20.016 | 20.128 |
-| Lertick fixed 策略 | 2.015 | 2.031 |
-| Lertick online 策略 | 2.023 | 3.996 |
+macOS 也能執行可攜式算術與文件檢查：
 
-**尚未證明 ML 效能改善。** 本次 online p99 高於 fixed 與 Linux 預設。
-預設時間片差異、暖身、記錄成本、虛擬化及主機排程都限制短期測量的解讀。
-[完整報告](docs/PHASE1_RESULTS.md)保留限制與實際數據。
+```sh
+make test-model test-accounting
+python3 tests/check_docs.py
+```
 
-## Phase 2 正確性與測量
-
-Linux suite 通過 19 個 lifecycle case、156 個獨立 CPU clock／procfs 使用量
-檢查、4,200-task churn、full preemption 下額外 8,000 個 fork/exec 子工作、
-三個有限公平性 trial 及 15 個回復測試。持續執行
-工作會把尚未 commit 的實際 CPU service 納入預算選擇；只有 stopping commit
-使用量與公平性費用。保留 snapshot 的 LRU map 與真正的 task/model storage 分離。
-
-[基準指南](benchmarks/README.md)比較 Linux 預設、官方 scx_simple、fixed、shadow、
-EWMA、online 及相容的 scx_bpfland，涵蓋八種 CPU workload，保留原始資料、
-隨機順序、核心 wake-to-switch 延遲、預測誤差、成本及不確定性。
-360 個最終 trial 全數通過。online 相對 fixed 的核心喚醒 p99 在 mixed 與
-multicore 分別增加約 214% 與 147%；所有 online/fixed 吞吐量區間都包含零變化。
-每類有有效標籤的 workload，線性模型的同 episode MAE 均高於 EWMA。
-兩類 workload 額外啟用核心計時器後，算術區段的平均值為每次線性更新約
-24–26 ns、推論約 14–15 ns。客體計數器約每 41.7 ns 一個 tick；這些數值是
-量化計時結果的平均，包含觀測成本，不代表單次操作有該精度，也不能解讀為
-未加儀器的實體硬體成本。
-參閱[正確性報告](docs/PHASE2_CORRECTNESS.md)與[實際結果](docs/PHASE2_RESULTS.md)。
+這些檢查不代表 BPF verifier 或 Linux 執行相容性。GitHub CI 執行可攜式檢查並編譯 Linux 工作負載；需特權的排程器驗證另在 QEMU 內執行。
 
 ## 安全與回復
 
-只在可丟棄 VM 中進行 privileged 實驗，並保留獨立的主機控制路徑。loader 預設
-30 秒，可設定 1–3600 秒；struct_ops link 不 pin。正常到期、SIGINT/SIGTERM
-與程序死亡會關閉 link。SIGKILL、SysRq 與真實 stalled-task watchdog 回復也已
-驗證，沒有安裝常駐服務。
+請在可丟棄的 VM 內進行特權實驗，並保留獨立主機控制路徑。loader 預設運行 30 秒，可設定 1–3600 秒，擁有未 pin 的 struct_ops link。正常到期、SIGINT/SIGTERM 或 loader 死亡會卸載排程器。
 
-卸載後確認：
+結束後確認已回到預設排程器：
 
 ```sh
-cat /sys/kernel/sched_ext/state  # 預期 disabled
+cat /sys/kernel/sched_ext/state  # disabled
 ```
 
-從獨立客體管理終端緊急中止 sched_ext：
+從獨立的客體管理終端緊急中止 sched_ext：
 
 ```sh
 printf S | sudo tee /proc/sysrq-trigger >/dev/null
 cat /sys/kernel/sched_ext/state
 ```
 
-必須使用大寫 `S`。watchdog 故障注入須搭配明確 VM 旗標、partial switching 與
-單一 TGID，請使用部署指南的 runner，勿在生產機執行。
+必須使用大寫 `S`。故意觸發 watchdog 的測試需要 VM 防護、partial switching 與指定目標，請使用[驗證指南](tests/README.md)。有限公平性與回復測試不構成普遍無飢餓或生產安全保證。
 
-## 限制與專案範圍
+## 文件與範圍
 
-目前只驗證一個 ARM64 客體／核心組合。Phase 2A 已修正持續執行工作的 pending
-CPU service 扣除，並通過 lifecycle、4,200-task churn、affinity/migration、
-有限公平性與重複回復測試。其他核心、實體硬體、長期生產行為、配置失敗注入、
-PID 回繞重用及普遍公平／無飢餓保證仍未驗證。
-時間片界限適用新派送預算，不保證精確實際執行時間，也不限制恢復時的剩餘預算。
+| 指南 | 內容 |
+| --- | --- |
+| [部署指南](docs/DEPLOYMENT.md) | QEMU、依賴、編譯、載入與回復 |
+| [Phase 2 正確性](docs/PHASE2_CORRECTNESS.md) | 使用量、生命週期、並行、公平性與證明限制 |
+| [Phase 2 結果](docs/PHASE2_RESULTS.md) | 效能、預測準確度、成本、退步與不確定性 |
+| [基準測試](benchmarks/README.md) | 工作負載、隨機順序與可重現分析 |
+| [Phase 2 證據](results/phase2/README.md) | 原始封存、manifest 與完整性檢查 |
+| [Phase 1 報告](docs/PHASE1_RESULTS.md)與[原始證據](results/phase1/README.md) | 以舊名稱 ScxSprout 取得並完整保留的歷史驗證 |
+| [重新命名驗證](docs/REBRAND_VALIDATION.md) | 名稱變更與獨立回歸測試 |
+| [貢獻指南](CONTRIBUTING.md)與[安全政策](SECURITY.md) | 貢獻與問題回報方式 |
 
-記憶體配置最佳化、回收、DAMON/DAMOS、NUMA 記憶體放置及聯合 CPU／記憶體
-管理不在專案範圍；相關發現僅保留於[背景研究檔案](docs/planning/README.md)，
-不作為開發或備選方向。CPU 拓撲與 BPF map 用量仍屬排程器驗證資訊。
+專案只開發 **Linux CPU 排程**：burst 預測、核心內學習、自適應時間片、公平性、回應延遲與低排程成本。記憶體壓力是基準測試干擾；記憶體配置、回收、DAMON/DAMOS 及 NUMA 記憶體放置不屬於目前開發範圍。較早的研究保留於[背景檔案](docs/planning/README.md)。
 
-Phase 2 已批准；目前證據不支持開始 Phase 2C 參數最佳化，建議先重新檢驗
-預測值映射到時間片的決策。
-Phase 2 commits 只保留本機，推送仍需批准。[Phase 2 結果](docs/PHASE2_RESULTS.md)
-另記實際測量，原 Phase 1 證據保持不變。參閱 [CONTRIBUTING](CONTRIBUTING.md)、
-[安全政策](SECURITY.md)及[決策記錄](docs/DECISIONS.md)。
+其他核心相容性、實體硬體效能、長期生產行為、配置失敗注入與 PID 回繞重用仍未驗證。測量包含取樣、截尾與觀測成本限制。原 Phase 1 證據逐位元保留，詳細歷史基準表仍在該階段報告內。
 
-原創文件、模型與工作負載採 [MIT](LICENSE)；官方範例衍生的排程器、loader
-及相關材料保留各自 GPL 告示。參閱 [THIRD_PARTY](THIRD_PARTY.md)。
+## 授權
+
+原創文件、獨立模型及工作負載採 [MIT](LICENSE)。排程器、loader、相關建置材料與 vendored helpers 保留各自 GPL 聲明。詳見[第三方來源與授權邊界](THIRD_PARTY.md)。

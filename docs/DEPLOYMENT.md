@@ -79,7 +79,7 @@ suitable ARM Linux host. TCG can establish functional behavior, but comparisons
 under software emulation must be labeled accordingly. This helper currently
 provisions ARM64; an x86 guest needs a separate image/firmware setup.
 
-## Copy this branch into the guest
+## Copy this checkout into the guest
 
 These host commands transfer source without generated BTF headers, VM disks,
 private VM keys, or build outputs:
@@ -261,8 +261,8 @@ justify a performance improvement claim or a production scheduling guarantee.
 
 ## Phase 2 correctness and benchmark deployment
 
-Phase 2 source remains on the local `phase2-correctness-benchmarks` branch until
-the owner approves publication. Follow [Phase 2 correctness](PHASE2_CORRECTNESS.md)
+Phase 2 source is published on `phase2-correctness-benchmarks`, and the owner has
+approved merging the validated branch into `main`. Follow [Phase 2 correctness](PHASE2_CORRECTNESS.md)
 and the [benchmark guide](../benchmarks/README.md), preserving fresh output
 directories for each experiment.
 
@@ -376,9 +376,10 @@ overlay from the read-only base.
 
 ## Known boundaries
 
-This is a minimal Phase 1 scheduler. It learns per-task CPU-burst estimates and
-changes bounded slice budgets; CPU placement, NUMA tuning, advanced ML,
-and production service installation remain outside Phase 1. Memory allocation,
+The scheduler retains its minimal Phase 1 architecture, with Phase 2 correctness
+and benchmark validation. It learns per-task CPU-burst estimates and changes
+bounded slice budgets; CPU placement, NUMA tuning, advanced ML,
+and production service installation remain outside the completed work. Memory allocation,
 reclaim, DAMON/DAMOS, NUMA memory placement, and joint CPU/memory management are
 outside the project scope; archived material is background research only.
 Root privileges are required in the guest. The official

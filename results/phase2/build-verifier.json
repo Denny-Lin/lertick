@@ -22,7 +22,7 @@
     25
   ],
   "maximum_processed_instructions": 3031,
-  "registered_ops": "lertick",
+  "registered_ops": "scx_lertick",
   "warnings": "Five declarations in generated running-kernel vmlinux.h and three signed comparisons in vendored scx/compat.h; build completed successfully.",
   "model_oracle_trials": 200121,
   "accounting_oracle_trials": 202000

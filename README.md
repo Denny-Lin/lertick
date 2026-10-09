@@ -1,91 +1,75 @@
 # Lertick — A Self-Learning CPU Scheduler for Linux
 
-**Lertick is an experimental Linux CPU scheduler that learns task CPU-burst duration online inside eBPF and uses sched_ext to select bounded time slices.**
+Lertick is an experimental Linux CPU scheduler that learns task CPU-burst duration online inside eBPF and uses sched_ext to select bounded time slices.
 
-[繁體中文](README.zh-TW.md) · [Deployment](docs/DEPLOYMENT.md) · [Phase 1 results](docs/PHASE1_RESULTS.md) · [Naming research](docs/NAMING.md)
+[![CI](https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml)
+[繁體中文](README.zh-TW.md) · [Deployment](docs/DEPLOYMENT.md) · [Phase 2 results](docs/PHASE2_RESULTS.md) · [Benchmarks](benchmarks/README.md)
 
-The project focuses exclusively on **online machine learning for Linux CPU
-scheduling using sched_ext and eBPF**. CPU burst prediction, adaptive slices,
-scheduling decisions, fairness, starvation prevention, low overhead, and
-reproducible benchmarks define its scope. Learning and inference run in the
-kernel; the loader observes telemetry and controls attachment lifetime.
+## Current status
 
-**Status: Phase 1 works on the recorded Linux VM. This is an experimental
-prototype, not a production scheduler.** Phase 2A passed Linux correctness and
-safety checks, and Phase 2B completed 280 benchmark trials plus 80 observer/cost
-trials. The linear model did not show a reliable throughput gain over fixed
-budgets and regressed wake latency in two workloads. See
-[Phase 2 results](docs/PHASE2_RESULTS.md). No general superiority over Linux
-EEVDF or another sched_ext scheduler is established.
+**Phase 2A correctness and Phase 2B benchmarking are complete. This is a research prototype with validation on one ARM64 Linux VM.** Compilation, BPF verifier acceptance, sched_ext registration, real task execution, in-kernel updates, adaptive budgets and scheduler recovery passed.
 
-## Technical features
+| Validation | Recorded outcome |
+| --- | --- |
+| Environment | Ubuntu 24.04.5 ARM64, Linux `7.0.0-38-generic`, QEMU 10.2.1/HVF, 4 vCPUs, 4 GiB RAM |
+| Correctness and lifecycle | 19 cases, 156 independent service checks, 4,200-task churn and 8,000 children from concurrent fork parents passed |
+| Recovery | 15 tests covering SIGINT, SIGTERM, SIGKILL, SysRq-S and watchdog fallback passed |
+| Benchmarks | 7 policies × 8 workload categories × 5 randomized repetitions, plus 80 overhead/control trials; all 360 trials passed |
 
-- C/eBPF struct_ops scheduler following the official C examples, pinned at
-  `370b1cea95c6bb668d5b9261f069d433142b9986`.
-- Shared weighted virtual-time dispatch; fairness charges actual CPU service
-  from `sum_exec_runtime`, independently of predictions.
-- CPU-burst labels accumulate across preemption and slice expiration. Only
-  verified wake-to-sleep episodes train; attachment and exit are censored.
-- Per-task five-feature Q16 linear model with clipped, bounded LMS updates.
-  Features are bias, previous burst, burst EWMA, sleep interval, and queue depth.
-- In-kernel training and inference, without a userspace trainer, neural network,
-  or external inference service.
-- Prediction-selected dispatch budgets bounded to 0.5–5 ms after eight labels;
-  fixed fallback for invalid or exhausted predictions.
-- Finite C/libbpf loader, kernel compatibility probes, JSONL task/model counters,
-  controlled real CPU workloads, and independent arithmetic tests.
+**A useful learned scheduling advantage remains unproven.** All online/fixed throughput confidence intervals included zero change. Online wake p99 increased about **214% in mixed** and **147% in multicore** contention versus fixed slices. Linear prediction MAE exceeded same-episode EWMA in all six categories with eligible labels. These five-trial VM comparisons are exploratory; they do not establish superiority over Linux EEVDF or other sched_ext schedulers.
 
-| Mode | Model | Newly assigned slice |
+[Full results, uncertainty and overhead](docs/PHASE2_RESULTS.md) · [Raw evidence and analysis commands](results/phase2/README.md)
+
+Phase 2C optimization is deferred. The next research priority is understanding how predictions affect responsiveness before tuning the model.
+
+## Features and modes
+
+- C/eBPF struct_ops scheduler derived from the pinned [official sched_ext C examples](THIRD_PARTY.md).
+- Weighted virtual-time dispatch charges actual CPU service independently of predictions.
+- CPU bursts accumulate across preemption and slice expiration; verified wake-to-sleep episodes provide labels. Attachment and exit are censored.
+- Per-task five-feature Q16 linear model with bounded LMS updates. Features: bias, previous burst, burst EWMA, sleep interval and queue depth.
+- Training and inference execute inside eBPF; the C/libbpf loader handles attachment and JSONL telemetry.
+- Default prediction-selected budgets are 0.5–5 ms after eight valid labels, with a 2 ms fallback. Bounds apply to newly assigned budgets, not exact execution time or resumed remaining budgets.
+
+| Mode | Learning or prediction | Newly assigned slice (defaults) |
 | --- | --- | --- |
-| `fixed` | Disabled | Fixed 2 ms by default |
-| `shadow` | In-eBPF training and inference | Fixed 2 ms by default |
-| `online` | In-eBPF training and inference | Bounded predictions after warm-up |
+| `fixed` | Disabled | Fixed 2 ms |
+| `shadow` | Linear training and inference inside eBPF | Fixed 2 ms |
 | `ewma` | Historical burst EWMA; no linear training | Bounded EWMA after warm-up |
+| `online` | Linear training and inference inside eBPF | Bounded model prediction after warm-up |
+
+Model tracking defaults to tasks with a `lertick` name prefix. `--tracked-tgid PID` selects a process and `--track-all` enables learning for all tasks. Tracking controls model eligibility; it does not restrict which tasks sched_ext schedules. Partial switching is a separate `--partial` option.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    W[Task wake: causal features] --> P[eBPF prediction]
-    M[Per-task Q16 weights] --> P
-    P --> C[Warm-up / fixed fallback / slice clamp]
-    C --> D[Weighted virtual-time dispatch]
+    W[Task wake: historical features] --> P[eBPF prediction]
+    M[Per-task Q16 model] --> P
+    P --> B[Warm-up, fallback, bounded budget]
+    B --> D[Weighted virtual-time dispatch]
     D --> R[Actual CPU execution]
-    R --> S[Stopping: accumulate CPU service]
-    S --> Q[Verified sleep: completed burst label]
+    R --> S[Stopping: commit CPU service]
+    S --> Q[Verified sleep: completed burst]
     Q --> T[eBPF online update]
     T --> M
-    L[Userspace loader: preflight and finite attachment] --> D
-    S --> O[Read-only userspace telemetry]
+    L[C/libbpf loader] -. attach and observe .-> D
 ```
 
-Continuing-task budgets deduct both committed and pending actual CPU service;
-only `stopping` commits runtime and weighted fairness charges. A bounded LRU
-telemetry map remains separate from live task/model storage.
+Continuing-task decisions include committed and pending CPU service. Only `stopping` commits runtime and fairness charges. Live task/model storage is separate from the bounded LRU telemetry map. Predictions affect slice budgets; dispatch ordering and CPU selection remain based on the existing policy. See [correctness and kernel assumptions](docs/PHASE2_CORRECTNESS.md).
 
-The learned value affects time-slice budgets. Dispatch ordering, CPU selection,
-and actual-service accounting follow the existing Phase 1 policy. The model
-learns each tracked task separately. By default, workloads opt in with a
-`lertick` task-name prefix; `--tracked-tgid PID` selects a particular process.
+## Build and run
 
-## Build and deploy
+The scheduler requires a compatible Linux kernel with `CONFIG_SCHED_CLASS_EXT=y`, BPF syscall/JIT support and live BTF. Follow the [deployment guide](docs/DEPLOYMENT.md) to prepare the tested Ubuntu QEMU guest and pinned dependencies. Build against the running guest kernel. Containers share their host kernel and cannot replace this deployment validation.
 
-Portable checks on macOS or Linux:
+Get the source:
 
 ```sh
 git clone https://github.com/Denny-Lin/lertick.git
 cd lertick
-make test-model
-make test-accounting
-python3 tests/check_docs.py
 ```
 
-The scheduler itself requires a compatible Linux kernel with
-`CONFIG_SCHED_CLASS_EXT=y`, BPF syscall/JIT support, and live BTF. Build against
-that running kernel, not a container's assumed kernel. The tested ARM64 QEMU
-setup, pinned dependencies, and exact commands are in the [deployment guide](docs/DEPLOYMENT.md).
-
-Inside the prepared Ubuntu guest:
+Inside the prepared Linux guest:
 
 ```sh
 scripts/preflight.sh
@@ -93,124 +77,74 @@ scripts/build_libbpf.sh
 export PKG_CONFIG_PATH="$PWD/build/deps/install/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 make clean
 make CLANG=clang-18
-make test-model
+make test-model test-accounting
 sudo build/scx_lertick --check
-sudo build/scx_lertick --mode online --duration 10 \
-  --sample-ms 250 --stats-json /tmp/lertick.jsonl
+mkdir -p results/local
 ```
 
-Use the [terminal experiment](examples/README.md) to run named workloads while
-attached. Docker can supply build dependencies; it cannot replace QEMU's real
-Linux kernel validation.
+Start a finite scheduler in one guest terminal:
 
-## Phase 1 validation and benchmark status
+```sh
+sudo build/scx_lertick --mode online --duration 30 --sample-ms 1000 \
+  --stats-json results/local/scheduler.jsonl
+```
 
-Original validation on 2026-10-09 used **Ubuntu 24.04.5 ARM64**, kernel
-**7.0.0-38-generic**, **QEMU 10.2.1 with HVF hardware acceleration**, four vCPUs,
-and 4 GiB RAM. Compilation, verifier acceptance, registration, actual execution,
-online updates, adaptive budgets, and default-scheduler recovery passed.
-Online mode recorded **1,345 updates and 1,355 adaptive execution segments**;
-shadow recorded 1,348 updates; fixed recorded none.
+While it runs, use another guest terminal to verify registration and exercise learning:
 
-Those measurements were made under the earlier ScxSprout name. All original
-[Phase 1 evidence](results/phase1/README.md) is preserved byte-for-byte. The
-separate [rebranding regression](docs/REBRAND_VALIDATION.md) checks the renamed
-source and binary without changing the policy.
+```sh
+cat /sys/kernel/sched_ext/state     # enabled
+cat /sys/kernel/sched_ext/root/ops  # scx_lertick
+build/burst_workload --duration 8 --cpu 0 --burst-us 1000 --sleep-us 2000 \
+  --phase-burst-us 6000 > results/local/workload.jsonl
+```
 
-The original benchmark comprised three four-second repetitions per policy,
-with a burst worker and two CPU competitors pinned to guest CPU 0. Values below
-are medians of per-trial completion percentiles:
+Scheduler telemetry records labels, model coefficients, predictions and selected slices. Keep it with the workload's independently measured CPU service. See the [terminal example](examples/README.md) and [benchmark protocol](docs/PHASE2_BENCHMARKS.md) for further experiments.
 
-| Policy | p95 completion (ms) | p99 completion (ms) |
-| --- | ---: | ---: |
-| Default Linux | 3.259 | 3.350 |
-| Official non-ML `scx_simple` | 20.016 | 20.128 |
-| Lertick fixed policy | 2.015 | 2.031 |
-| Lertick online policy | 2.023 | 3.996 |
+Portable arithmetic and documentation checks also run on macOS:
 
-**No ML performance improvement was demonstrated.** Online p99 was worse than
-fixed and default in this short trial. Different slice defaults, warm-up,
-logging, virtualization, and host scheduling limit interpretation. This is a
-functional baseline, not evidence of superiority over EEVDF or other policies.
-See [the full report](docs/PHASE1_RESULTS.md) for measurements and limitations.
+```sh
+make test-model test-accounting
+python3 tests/check_docs.py
+```
 
-## Phase 2 correctness and benchmarking
-
-The [Linux correctness suite](tests/validate_phase2.py) passed 19 lifecycle cases,
-156 independent CPU-clock/procfs service checks, 4,200-task churn, an additional
-8,000-child concurrent fork/exec test under full preemption, three finite
-fairness trials and three repetitions of all five recovery paths. A real
-continuation witness changes the old slice decision after including pending
-service. Eight equal competitors on four CPUs produced Jain indices above
-0.99999 and observed progress gaps below 75 ms in the final full-preemption
-regression. These are finite VM checks.
-
-The [benchmark suite](benchmarks/README.md) compares default Linux, official
-`scx_simple`, fixed, shadow, EWMA, online and compatible `scx_bpfland` across
-eight categories. It retains randomized plans, raw data, kernel wake-to-switch
-observations, uncertainty estimates, model errors and overhead measurements.
-All 360 final trials passed. Online versus fixed kernel wake p99 increased
-about 214% in mixed and 147% in multicore contention; all online/fixed throughput
-intervals included zero change. Same-episode linear MAE exceeded EWMA in every
-category with eligible labels. Optional timers reported instrumented arithmetic
-means of roughly 24–26 ns per linear update and 14–15 ns per inference in two
-workloads. The guest counter ticks about every 41.7 ns; those means average
-quantized calls and include observer cost. They do not resolve individual
-operations to that precision or establish uninstrumented overhead. A useful
-learned scheduling advantage remains unproven.
-See [the correctness report](docs/PHASE2_CORRECTNESS.md),
-[protocol](docs/PHASE2_BENCHMARKS.md) and [results](docs/PHASE2_RESULTS.md).
-Phase 2 commits remain local pending approval; no release or tag is created.
+These checks do not establish verifier acceptance or Linux runtime compatibility. GitHub CI runs portable checks and compiles Linux workload fixtures; privileged scheduler validation runs separately in QEMU.
 
 ## Safety and recovery
 
-Run privileged experiments in a disposable VM with an independent host control
-path. The loader defaults to 30 seconds and accepts 1–3600 seconds. Its struct_ops
-link is unpinned: normal expiry, SIGINT/SIGTERM, and process death close it.
-The Linux suite also verified SIGKILL, SysRq abort, and a real stalled-task
-watchdog fallback. No persistent service is installed.
+Run privileged experiments in a disposable VM with an independent host control path. The loader defaults to 30 seconds, accepts 1–3600 seconds, and owns an unpinned struct_ops link. Normal expiry, SIGINT/SIGTERM and loader death detach it.
 
-Check state after shutdown:
+After shutdown, verify default scheduling is restored:
 
 ```sh
-cat /sys/kernel/sched_ext/state  # expected: disabled
+cat /sys/kernel/sched_ext/state  # disabled
 ```
 
-From an independent guest admin console, an emergency sched_ext abort is:
+From an independent guest administrator terminal, an emergency sched_ext abort is:
 
 ```sh
 printf S | sudo tee /proc/sysrq-trigger >/dev/null
 cat /sys/kernel/sched_ext/state
 ```
 
-Use uppercase `S`. Deliberate watchdog injection requires explicit VM-only
-flags, partial switching, and one target TGID; reproduce it through the
-[validation runner](docs/DEPLOYMENT.md), not on a production machine.
+Use uppercase `S`. Deliberate watchdog tests require VM-only guards, partial switching and a selected target; use the [validation instructions](tests/README.md). Finite fairness and recovery tests do not prove universal starvation freedom or production safety.
 
-## Known limitations and scope
+## Documentation and scope
 
-Only one ARM64 guest/kernel combination is validated. Cross-kernel support,
-bare-metal results, long-term production behavior, allocation-failure injection,
-PID-wrap reuse and universal starvation/fairness guarantees remain unvalidated.
-Phase 2 fixes the known continuing-service issue and adds finite affinity,
-churn and fairness tests. Slice bounds constrain newly assigned budgets, not
-exact runtime or partially consumed budgets on resumed tasks. Diagnostic
-timers, tracing and runtime accounting have observer cost.
+| Guide | Contents |
+| --- | --- |
+| [Deployment](docs/DEPLOYMENT.md) | QEMU setup, dependencies, build, load and recovery |
+| [Phase 2 correctness](docs/PHASE2_CORRECTNESS.md) | Accounting, lifecycle, concurrency, fairness and proof limits |
+| [Phase 2 results](docs/PHASE2_RESULTS.md) | Performance, prediction accuracy, overhead, regressions and uncertainty |
+| [Benchmarks](benchmarks/README.md) | Workloads, randomized runs and reproducible analysis |
+| [Phase 2 evidence](results/phase2/README.md) | Raw archives, manifests and integrity checks |
+| [Phase 1 report](docs/PHASE1_RESULTS.md) and [original evidence](results/phase1/README.md) | Preserved historical validation under the ScxSprout name |
+| [Rebranding validation](docs/REBRAND_VALIDATION.md) | Naming changes and separate regressions |
+| [Contributing](CONTRIBUTING.md) and [security policy](SECURITY.md) | Contribution and reporting guidance |
 
-Memory allocation optimization, reclaim, DAMON/DAMOS controllers, NUMA memory
-placement, and joint CPU/memory management are outside the project. Useful
-related findings remain in the [background research archive](docs/planning/README.md),
-with no active or backup memory-development direction. CPU-topology metadata
-and BPF map footprint remain relevant to scheduler validation.
+Active scope is **Linux CPU scheduling**: burst prediction, in-kernel learning, adaptive slices, fairness, responsiveness and low scheduling overhead. Memory pressure is benchmark interference; memory allocation, reclaim, DAMON/DAMOS and NUMA memory placement are outside active development. Earlier research remains in the [background archive](docs/planning/README.md).
 
-Phase 2C optimization is deferred. The current evidence favors revisiting the
-prediction-to-slice decision before tuning model parameters.
-See [CONTRIBUTING](CONTRIBUTING.md), [security policy](SECURITY.md), and
-[the decision record](docs/DECISIONS.md).
+Cross-kernel compatibility, bare-metal performance, long-term production behavior, allocation-failure injection and PID-wrap reuse remain unvalidated. Results include sampling, censoring and observer-cost limitations. Original Phase 1 evidence is preserved byte-for-byte; detailed historical benchmark tables remain in its report.
 
 ## License
 
-Original documents, the independent model, and workload use [MIT](LICENSE).
-The scheduler, loader, associated GPL build material, and vendored official
-helpers retain their GPL notices. See [THIRD_PARTY](THIRD_PARTY.md) for exact
-provenance and license boundaries.
+Original documents, the independent model and workloads use [MIT](LICENSE). The scheduler, loader, associated build material and vendored helpers retain their GPL notices. See [third-party provenance and license boundaries](THIRD_PARTY.md).

@@ -2,8 +2,8 @@
 
 No Phase 2C policy or model optimization was implemented. Final Phase 2A and
 Phase 2B evidence does not justify tuning the linear model for benchmark scores.
-The approved work remains correctness and credible measurement on the dedicated
-local branch.
+The completed correctness and measurement work is published on the dedicated
+Phase 2 branch, and the owner has approved merging it into `main`.
 
 The accounting fix, bounded telemetry retention, EWMA comparator and optional
 diagnostic clocks serve correctness and measurement. The initial five-feature
@@ -58,5 +58,5 @@ comparator's real verifier rejection. They are documented correctness and
 compatibility findings, not discarded performance scores. Final tables use only
 the fresh `109ce71` implementation run.
 
-No further optimization phase begins automatically. Phase 2 commits remain local
-for review, with no GitHub push, release or tag.
+Phase 2 publication and merging into `main` are approved. Further policy or model
+optimization requires separate approval; no release or tag is authorized.

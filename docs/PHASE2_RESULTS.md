@@ -9,8 +9,9 @@ multicore contention. Its same-episode MAE exceeded EWMA in all six categories
 with eligible labels. **Phase 2C optimization is deferred.**
 
 These are experimental findings from one VM, not production-safety or general
-Linux-scheduler superiority claims. The branch is local and reviewable; no push,
-release or tag was made. Original Phase 1 evidence is unchanged.
+Linux-scheduler superiority claims. The measurements were recorded before
+publication. Subsequent publication and merge approvals are recorded in
+[the decision log](DECISIONS.md). Original Phase 1 evidence is unchanged.
 
 ## Environment, compilation and actual execution
 
@@ -34,7 +35,7 @@ The [environment record](../results/phase2/environment.json),
   skeleton, C loader, three workload binaries and two independent arithmetic
   tests. The model's 200,121 and accounting's 202,000 oracle cases passed.
 - Actual verbose verifier acceptance recorded 13 program summaries, maximum
-  3,031 processed instructions. Registration as `lertick`, real task execution,
+  3,031 processed instructions. Registration as `scx_lertick`, real task execution,
   eBPF training and adaptive budgets were checked separately.
 - Generated BTF declarations and vendored signed comparisons emitted nonfatal
   warnings. Full build and verifier logs are retained in `diagnostics.tar.gz`.

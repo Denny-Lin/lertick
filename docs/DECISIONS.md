@@ -1,5 +1,24 @@
 # Lertick decisions
 
+## 2026-10-09: Phase 2 publication and merge approval
+
+The owner approved publishing the validated Phase 2A correctness and Phase 2B
+benchmark work. The `phase2-correctness-benchmarks` branch was published at
+`e63b62ef1e9ccb2293ecc5e517ee7ad23afd4319`; its final measured implementation is
+`109ce711bfad52c9f2ddfe2ba760b29258d58c25`. The owner subsequently approved merging
+that branch into `main` and cleaning up the English and Traditional Chinese
+READMEs for public readers.
+
+This approval supersedes the earlier local-only Phase 2 publication gate below.
+The merge and documentation cleanup preserve the validated implementation and
+raw evidence. Historical Phase 1 and rebranding records remain unchanged;
+Phase 2's `local-review.json` records checks made before publication, so its
+original no-push/CI status is a historical snapshot. See the
+[Phase 2 results](PHASE2_RESULTS.md) for actual measurements and limitations.
+
+No further policy or model optimization, release, or tag is authorized by this
+approval. The [optimization gate](PHASE2_OPTIMIZATION.md) remains in effect.
+
 ## 2026-10-09: Phase 2 approval and local validation
 
 The owner approved Phase 2A correctness and safety followed by Phase 2B
@@ -12,8 +31,10 @@ Historical Phase 1 evidence is immutable. Memory pressure is a CPU interference
 workload, not a memory-management development direction. The project name and
 open-source architecture remain Lertick.
 
-Validated changes may be committed locally. **GitHub push requires renewed
-approval of these results. No release or tag is created.** See
+At this earlier decision, validated changes could be committed locally.
+**GitHub push required renewed approval of these results. No release or tag was
+created.** The publication restriction was superseded by the later approval
+recorded above. See
 [Phase 2 results](PHASE2_RESULTS.md) for the completed scope and limitations.
 
 ## 2026-10-09: CPU-only scope, final name, and publication approval
