@@ -1,0 +1,1 @@
+1d6bffe64b848468ac97f821d369a4846d983de1800ccf6b5ec8853e85cefc55  ubuntu-24.04-server-cloudimg-arm64.img

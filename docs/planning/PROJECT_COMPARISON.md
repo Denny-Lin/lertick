@@ -1,5 +1,7 @@
 # Candidate project comparison
 
+> Historical Phase 0 planning snapshot. The user approved ScxSprout on 2026-10-09. Implementation and actual Linux validation now exist; see [Phase 1 results](../PHASE1_RESULTS.md), [decision record](../DECISIONS.md), and [current licensing](../../THIRD_PARTY.md). Statements below describe the original planning stage.
+
 Source review date: **2026-10-09**. This is a Phase 0 planning assessment. No candidate is implemented or benchmarked in this repository. Scores, code budgets, and development estimates are engineering judgments, not measured results or established research novelty.
 
 ## Decision criteria

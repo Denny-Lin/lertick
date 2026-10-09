@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""Validate the Phase 0 document set and local Markdown links; no network I/O."""
+"""Validate maintained documents and local Markdown links; no network I/O."""
 
 from pathlib import Path
 import re
@@ -17,7 +17,8 @@ REQUIRED = (
     "README.md", "README.zh-TW.md", "LICENSE", "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md", "SECURITY.md", "CHANGELOG.md", "docs/DEPLOYMENT.md",
     "src/README.md", "tests/README.md", "benchmarks/README.md",
-    "examples/README.md", ".github/workflows/docs.yml",
+    "examples/README.md", ".github/workflows/docs.yml", "docs/PHASE1_RESULTS.md",
+    "docs/DECISIONS.md", "THIRD_PARTY.md", "results/phase1/README.md",
 )
 LINK = re.compile(r"!?\[[^\]\n]+\]\((<[^>]+>|[^\s)]+)(?:\s+\"[^\"]*\")?\)")
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
@@ -32,7 +33,9 @@ def main():
 
     count = 0
     for path in sorted(ROOT.rglob("*.md")):
-        if ".git" in path.relative_to(ROOT).parts:
+        # Downloaded reference trees and generated VM/build artifacts are not
+        # maintained project documents and may contain their own relative links.
+        if path.relative_to(ROOT).parts[0] in (".git", "build", "vendor"):
             continue
         count += 1
         content = path.read_text(encoding="utf-8")

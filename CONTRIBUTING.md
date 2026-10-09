@@ -1,20 +1,20 @@
 # Contributing
 
-Phase 0 accepts research corrections, documentation, test-design proposals, and architecture review. Scheduler implementation begins after the research direction is approved. Current maintainership belongs to the repository owner, Denny-Lin; this is a new project with no claimed external contributor community yet.
+The ScxSprout direction was approved on 2026-10-09. Phase 1 implements and validates a minimal Linux scheduler. Contributions can improve correctness, compatibility, reproducibility, and documentation. Current maintainership belongs to the repository owner, Denny-Lin; this is a new project with no claimed external contributor community yet.
 
 ## Workflow
 
-1. Read the [recommendation](docs/planning/RECOMMENDATION.md), [prior art](docs/planning/PRIOR_ART.md), and [roadmap](docs/planning/ROADMAP.md).
+1. Read the [current results](docs/PHASE1_RESULTS.md), [deployment guide](docs/DEPLOYMENT.md), and historical [prior art](docs/planning/PRIOR_ART.md).
 2. For a design change, open a focused proposal with the problem, alternatives, primary references, and falsifiable validation. Small documentation fixes may go directly to a pull request.
 3. Fork and create a topic branch. Keep one logical change per commit; use an imperative subject and explain why the change is needed.
-4. Run `python3 tests/check_docs.py` and `git diff --check`. Document any checks you could not run.
+4. Run `python3 tests/check_docs.py`, `make test-model`, and `git diff --check`. Changes to scheduling or loading also need actual Linux verifier, execution, and recovery evidence from the [validation runner](tests/README.md). Document checks you could not run.
 5. Submit a pull request with scope, evidence, tests, compatibility, recovery implications, and licensing provenance. Do not invent measurements.
 
-Contributions are submitted under the applicable file's license. No CLA is currently required. Do not contribute material you cannot license. Preserve authorship and upstream SPDX identifiers. Review [license boundaries](docs/planning/LICENSE_ANALYSIS.md) before future C/eBPF contributions.
+Contributions are submitted under the applicable file's license. No CLA is currently required. Do not contribute material you cannot license. Preserve authorship and upstream SPDX identifiers. Review the implemented [license boundaries and provenance](THIRD_PARTY.md) before C/eBPF contributions.
 
 ## Style and evidence
 
-Future C/eBPF follows [Linux kernel coding conventions](https://docs.kernel.org/process/coding-style.html): 8-column tabs, short functions, descriptive identifiers, explicit ownership, and bounded hot-path work. Document units, fixed-point scale, overflow bounds, locking, and verifier assumptions. Avoid allocation and unbounded iteration in scheduling callbacks.
+C/eBPF follows [Linux kernel coding conventions](https://docs.kernel.org/process/coding-style.html): 8-column tabs, short functions, descriptive identifiers, explicit ownership, and bounded hot-path work. Document units, fixed-point scale, overflow bounds, locking, and verifier assumptions. Task storage is allocated in task initialization; hot-path model loops are bounded.
 
 Documentation uses plain English, descriptive Markdown links, and primary sources. Label statements as **verified**, **estimate**, or **hypothesis** when their status matters. Include checked dates; pin source commits for reproducible experiments. Traditional Chinese improvements are welcome; keep status and limitations consistent with the English README.
 
@@ -30,7 +30,7 @@ Documentation uses plain English, descriptive Markdown links, and primary source
 
 ## Compatibility expectations
 
-No runtime combination is currently supported. Future compatibility reports must identify kernel release and config hash, architecture, CPU topology, Ubuntu image, libbpf/LLVM versions, source commits, and VM accelerator. A successful build alone does not establish runtime compatibility. CI must not run privileged experiments on ordinary shared runners.
+The recorded Ubuntu ARM64 kernel `7.0.0-38-generic` passed actual runtime validation in QEMU HVF. This is one experimental environment, not a supported kernel matrix. Compatibility reports must identify kernel release and config hash, architecture, CPU topology, Ubuntu image, libbpf/LLVM versions, source commits, and VM accelerator. A successful build alone does not establish runtime compatibility. CI must not run privileged experiments on ordinary shared runners.
 
 ## Maintainer review checklist
 

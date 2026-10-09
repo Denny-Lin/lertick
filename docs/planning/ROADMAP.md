@@ -1,5 +1,7 @@
 # Development roadmap
 
+> Historical Phase 0 planning snapshot. The user approved ScxSprout on 2026-10-09. Implementation and actual Linux validation now exist; see [Phase 1 results](../PHASE1_RESULTS.md), [decision record](../DECISIONS.md), and [current licensing](../../THIRD_PARTY.md). Statements below describe the original planning stage.
+
 Source review date: **2026-10-09**. Current phase: **Phase 0 — research and planning**. Scheduler implementation has not begun. Linux loading, compatibility, safety and performance claims remain unverified for this repository.
 
 The recommended direction is conditional; it must pass the accounting, numeric-safety and deployment gates in [RECOMMENDATION.md](RECOMMENDATION.md). The backup is a cgroup-v2 proactive reclaim controller, not a persistent DAMOS actuator.

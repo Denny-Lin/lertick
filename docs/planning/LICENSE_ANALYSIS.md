@@ -1,5 +1,7 @@
 # License analysis
 
+> Historical Phase 0 planning snapshot. The user approved ScxSprout on 2026-10-09. Implementation and actual Linux validation now exist; see [Phase 1 results](../PHASE1_RESULTS.md), [decision record](../DECISIONS.md), and [current licensing](../../THIRD_PARTY.md). Statements below describe the original planning stage.
+
 Reviewed: 2026-10-09. This records the project's licensing choice and engineering boundaries; it is not a legal opinion about every possible future integration.
 
 ## Current decision

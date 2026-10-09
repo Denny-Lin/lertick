@@ -1,5 +1,7 @@
 # Benchmark plan
 
+> Historical Phase 0 planning snapshot. The user approved ScxSprout on 2026-10-09. Implementation and actual Linux validation now exist; see [Phase 1 results](../PHASE1_RESULTS.md), [decision record](../DECISIONS.md), and [current licensing](../../THIRD_PARTY.md). Statements below describe the original planning stage.
+
 Research snapshot: 2026-10-09. All procedures below are proposed. No Linux,
 QEMU, verifier, training-overhead, or performance result has been collected.
 

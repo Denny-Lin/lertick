@@ -1,5 +1,7 @@
 # Open-source strategy
 
+> Historical Phase 0 planning snapshot. The user approved ScxSprout on 2026-10-09. Implementation and actual Linux validation now exist; see [Phase 1 results](../PHASE1_RESULTS.md), [decision record](../DECISIONS.md), and [current licensing](../../THIRD_PARTY.md). Statements below describe the original planning stage.
+
 Status: Phase 0 planning. Source/name checks: 2026-10-09. The public umbrella repository is `Denny-Lin/linux-resource-learning`; the proposed CPU scheduler brand is **ScxSprout (`scx-sprout`)**. The name and direction are proposals, not an approved implementation or software release.
 
 ## Name candidates and observed collisions

@@ -1,5 +1,7 @@
 # Initial project recommendation
 
+> Historical Phase 0 planning snapshot. The user approved ScxSprout on 2026-10-09. Implementation and actual Linux validation now exist; see [Phase 1 results](../PHASE1_RESULTS.md), [decision record](../DECISIONS.md), and [current licensing](../../THIRD_PARTY.md). Statements below describe the original planning stage.
+
 Source review date: **2026-10-09**. Status: **Phase 0 planning only; project direction awaiting review**. There is no scheduler implementation, tested kernel support matrix, or measured performance result in this repository.
 
 ## Recommended direction

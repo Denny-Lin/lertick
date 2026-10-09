@@ -1,0 +1,3 @@
+# Preserve the pinned upstream generated header byte-for-byte, including its
+# trailing blank line; retain normal whitespace checks for maintained source.
+vendor/scx/enums.autogen.bpf.h whitespace=-blank-at-eof

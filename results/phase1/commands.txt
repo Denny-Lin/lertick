@@ -1,0 +1,61 @@
+/home/ubuntu/linux-resource-learning/build/scx_sprout --check
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode fixed --duration 15 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/evidence-fixed.jsonl
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 6 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000 --phase-burst-us 6000
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode shadow --duration 15 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/evidence-shadow.jsonl
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 6 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000 --phase-burst-us 6000
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode online --duration 15 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/evidence-online.jsonl
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 6 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000 --phase-burst-us 6000
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode fixed --duration 30 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/recovery-sigint.jsonl
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 1 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode fixed --duration 30 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/recovery-sigterm.jsonl
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 1 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode fixed --duration 30 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/recovery-sigkill.jsonl
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 1 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode fixed --duration 30 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/recovery-sysrq.jsonl
+/bin/bash -c 'kill -STOP $$; exec /home/ubuntu/linux-resource-learning/build/burst_workload --role burst --duration 1 --policy-ext --cpu 0 --burst-us 1000 --sleep-us 2000'
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode fixed --duration 10 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/recovery-watchdog.jsonl --partial --fault-stall --stall-tgid 3859 --dangerous-vm-test --expect-watchdog
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode fixed --duration 19 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/comparison-0-fixed-scheduler.jsonl
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode online --duration 19 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/comparison-0-online-scheduler.jsonl
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/reference/scx-c-examples/build/scheds/c/scx_simple
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/reference/scx-c-examples/build/scheds/c/scx_simple
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode online --duration 19 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/comparison-1-online-scheduler.jsonl
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode fixed --duration 19 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/comparison-1-fixed-scheduler.jsonl
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/reference/scx-c-examples/build/scheds/c/scx_simple
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode fixed --duration 19 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/comparison-2-fixed-scheduler.jsonl
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/scx_sprout --mode online --duration 19 --sample-ms 250 --stats-json /home/ubuntu/linux-resource-learning/results/local/final/comparison-2-online-scheduler.jsonl
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/linux-resource-learning/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000

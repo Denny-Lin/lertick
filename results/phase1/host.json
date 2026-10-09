@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-09",
+  "host_os": "macOS 26.3.1 (a)",
+  "host_build": "25D771280a",
+  "host_architecture": "arm64",
+  "qemu_version": "10.2.1",
+  "accelerator": "hvf",
+  "accelerator_evidence": "Successful live QEMU process inspected with ps: -accel hvf -cpu host",
+  "machine": "virt",
+  "vcpus": 4,
+  "memory_mib": 4096,
+  "overlay_gib": 20,
+  "ssh_binding": "127.0.0.1:22222",
+  "firmware": "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+  "launch_reproduction": "python3 scripts/qemu_vm.py --accelerator hvf start"
+}

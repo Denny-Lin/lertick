@@ -1,68 +1,136 @@
 # Linux Resource Learning
 
-**Small, measurable online learning for Linux resource management.**
+**ScxSprout: a small C/eBPF sched_ext scheduler with online learning inside eBPF.**
 
-[繁體中文](README.zh-TW.md) · [Recommendation](docs/planning/RECOMMENDATION.md) · [Prior art](docs/planning/PRIOR_ART.md) · [Roadmap](docs/planning/ROADMAP.md)
+[繁體中文](README.zh-TW.md) · [Deployment](docs/DEPLOYMENT.md) · [Phase 1 results](docs/PHASE1_RESULTS.md) · [Prior art](docs/planning/PRIOR_ART.md)
 
-**Status: Phase 0 — research and design. There is no runnable scheduler yet.**
-No kernel has been modified, no experimental BPF program has been executed, and no performance result is claimed by this repository.
+**Status: Phase 1 implemented and validated on an actual Linux kernel.** On
+2026-10-09, the QEMU Ubuntu guest compiled the scheduler and loader, accepted the
+BPF programs, registered sched_ext, executed real workloads, updated model
+parameters inside eBPF, and applied predictions to bounded dispatch slices.
+Normal unload, signal/process termination, SysRq abort and kernel watchdog
+fallback restored the default Linux scheduler. This establishes architecture
+feasibility in one tested environment; no performance improvement is claimed.
 
-The proposed first project, **ScxSprout (`scx-sprout`)**, is a small C/eBPF sched_ext scheduler that learns task CPU-burst behavior online and uses predictions to select bounded time slices. A conventional weighted virtual-time policy retains responsibility for ordering and CPU-share accounting. A bounded learned memory-reclaim controller is the backup direction.
+## What is implemented
 
-## Why explore this?
+ScxSprout follows the official sched_ext C examples, pinned at
+`370b1cea95c6bb668d5b9261f069d433142b9986`. It retains global weighted virtual-time
+dispatch and charges actual CPU service from `sum_exec_runtime`. Only verified
+wake-to-sleep episodes produce completed burst labels; preempted execution
+segments accumulate in the same episode, and continuously runnable controls
+provide no completed labels.
 
-Mixed workloads can change faster than one fixed policy can anticipate. Linux's default fair scheduler and existing sched_ext policies already handle many such cases well. Our question is narrower: **can a tiny, auditable online model improve a specified workload's tradeoff after accounting for training cost and fairness?** The answer requires measurements, including negative results.
+A per-task five-feature Q16 linear model performs projected, error-clipped LMS
+training and inference in eBPF. Its causal inputs are a bias, previous completed
+burst, burst EWMA, previous sleep interval and queue depth. After eight labels,
+predictions can select dispatch slices bounded to 0.5–5 ms. Exhausted or invalid
+predictions use the fixed slice. Predictions do not determine dispatch ordering
+or substitute for actual CPU accounting.
 
-This is not the first learned scheduler. Meta's scheduler experiments, hybrid ML sched_ext projects, and learned memory-management papers already cover important parts of this space. Read the [source-linked review](docs/planning/PRIOR_ART.md) before interpreting any novelty claim.
+| Mode | Model | Dispatch slice |
+| --- | --- | --- |
+| `fixed` | Disabled | Fixed 2 ms by default |
+| `shadow` | Training and inference in eBPF | Fixed 2 ms by default |
+| `online` | Training and inference in eBPF | Bounded predictions after warmup |
 
-## Proposed learning loop
+The C/libbpf loader checks compatibility, owns an unpinned attachment, records
+JSONL telemetry and detaches after a finite duration. A calibrated workload
+measures real thread CPU service, wake lateness, completion latency and completed
+work. Host tests check arithmetic against an independent 128-bit oracle.
 
-1. Collect a bounded task history from scheduling callbacks.
-2. Accumulate CPU execution across preemptions; identify reliable completed bursts and explicitly handle censored observations.
-3. Predict the next burst with a fixed-point online linear model.
-4. Update model weights from prediction error during execution.
-5. Clamp the prediction to a safe time-slice range; use the conventional policy when data are missing or invalid.
+## Actual validation
 
-Fixed slices and EWMA are baselines. They are not described as machine learning. CPU placement, neural networks, deep reinforcement learning, and CPU/memory coordination are outside the initial MVP. See the [architecture](docs/planning/ARCHITECTURE.md) for concurrency, arithmetic, labeling, and fairness risks.
+The tested environment was **Ubuntu 24.04.5 ARM64**, Linux
+**`7.0.0-38-generic`**, in **QEMU 10.2.1 with HVF hardware acceleration** on
+Apple Silicon macOS, with four vCPUs and 4 GiB RAM. Required sched_ext, BPF and
+BTF configuration and live interfaces were checked.
 
-## Read or contribute now
+The Linux suite passed fixed, shadow and online loading and execution. The
+online evidence run recorded **1,345 model updates and 1,355 adaptive execution
+segments**; shadow recorded 1,348 updates, and fixed recorded none. Selected
+budgets were compared with slices observed by real `running` callbacks.
+Recovery checks included a deliberately stalled SCHED_EXT task triggering the
+kernel watchdog.
+
+Three four-second repetitions compared the default Linux scheduler, official
+non-ML `scx_simple`, fixed ScxSprout and online ScxSprout. These short VM
+measurements establish a reproducible baseline and do not justify a speedup
+claim. Median trial completion percentiles were:
+
+| Policy | p95 (ms) | p99 (ms) |
+| --- | --- | --- |
+| Default Linux | 3.259 | 3.350 |
+| Official `scx_simple` | 20.016 | 20.128 |
+| ScxSprout fixed | 2.015 | 2.031 |
+| ScxSprout online | 2.023 | 3.996 |
+
+Online p99 was worse than fixed and default in this short comparison. There is
+no demonstrated ML improvement. See the [results and limitations](docs/PHASE1_RESULTS.md),
+[machine-readable validation](results/phase1/validation.json) and
+[environment manifest](results/phase1/environment.txt).
+
+## Build and reproduce
+
+Portable model and documentation checks:
 
 ```sh
 git clone https://github.com/Denny-Lin/linux-resource-learning.git
 cd linux-resource-learning
+make test-model
 python3 tests/check_docs.py
 ```
 
-Python 3.10+ and Git are enough for the current documentation checks. The checker uses only the standard library and has no network or kernel access. [Contributing](CONTRIBUTING.md) describes independent documentation, experiment-design, compatibility, and algorithm work.
+For the Linux deployment, follow the [QEMU setup, dependency and build
+commands](docs/DEPLOYMENT.md). Build against the running guest's BTF; containers
+cannot replace this kernel validation. The complete suite runs inside that
+guest after building ScxSprout and the pinned reference:
 
-## Install and run later
+```sh
+sudo python3 tests/validate_linux.py \
+  --output results/local/validation \
+  --reference build/reference/scx-c-examples/build/scheds/c/scx_simple \
+  --repetitions 3 --seconds 4
+```
 
-No scheduler binary, build system, package, or service is supplied at Phase 0. The proposed target is an Ubuntu QEMU guest with a sched_ext-enabled kernel, beginning with a pinned Linux 6.12 baseline. **No kernel/Ubuntu combination is validated by this project yet.** Newer kernels must be tested against matching headers and scheduler sources because sched_ext's BPF interface can change.
+The [terminal example](examples/README.md), [source overview](src/README.md),
+[model tests](tests/README.md) and [workload guide](benchmarks/README.md) describe
+the implemented interfaces. See [CONTRIBUTING](CONTRIBUTING.md) for contributions.
 
-The [deployment plan](docs/DEPLOYMENT.md) records kernel configuration, expected C/LLVM/libbpf dependencies, VM setup, planned commands, verification, and recovery. Its proposed `scx-sprout` commands are unavailable until implementation is approved and delivered. No persistent service is planned for early releases.
+## Scope and next work
 
-## Benchmark and recovery
+The current priority is deployment, actual learning and safe recovery. This is
+one kernel/architecture validation, not a production release or a proof of
+fairness. Longer randomized trials, model error analysis, independent hardware,
+migration/affinity stress and overhead measurement remain. CPU placement,
+neural networks, reinforcement learning and CPU/memory coordination are deferred.
+A learned cgroup memory-reclaim controller remains a research backup direction.
 
-The [benchmark protocol](docs/planning/BENCHMARK_PLAN.md) compares the Linux default scheduler, `scx_simple`, a pinned maintained sched_ext scheduler, fixed slices, EWMA, frozen weights, and online learning. It requires raw data for throughput, p95/p99 latency, migrations, fairness, starvation, and separate model costs. QEMU is for deployment and safety testing; it cannot establish host-independent bare-metal performance.
+Existing learned scheduling and memory-management work predates this project.
+The [primary-source review](docs/planning/PRIOR_ART.md) records that context;
+ScxSprout makes no novelty claim.
 
-For a future foreground sched_ext loader, normal shutdown must destroy its BPF link; verify that `/sys/kernel/sched_ext/state` returns to `disabled`. The kernel provides fallback on scheduler errors, stalled runnable tasks, and the emergency SysRq-S path. These mechanisms do not prove a policy is fair or fast. See the exact [recovery procedure](docs/DEPLOYMENT.md) before experiments. Stopping the backup cgroup `memory.reclaim` controller prevents new requests; an in-flight request may finish and evicted cache cannot be restored immediately. Deferred DAMOS actuation needs explicit kernel-context shutdown.
+## Original research and planning
 
-## Planning documents
+These Phase 0 documents preserve the original proposals and estimates. The
+deployment guide and Phase 1 results describe what was actually implemented.
 
 | Document | Purpose |
 | --- | --- |
-| [RESEARCH](docs/planning/RESEARCH.md) | Evidence, algorithm options, feasibility, and unanswered questions |
-| [PRIOR_ART](docs/planning/PRIOR_ART.md) | Existing projects and academic work with primary links |
-| [PROJECT_COMPARISON](docs/planning/PROJECT_COMPARISON.md) | Six candidates scored on nine criteria |
-| [ARCHITECTURE](docs/planning/ARCHITECTURE.md) | Proposed primary and backup designs |
-| [OPEN_SOURCE_STRATEGY](docs/planning/OPEN_SOURCE_STRATEGY.md) | Names, repository structure, contribution, and adoption |
-| [LICENSE_ANALYSIS](docs/planning/LICENSE_ANALYSIS.md) | MIT/GPL boundaries and dependency obligations |
-| [ROADMAP](docs/planning/ROADMAP.md) | Phases, effort estimates, and decision gates |
-| [BENCHMARK_PLAN](docs/planning/BENCHMARK_PLAN.md) | Reproducibility and falsifiable acceptance criteria |
-| [RECOMMENDATION](docs/planning/RECOMMENDATION.md) | Proposed direction, risks, and next steps |
-
-The source review was performed on **2026-10-09**. Documents distinguish verified facts, engineering estimates, and untested hypotheses. Branch-tip links establish source availability on that date; implementation and benchmark releases must pin immutable commits.
+| [RESEARCH](docs/planning/RESEARCH.md) | Evidence, algorithm options and open questions |
+| [PRIOR_ART](docs/planning/PRIOR_ART.md) | Existing projects and papers with primary links |
+| [PROJECT_COMPARISON](docs/planning/PROJECT_COMPARISON.md) | Six candidate directions |
+| [ARCHITECTURE](docs/planning/ARCHITECTURE.md) | Original primary and backup designs |
+| [OPEN_SOURCE_STRATEGY](docs/planning/OPEN_SOURCE_STRATEGY.md) | Repository and contribution plan |
+| [LICENSE_ANALYSIS](docs/planning/LICENSE_ANALYSIS.md) | MIT/GPL boundaries |
+| [ROADMAP](docs/planning/ROADMAP.md) | Original phases, estimates and decision gates |
+| [BENCHMARK_PLAN](docs/planning/BENCHMARK_PLAN.md) | Broader experimental protocol |
+| [RECOMMENDATION](docs/planning/RECOMMENDATION.md) | Approved direction and research risks |
 
 ## License
 
-Current original documentation and repository tooling use the [MIT License](LICENSE). Future kernel-facing BPF files are planned under `GPL-2.0-only`, with an appropriate BPF license section and retained upstream notices. A permissive repository license does not override GPL-only helpers, kfunc requirements, or copied kernel code. See [LICENSE_ANALYSIS](docs/planning/LICENSE_ANALYSIS.md).
+Original documents, the independently written model and workload use the
+[MIT License](LICENSE). The scheduler, loader, associated build scripts and
+vendored official-example material carry GPL notices. The root MIT license
+does not override those notices. See [THIRD_PARTY](THIRD_PARTY.md) for pinned
+provenance and distribution obligations.

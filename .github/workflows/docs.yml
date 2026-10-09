@@ -1,4 +1,4 @@
-name: Documentation
+name: Documentation and model
 
 on:
   push:
@@ -18,3 +18,9 @@ jobs:
           persist-credentials: false
       - name: Check documents and local links
         run: python3 tests/check_docs.py
+      - name: Test fixed-point arithmetic and learning
+        run: make test-model
+      - name: Check script syntax
+        run: |
+          bash -n scripts/preflight.sh scripts/fetch_reference.sh scripts/build_libbpf.sh
+          python3 -m py_compile tests/validate_linux.py scripts/qemu_vm.py
