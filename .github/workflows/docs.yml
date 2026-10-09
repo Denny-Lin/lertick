@@ -22,7 +22,9 @@ jobs:
         run: make test-model
       - name: Test CPU service accounting
         run: make test-accounting
+      - name: Compile Linux regression and benchmark workloads
+        run: make build/lifecycle_workload build/phase2_workload
       - name: Check script syntax
         run: |
           bash -n scripts/preflight.sh scripts/fetch_reference.sh scripts/build_libbpf.sh
-          python3 -m py_compile tests/validate_linux.py scripts/qemu_vm.py
+          python3 -m py_compile tests/validate_linux.py tests/validate_phase2.py benchmarks/run_phase2.py scripts/qemu_vm.py

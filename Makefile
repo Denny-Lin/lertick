@@ -18,7 +18,7 @@ BPF_CFLAGS += -D__TARGET_ARCH_$(TARGET_ARCH) -Ivendor/bpf-compat -I/usr/include/
 BPF_HEADERS := $(wildcard vendor/scx/*.h) $(wildcard src/shared/*.h)
 
 .PHONY: all clean preflight test-model test-accounting workload reference
-all: $(BUILD)/scx_lertick $(BUILD)/burst_workload
+all: $(BUILD)/scx_lertick $(BUILD)/burst_workload $(BUILD)/phase2_workload $(BUILD)/lifecycle_workload
 
 $(BUILD):
 	mkdir -p $@
@@ -41,6 +41,12 @@ $(BUILD)/scx_lertick: src/userspace/scx_lertick.c $(BUILD)/scx_lertick.bpf.skel.
 $(BUILD)/burst_workload: benchmarks/burst_workload.c | $(BUILD)
 	$(CC) $(CFLAGS) $< -o $@ -pthread -lm
 
+$(BUILD)/phase2_workload: benchmarks/phase2_workload.c | $(BUILD)
+	$(CC) $(CFLAGS) $< -o $@ -pthread -lm
+
+$(BUILD)/lifecycle_workload: tests/lifecycle_workload.c | $(BUILD)
+	$(CC) $(CFLAGS) $< -o $@ -pthread -lm
+
 $(BUILD)/test_model: tests/test_model.c src/shared/model.h | $(BUILD)
 	$(CC) -Isrc/shared -O2 -std=c11 -Wall -Wextra -Werror $< -o $@
 
@@ -53,10 +59,10 @@ $(BUILD)/test_accounting: tests/test_accounting.c src/shared/accounting.h src/sh
 test-accounting: $(BUILD)/test_accounting
 	$(BUILD)/test_accounting
 
-workload: $(BUILD)/burst_workload
+workload: $(BUILD)/burst_workload $(BUILD)/phase2_workload
 preflight:
 	scripts/preflight.sh
 reference:
 	scripts/fetch_reference.sh
 clean:
-	rm -f $(BUILD)/vmlinux.h $(BUILD)/scx_lertick.bpf.o $(BUILD)/scx_lertick.bpf.skel.h $(BUILD)/scx_lertick $(BUILD)/burst_workload $(BUILD)/test_model
+	rm -f $(BUILD)/vmlinux.h $(BUILD)/scx_lertick.bpf.o $(BUILD)/scx_lertick.bpf.skel.h $(BUILD)/scx_lertick $(BUILD)/burst_workload $(BUILD)/phase2_workload $(BUILD)/lifecycle_workload $(BUILD)/test_model $(BUILD)/test_accounting

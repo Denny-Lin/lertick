@@ -1,5 +1,21 @@
 # Lertick decisions
 
+## 2026-10-09: Phase 2 approval and local validation
+
+The owner approved Phase 2A correctness and safety followed by Phase 2B
+reproducible CPU scheduling benchmarks. Phase 2C optimization is conditional on
+correctness passing and reliable measured baselines. Work uses the dedicated
+`phase2-correctness-benchmarks` branch from published main `fba7ee4`.
+
+The existing ARM64 Ubuntu QEMU guest remains the deployment environment.
+Historical Phase 1 evidence is immutable. Memory pressure is a CPU interference
+workload, not a memory-management development direction. The project name and
+open-source architecture remain Lertick.
+
+Validated changes may be committed locally. **GitHub push requires renewed
+approval of these results. No release or tag is created.** See
+[Phase 2 results](PHASE2_RESULTS.md) for the completed scope and limitations.
+
 ## 2026-10-09: CPU-only scope, final name, and publication approval
 
 The owner approved publishing Phase 1, requested a narrower CPU-only scope, and

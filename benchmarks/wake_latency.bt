@@ -1,0 +1,37 @@
+#!/usr/bin/env bpftrace
+/* SPDX-License-Identifier: MIT */
+/* Read-only observer; all measured policies use identical probes. Every 16th
+ * wake of each named workload thread is sampled. No preemption is mislabeled
+ * as a wake. Kernel timestamps, rather than timer deadlines, define latency. */
+BEGIN { printf("{\"event\":\"observer_ready\"}\n"); }
+
+tracepoint:sched:sched_wakeup,
+tracepoint:sched:sched_wakeup_new
+/strncmp(args->comm, "lertick", 7) == 0 ||
+ args->comm == "make" || args->comm == "cc1" ||
+ args->comm == "cc1plus" || args->comm == "as" || args->comm == "gcc"/
+{
+	@wake[args->pid] = nsecs;
+}
+
+tracepoint:sched:sched_switch
+/@wake[args->next_pid]/
+{
+	$now = nsecs;
+	$pid = args->next_pid;
+	@sequence[$pid]++;
+	/* Compiler descendants are often shorter than sixteen wakes. */
+	if (@sequence[$pid] % 16 == 0 || strncmp(args->next_comm, "lertick", 7) != 0) {
+		printf("{\"event\":\"wake_run\",\"tid\":%d,\"monotonic_ns\":%llu,\"latency_ns\":%llu}\n",
+		       $pid, $now, $now - @wake[$pid]);
+	}
+	delete(@wake[$pid]);
+}
+
+tracepoint:sched:sched_process_exit
+{
+	delete(@wake[tid]);
+	delete(@sequence[tid]);
+}
+
+END { clear(@wake); clear(@sequence); }
