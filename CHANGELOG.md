@@ -2,6 +2,29 @@
 
 ## Unreleased — 2026-10-09
 
+### Phase 2 correctness and reproducible measurement
+
+- Include pending actual CPU service when selecting continuation budgets,
+  keeping `stopping` as the sole runtime/fairness charge owner.
+- Recognize task-name opt-in during continuations and stopping, censoring the
+  unobserved initial episode while retaining actual-service telemetry.
+- Bound retained snapshots with LRU eviction and bounded loader enumeration;
+  measure association balance and deferred map cleanup independently.
+- Add 202,000 accounting oracle cases and actual Linux lifecycle, affinity,
+  churn, finite fairness and repeated VM-only recovery regressions.
+- Protect unlocked initialization counters with atomic additions and test
+  8,000 concurrent fork/exec children under selected full preemption.
+- Align wake tracing with MONOTONIC measurement windows and record dynamic
+  preemption mode in experiment fingerprints.
+- Add an EWMA comparator, causal prediction errors, optional in-kernel model
+  timers and eight-category randomized Linux benchmarks with raw evidence.
+- Preserve Phase 1 evidence. Keep Phase 2 local until results are approved.
+  No model/policy optimization, release or tag is introduced.
+- Record 280 randomized Linux benchmark trials and 80 overhead/control trials.
+  Preserve raw evidence and reproducible host analysis. No reliable learned
+  throughput gain over fixed budgets was found; mixed/multicore wake latency
+  regressed and linear MAE exceeded same-episode EWMA.
+
 ### Lertick rebranding and CPU-only scope
 
 - Renamed the project to **Lertick — A Self-Learning CPU Scheduler for Linux**,

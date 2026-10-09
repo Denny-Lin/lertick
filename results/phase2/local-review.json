@@ -1,0 +1,24 @@
+{
+  "utc": "2026-10-09T14:26:32.495157+00:00",
+  "validated_implementation": "109ce711bfad52c9f2ddfe2ba760b29258d58c25",
+  "branch": "phase2-correctness-benchmarks",
+  "local_checks": {
+    "documentation": "40 Markdown files, 9 planning documents and local links passed",
+    "model": "200121 oracle cases passed",
+    "accounting": "202000 oracle cases and callback traces passed",
+    "sanitizers": "Both portable C oracle suites rebuilt with clang ASan+UBSan and passed",
+    "script_syntax": "All integration/benchmark/analyzer/VM Python scripts compiled; shell syntax passed",
+    "whitespace": "git diff --check passed",
+    "linux_build_and_execution": "See build-verifier.json, correctness.json and analysis.json; same109 source built and executed before this documentation-only review commit",
+    "archive_audit": "22 compressed hashes and safe streamed contents passed; see evidence-audit.json",
+    "historical_evidence": "24 Phase1/rebrand evidence files byte-identical to fba7ee4"
+  },
+  "remote_main": "fba7ee4b3cc0bf015e022f4edaa28fb44623afcc",
+  "published_main_ci": {
+    "run_id": 37921781614,
+    "conclusion": "success",
+    "url": "https://github.com/Denny-Lin/lertick/actions/runs/37921781614"
+  },
+  "phase2_github_ci": "Not run: Phase2 commits remain local per user instruction. No push or workflow dispatch.",
+  "host_clang": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+}

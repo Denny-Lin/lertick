@@ -1,0 +1,56 @@
+{
+  "captured_utc": "2026-10-09T14:11:45.198046+00:00",
+  "kernel": "Linux lertick-vm 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 17:12:37 UTC 2 aarch64 aarch64 aarch64 GNU/Linux",
+  "source_git_commit": "109ce711bfad52c9f2ddfe2ba760b29258d58c25",
+  "gcc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+  "bpftool": "bpftool v7.7.0\nusing libbpf v1.7\nfeatures:",
+  "bpftrace": "bpftrace v0.20.2",
+  "perf": "perf version 7.0.14",
+  "preemption_mode": "full (lazy)",
+  "sched_ext_state": "disabled",
+  "bpf_stats_enabled": "0",
+  "config_sha256": "8dd5a335cdf3a2dfe140f781f48aef3e76ffb262880a189e2108e0d63524b277",
+  "btf_sha256": "b711da58768d304757a88b8b9a6776f520fb307246d3f37bf6c18b2e8f25b0b6",
+  "swap": "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n/home/ubuntu/reference/phase2-benchmark.swap file\t\t2097148\t\t28120\t\t-1\n",
+  "references": {
+    "scx_simple": "370b1cea95c6bb668d5b9261f069d433142b9986",
+    "bpfland": "e25cc6e5920f33d5bbe2bd62b2e7a5854de88a19",
+    "lavd_rejected": "b68cb3c829312b43785225bcfd445a3ecefef5c2",
+    "libbpf": "f5dcbae736e5d7f83a35718e01be1a8e3010fa39"
+  },
+  "required_config": [
+    "CONFIG_BPF=y",
+    "CONFIG_BPF_SYSCALL=y",
+    "CONFIG_BPF_JIT=y",
+    "CONFIG_SCHED_CLASS_EXT=y",
+    "CONFIG_PSI=y",
+    "CONFIG_HZ=1000",
+    "CONFIG_DEBUG_INFO_BTF=y",
+    "CONFIG_MAGIC_SYSRQ=y",
+    "CONFIG_SCHEDSTATS=y"
+  ],
+  "workload_process_check": "",
+  "clocksource": "arch_sys_counter",
+  "architecture_timer_boot_log": [
+    "[    0.000000] arch_timer: cp15 timer running at 24.00MHz (virt).",
+    "[    0.000000] clocksource: arch_sys_counter: mask: 0xffffffffffffff max_cycles: 0x588fe9dc0, max_idle_ns: 440795202592 ns",
+    "[    0.031887] clocksource: Switched to clocksource arch_sys_counter"
+  ],
+  "vm": {
+    "host_platform": "macOS Apple Silicon",
+    "qemu_version": "10.2.1",
+    "accelerator": "hvf",
+    "vcpus": 4,
+    "ram_mib": 4096,
+    "overlay_disk_gib": 20,
+    "temporary_swap_mib": 2048,
+    "cloud_image_release": "20260926",
+    "cloud_image_sha256": "1d6bffe64b848468ac97f821d369a4846d983de1800ccf6b5ec8853e85cefc55"
+  },
+  "reference_build_notes": {
+    "bpfland": "Source scx-v1.0.16 e25cc6e, Rust1.91.1; binary uses shared CARGO_TARGET_DIR /home/ubuntu/reference/scx-v1.1.2/target. Directory name does not indicate the built bpfland version.",
+    "kernelcompile": "Linux7.0 ARM64 defconfig kernel/sched/built-in.a repeated rebuilds; warm subset, not fullkernel.",
+    "linux_source_sha256": "bb7f6d80b387c757b7d14bb93028fcb90f793c5c0d367736ee815a100b3891f0"
+  }
+}

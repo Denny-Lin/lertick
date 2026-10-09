@@ -1,0 +1,112 @@
+[
+  {
+    "file": "aborted-manifest.tar.gz",
+    "bytes": 7213,
+    "sha256": "2e9feacfac1a0e568f39458b4e6aa991921b3313cd9a8ba5ef267e8287a187a9"
+  },
+  {
+    "file": "aborted-r00.tar.gz",
+    "bytes": 35630890,
+    "sha256": "4a732f582b6a61ee7bef805af72d6bbe35f613a82f4a06dc85f348b01e0b585d"
+  },
+  {
+    "file": "aborted-r01.tar.gz",
+    "bytes": 35967560,
+    "sha256": "831ce94073cbf11edd7d04ea2da39c1316fd0aaf5008d627d8b4fee7d28f5d7c"
+  },
+  {
+    "file": "aborted-r02.tar.gz",
+    "bytes": 22081988,
+    "sha256": "536dfa531ae20d0916f5bba946c64923e878a9c08e9fb191100ae89740d525ff"
+  },
+  {
+    "file": "analysis-input.tar.gz",
+    "bytes": 517637,
+    "sha256": "7c9a505d667edb04af4bacddd75f75c701df52d9ee98d0e5b5b7378b8b28ad2c"
+  },
+  {
+    "file": "diagnostics.tar.gz",
+    "bytes": 643984,
+    "sha256": "60951066188809b80e06c1f62d1b2eb77b1f0edf5ccbfeee741e58f7fb1804c2"
+  },
+  {
+    "file": "phase2-atomic-concurrency.tar.gz",
+    "bytes": 975129,
+    "sha256": "af757410a1ca6bd0d6c29323b11ef986181f60af0a2a425791044bd1920c9bda"
+  },
+  {
+    "file": "phase2-atomic-observer-smoke.tar.gz",
+    "bytes": 140346,
+    "sha256": "bfb2e8d5e95f5adc3a8495243a118b66812823adf0e0d7e8ba67aeb384d12486"
+  },
+  {
+    "file": "phase2-bench-smoke3.tar.gz",
+    "bytes": 448526,
+    "sha256": "4439982333ee6454f4c06090607a7e22c04036aa432f7284f9bfb40dcccb202b"
+  },
+  {
+    "file": "phase2-no-observers.tar.gz",
+    "bytes": 8503183,
+    "sha256": "436d6a95869bdf4d8b127d0a1af8530390df30c644f08bb29c7ef4494e2fcbee"
+  },
+  {
+    "file": "phase2-observer-control.tar.gz",
+    "bytes": 8722288,
+    "sha256": "26925d3e0c6f1c828c24b14201a6481a1e9065160b27bd4edb6253c4ce3ff3ea"
+  },
+  {
+    "file": "phase2-overhead-profile.tar.gz",
+    "bytes": 18672000,
+    "sha256": "4bbdbe65c0e9eb206bbd3ab10aaddf4175102c8eca7a55969f96a0dc3fb7bc0d"
+  },
+  {
+    "file": "phase2-special-smoke.tar.gz",
+    "bytes": 871184,
+    "sha256": "217ad4b457088ed0f943254e18126ba0e5c54b5d2946357484730f3e555cf147"
+  },
+  {
+    "file": "phase2a-final-validated.tar.gz",
+    "bytes": 1855788,
+    "sha256": "bb3d1e249f0c9c86aecbf324bec62e99233402c59e2b80a582cc139fdafa1308"
+  },
+  {
+    "file": "phase2a-validated.tar.gz",
+    "bytes": 969251,
+    "sha256": "6126feb7d1d37002efbbac2b3f03101806b6824ce2c7c55def35d0f602e78365"
+  },
+  {
+    "file": "primary-manifest.tar.gz",
+    "bytes": 48870,
+    "sha256": "86bb4ad3a788c07790f503dceb6a25d2efe9b1f450f25ad79158492ac6ad2586"
+  },
+  {
+    "file": "primary-r00.tar.gz",
+    "bytes": 35919323,
+    "sha256": "32e15eee8f93898d8f7374344a8c08cf9cef3b7a546ee5c7f0732d3a55403425"
+  },
+  {
+    "file": "primary-r01.tar.gz",
+    "bytes": 35859606,
+    "sha256": "c43dcb5c4f70ed6806f0958051f89dcc48213b93310be065e53ff481790422b9"
+  },
+  {
+    "file": "primary-r02.tar.gz",
+    "bytes": 35259099,
+    "sha256": "ccc66f8ed2c3de749e95900689c5644d68cbfb2485a41765bde00efe81437a2d"
+  },
+  {
+    "file": "primary-r03.tar.gz",
+    "bytes": 35210446,
+    "sha256": "6241edfe3a5d998774e429df5c7285f862912cff45549e9f4d481244f058c299"
+  },
+  {
+    "file": "primary-r04.tar.gz",
+    "bytes": 35241233,
+    "sha256": "2482c7ed045db27f269a8d472f8e3bcc4aa22d21aaeea39b14a540ece6dc0a18"
+  },
+  {
+    "file": "validation-attempts.tar.gz",
+    "bytes": 593640,
+    "sha256": "a6934e68b540559efb4c337e36fb4f16e39bf5d2c763c0e656363bdbe6603ddd"
+  }
+]

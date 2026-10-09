@@ -1,0 +1,132 @@
+{
+  "loader_pid": 86183,
+  "map_fd_ids": [
+    3616,
+    3617,
+    3618,
+    3620,
+    3621,
+    3622,
+    3623,
+    3624
+  ],
+  "program_fd_ids": [
+    6257,
+    6259,
+    6260,
+    6261,
+    6262,
+    6263,
+    6264,
+    6265,
+    6266,
+    6267,
+    6268,
+    6269,
+    6270
+  ],
+  "maps": [
+    {
+      "id": 3616,
+      "type": "task_storage",
+      "name": "task_ctx_stor",
+      "flags": 1,
+      "bytes_key": 4,
+      "bytes_value": 576,
+      "max_entries": 0,
+      "bytes_memlock": 384,
+      "frozen": 0,
+      "btf_id": 3832
+    },
+    {
+      "id": 3617,
+      "type": "lru_hash",
+      "name": "task_snapshots",
+      "flags": 0,
+      "bytes_key": 4,
+      "bytes_value": 440,
+      "max_entries": 4096,
+      "bytes_memlock": 2098048,
+      "frozen": 0,
+      "btf_id": 3832
+    },
+    {
+      "id": 3618,
+      "type": "percpu_array",
+      "name": "stats",
+      "flags": 0,
+      "bytes_key": 4,
+      "bytes_value": 8,
+      "max_entries": 29,
+      "bytes_memlock": 1472,
+      "frozen": 0,
+      "btf_id": 3832
+    },
+    {
+      "id": 3620,
+      "type": "array",
+      "name": "scx_lert.rodata",
+      "flags": 1152,
+      "bytes_key": 4,
+      "bytes_value": 388,
+      "max_entries": 1,
+      "bytes_memlock": 8192,
+      "frozen": 1,
+      "btf_id": 3832
+    },
+    {
+      "id": 3621,
+      "type": "array",
+      "name": ".data.uei_dump",
+      "flags": 1024,
+      "bytes_key": 4,
+      "bytes_value": 32768,
+      "max_entries": 1,
+      "bytes_memlock": 36864,
+      "frozen": 0,
+      "btf_id": 3832
+    },
+    {
+      "id": 3622,
+      "type": "array",
+      "name": "scx_lert.data",
+      "flags": 1024,
+      "bytes_key": 4,
+      "bytes_value": 1168,
+      "max_entries": 1,
+      "bytes_memlock": 8192,
+      "frozen": 0,
+      "btf_id": 3832
+    },
+    {
+      "id": 3623,
+      "type": "array",
+      "name": "scx_lert.bss",
+      "flags": 0,
+      "bytes_key": 4,
+      "bytes_value": 8,
+      "max_entries": 1,
+      "bytes_memlock": 320,
+      "frozen": 0,
+      "btf_id": 3832
+    },
+    {
+      "id": 3624,
+      "type": "struct_ops",
+      "name": "lertick_ops",
+      "flags": 8192,
+      "bytes_key": 4,
+      "bytes_value": 512,
+      "max_entries": 1,
+      "bytes_memlock": 6128,
+      "frozen": 0,
+      "btf_id": 3832
+    }
+  ],
+  "ownership_method": "loader map FDs and struct_ops BTF ID",
+  "ops_btf_id": 3832,
+  "selected_map_ids": [
+    3616,
+    3617
+  ]
+}

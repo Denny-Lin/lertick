@@ -1,0 +1,29 @@
+{
+  "source_commit": "109ce711bfad52c9f2ddfe2ba760b29258d58c25",
+  "build_command": "PKG_CONFIG_PATH=/home/ubuntu/deps/install/lib/pkgconfig make all test-model test-accounting",
+  "build_log_archive": "raw/diagnostics.tar.gz:phase2-final-build.log",
+  "build_log_sha256": "3cd614f9016d2bf622d52defedb502ee0f099441775cf482e2c38bd2c6171975",
+  "verifier_log_archive": "raw/diagnostics.tar.gz:phase2-final-verifier.log",
+  "verifier_log_sha256": "275b3d84e31b68ede73a2be382498c88f6393baf46de72f9527b3b5010373065",
+  "accepted_program_summaries": 13,
+  "processed_instruction_counts": [
+    1332,
+    631,
+    816,
+    897,
+    750,
+    311,
+    3031,
+    110,
+    5,
+    192,
+    220,
+    4,
+    25
+  ],
+  "maximum_processed_instructions": 3031,
+  "registered_ops": "lertick",
+  "warnings": "Five declarations in generated running-kernel vmlinux.h and three signed comparisons in vendored scx/compat.h; build completed successfully.",
+  "model_oracle_trials": 200121,
+  "accounting_oracle_trials": 202000
+}

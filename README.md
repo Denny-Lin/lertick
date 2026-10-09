@@ -11,8 +11,12 @@ reproducible benchmarks define its scope. Learning and inference run in the
 kernel; the loader observes telemetry and controls attachment lifetime.
 
 **Status: Phase 1 works on the recorded Linux VM. This is an experimental
-prototype, not a production scheduler.** No result establishes that Lertick
-outperforms Linux EEVDF or another sched_ext scheduler. Phase 2 has not started.
+prototype, not a production scheduler.** Phase 2A passed Linux correctness and
+safety checks, and Phase 2B completed 280 benchmark trials plus 80 observer/cost
+trials. The linear model did not show a reliable throughput gain over fixed
+budgets and regressed wake latency in two workloads. See
+[Phase 2 results](docs/PHASE2_RESULTS.md). No general superiority over Linux
+EEVDF or another sched_ext scheduler is established.
 
 ## Technical features
 
@@ -36,6 +40,7 @@ outperforms Linux EEVDF or another sched_ext scheduler. Phase 2 has not started.
 | `fixed` | Disabled | Fixed 2 ms by default |
 | `shadow` | In-eBPF training and inference | Fixed 2 ms by default |
 | `online` | In-eBPF training and inference | Bounded predictions after warm-up |
+| `ewma` | Historical burst EWMA; no linear training | Bounded EWMA after warm-up |
 
 ## Architecture
 
@@ -54,6 +59,10 @@ flowchart LR
     S --> O[Read-only userspace telemetry]
 ```
 
+Continuing-task budgets deduct both committed and pending actual CPU service;
+only `stopping` commits runtime and weighted fairness charges. A bounded LRU
+telemetry map remains separate from live task/model storage.
+
 The learned value affects time-slice budgets. Dispatch ordering, CPU selection,
 and actual-service accounting follow the existing Phase 1 policy. The model
 learns each tracked task separately. By default, workloads opt in with a
@@ -67,6 +76,7 @@ Portable checks on macOS or Linux:
 git clone https://github.com/Denny-Lin/lertick.git
 cd lertick
 make test-model
+make test-accounting
 python3 tests/check_docs.py
 ```
 
@@ -124,6 +134,34 @@ logging, virtualization, and host scheduling limit interpretation. This is a
 functional baseline, not evidence of superiority over EEVDF or other policies.
 See [the full report](docs/PHASE1_RESULTS.md) for measurements and limitations.
 
+## Phase 2 correctness and benchmarking
+
+The [Linux correctness suite](tests/validate_phase2.py) passed 19 lifecycle cases,
+156 independent CPU-clock/procfs service checks, 4,200-task churn, an additional
+8,000-child concurrent fork/exec test under full preemption, three finite
+fairness trials and three repetitions of all five recovery paths. A real
+continuation witness changes the old slice decision after including pending
+service. Eight equal competitors on four CPUs produced Jain indices above
+0.99999 and observed progress gaps below 75 ms in the final full-preemption
+regression. These are finite VM checks.
+
+The [benchmark suite](benchmarks/README.md) compares default Linux, official
+`scx_simple`, fixed, shadow, EWMA, online and compatible `scx_bpfland` across
+eight categories. It retains randomized plans, raw data, kernel wake-to-switch
+observations, uncertainty estimates, model errors and overhead measurements.
+All 360 final trials passed. Online versus fixed kernel wake p99 increased
+about 214% in mixed and 147% in multicore contention; all online/fixed throughput
+intervals included zero change. Same-episode linear MAE exceeded EWMA in every
+category with eligible labels. Optional timers reported instrumented arithmetic
+means of roughly 24–26 ns per linear update and 14–15 ns per inference in two
+workloads. The guest counter ticks about every 41.7 ns; those means average
+quantized calls and include observer cost. They do not resolve individual
+operations to that precision or establish uninstrumented overhead. A useful
+learned scheduling advantage remains unproven.
+See [the correctness report](docs/PHASE2_CORRECTNESS.md),
+[protocol](docs/PHASE2_BENCHMARKS.md) and [results](docs/PHASE2_RESULTS.md).
+Phase 2 commits remain local pending approval; no release or tag is created.
+
 ## Safety and recovery
 
 Run privileged experiments in a disposable VM with an independent host control
@@ -152,12 +190,12 @@ flags, partial switching, and one target TGID; reproduce it through the
 ## Known limitations and scope
 
 Only one ARM64 guest/kernel combination is validated. Cross-kernel support,
-bare-metal results, adversarial fairness/starvation, affinity/migration stress,
-heavy task churn, and long-duration overhead remain unvalidated. A continuing
-running task can receive a bounded prediction slice before its current service
-segment is deducted; that accounting limitation remains unchanged by this
-rebrand. Slice bounds constrain newly assigned budgets, not exact runtime or
-partially consumed budgets on resumed tasks.
+bare-metal results, long-term production behavior, allocation-failure injection,
+PID-wrap reuse and universal starvation/fairness guarantees remain unvalidated.
+Phase 2 fixes the known continuing-service issue and adds finite affinity,
+churn and fairness tests. Slice bounds constrain newly assigned budgets, not
+exact runtime or partially consumed budgets on resumed tasks. Diagnostic
+timers, tracing and runtime accounting have observer cost.
 
 Memory allocation optimization, reclaim, DAMON/DAMOS controllers, NUMA memory
 placement, and joint CPU/memory management are outside the project. Useful
@@ -165,7 +203,8 @@ related findings remain in the [background research archive](docs/planning/READM
 with no active or backup memory-development direction. CPU-topology metadata
 and BPF map footprint remain relevant to scheduler validation.
 
-Future implementation or performance work requires explicit Phase 2 approval.
+Phase 2C optimization is deferred. The current evidence favors revisiting the
+prediction-to-slice decision before tuning model parameters.
 See [CONTRIBUTING](CONTRIBUTING.md), [security policy](SECURITY.md), and
 [the decision record](docs/DECISIONS.md).
 

@@ -95,6 +95,22 @@ scp -i build/vm/id_ed25519 -P 22222 \
 python3 scripts/qemu_vm.py ssh -- 'mkdir -p /home/ubuntu/lertick && tar -xzf /home/ubuntu/lertick-source.tgz -C /home/ubuntu/lertick'
 ```
 
+An archive omits Git history. Record `git rev-parse HEAD` on the host and retain
+the archive hash when using that method. For the Phase 2 measurements, a Git
+bundle preserved the exact committed source and the runner's `source_git_commit`:
+
+```sh
+git bundle create build/phase2-source.bundle phase2-correctness-benchmarks
+scp -i build/vm/id_ed25519 -P 22222 \
+  -o BatchMode=yes -o UserKnownHostsFile=build/vm/known_hosts \
+  build/phase2-source.bundle ubuntu@127.0.0.1:/home/ubuntu/phase2-source.bundle
+python3 scripts/qemu_vm.py ssh -- 'git clone -b phase2-correctness-benchmarks /home/ubuntu/phase2-source.bundle /home/ubuntu/lertick-phase2-bench'
+```
+
+Use a fresh clone directory. Each experiment's `source_git_commit` identifies
+its measured implementation. Later documentation changes do not retroactively
+change its saved source and binary fingerprints.
+
 Use the helper to run an explicit guest command, or open an interactive session:
 
 ```sh
@@ -146,7 +162,8 @@ when rebuilding that existing guest. `LIBBPF_CFLAGS`, `LIBBPF_LIBS`, `CLANG`, an
 
 The build generates `build/vmlinux.h` from this running guest's BTF, compiles
 `src/bpf/scx_lertick.bpf.c` to `build/scx_lertick.bpf.o`, generates a libbpf skeleton,
-and builds `build/scx_lertick` plus `build/burst_workload`. Run `make clean` after a
+and builds `build/scx_lertick`, `build/burst_workload`, `build/phase2_workload`
+and `build/lifecycle_workload`. Run `make clean` after a
 kernel change so a cached header cannot hide a mismatch. `--check` additionally
 loads live BTF, finds `sched_ext_ops`, and tests BPF map creation with the current
 privileges. Loading refuses to replace an already enabled sched_ext scheduler.
@@ -165,6 +182,7 @@ selection:
 | `fixed` | No training or inference | Fixed 2 ms by default |
 | `shadow` | Training/inference inside eBPF | Fixed 2 ms by default |
 | `online` | Training/inference inside eBPF | Predictions may select bounded slices after eight valid labels |
+| `ewma` | Historical EWMA; no linear training | Same bounds and warm-up; EWMA predicts remaining service |
 
 The default prediction bounds are 0.5–5 ms. `--fixed-slice-us`,
 `--min-slice-us`, and `--max-slice-us` configure them; the loader requires
@@ -240,6 +258,82 @@ Each run includes two CPU-only controls and one blocking CPU-burst workload,
 all pinned to guest CPU 0. It reports measured completion percentiles and work
 throughput. These short VM measurements establish a baseline; they do not
 justify a performance improvement claim or a production scheduling guarantee.
+
+## Phase 2 correctness and benchmark deployment
+
+Phase 2 source remains on the local `phase2-correctness-benchmarks` branch until
+the owner approves publication. Follow [Phase 2 correctness](PHASE2_CORRECTNESS.md)
+and the [benchmark guide](../benchmarks/README.md), preserving fresh output
+directories for each experiment.
+
+Additional tools used in the recorded guest:
+
+```sh
+sudo apt-get install bpftrace stress-ng linux-tools-generic-hwe-24.04 \
+  flex bison bc libssl-dev dwarves rustup protobuf-compiler libseccomp-dev
+make test-model test-accounting
+cat /sys/kernel/debug/sched/preempt
+printf full | sudo tee /sys/kernel/debug/sched/preempt
+sudo python3 tests/validate_phase2.py --output results/local/phase2a
+printf lazy | sudo tee /sys/kernel/debug/sched/preempt
+```
+
+These mode commands belong inside the disposable guest. The recorded kernel
+originally selects `lazy`; record and restore the selected mode if another guest
+differs. The concurrent-init regression requires actual selected `full`, while
+the final performance comparison uses the original `lazy` mode.
+
+Rust is needed only for the external upstream comparator. Lertick's model and
+scheduler remain C/eBPF. The compatible comparison uses `sched-ext/scx`
+`v1.0.16`, commit `e25cc6e5920f33d5bbe2bd62b2e7a5854de88a19`:
+
+```sh
+rustup toolchain install 1.91.1 --profile minimal
+git clone --depth 1 --branch v1.0.16 https://github.com/sched-ext/scx.git \
+  build/reference/scx-v1.0.16
+mkdir -p build/reference/tool-bin
+ln -s /usr/bin/clang-18 build/reference/tool-bin/clang
+cd build/reference/scx-v1.0.16
+PATH="$PWD/../tool-bin:$PATH" cargo +1.91.1 build --release --locked -p scx_bpfland -j2
+cd ../../..
+```
+
+The newer `scx_lavd` v1.1.2 built but failed actual verifier acceptance in
+`arena_init` on this guest. It is not included as a successfully deployed
+comparator. Preserve its diagnostic rather than changing the test kernel to
+improve a benchmark result.
+
+The compile workload uses official Linux 7.0 source, archive SHA256
+`bb7f6d80b387c757b7d14bb93028fcb90f793c5c0d367736ee815a100b3891f0`:
+
+```sh
+curl -fL https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.0.tar.xz \
+  -o build/reference/linux-7.0.tar.xz
+printf '%s  %s\n' \
+  bb7f6d80b387c757b7d14bb93028fcb90f793c5c0d367736ee815a100b3891f0 \
+  build/reference/linux-7.0.tar.xz | sha256sum -c -
+tar -xJf build/reference/linux-7.0.tar.xz -C build/reference
+make -C build/reference/linux-7.0 O="$PWD/build/kernel-benchmark" defconfig
+make -C build/reference/linux-7.0 O="$PWD/build/kernel-benchmark" -j4 kernel/sched/built-in.a
+```
+
+The memory-pressure interference workload uses 3,600 MiB of anonymous pages in
+the four-GiB VM and a temporary two-GiB swap file. No memory controller is added.
+Prepare swap only inside the disposable guest, using a fresh file:
+
+```sh
+sudo fallocate -l 2G build/phase2-benchmark.swap
+sudo chmod 600 build/phase2-benchmark.swap
+sudo mkswap build/phase2-benchmark.swap
+sudo swapon build/phase2-benchmark.swap
+swapon --show
+```
+
+Record actual PSI, reclaim scans and swap counters. Do not infer pressure from
+allocation size alone. The [benchmark commands](../benchmarks/README.md) run the
+primary repeated suite and separate profiled/observer-control studies. Stop
+workloads before removing temporary swap; the recorded VM is shut down after
+experiments. Never deploy these fault tests on the host kernel.
 
 ## Recovery and watchdog test
 

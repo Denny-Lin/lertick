@@ -130,3 +130,132 @@ be selected, report that blocker rather than claiming this stress was covered.
 Expected final state is `disabled`. The runner refuses an existing sched_ext
 scheduler and terminates only children it owns. Allocation failure injection,
 PID-wrap reuse, other kernel versions, x86 and bare metal remain separate work.
+
+## Final measured validation
+
+The final Phase 2A run tested source commit
+`109ce711bfad52c9f2ddfe2ba760b29258d58c25` in the four-vCPU Ubuntu ARM64 QEMU
+guest on `7.0.0-38-generic`. Full preemption was selected: the dynamic interface
+reported `(full) lazy`, where parentheses identify the selected mode. The
+[raw correctness results](../results/phase2/correctness.json) and
+[independently audited metrics](../results/phase2/correctness-metrics.json)
+record this run. All 19 original lifecycle cases, three fairness cases, the
+concurrent-fork regression and all 15 recovery attempts passed. The suite
+completed with sched_ext `disabled`; successful registration and real task
+execution required the kernel to accept the loaded BPF programs.
+
+The burst fixture recorded the following per-task counters. A run is a
+`running` callback, not necessarily a new burst. Shadow trains and predicts
+while retaining the fixed policy; online applies the learned prediction.
+
+| Mode | Runs | Completed labels | Training updates | Adaptive runs | Selected slice range |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Fixed | 1,361 | 1,346 | 0 | 0 | 2 ms |
+| Shadow | 1,363 | 1,350 | 1,350 | 0 | 2 ms |
+| Online | 1,363 | 1,348 | 1,348 | 1,351 | 0.5–5 ms |
+
+Online additionally recorded 1,619 adaptive slice assignments and 1,358
+dispatch budgets matching the subsequent running observation. Training updates
+equal completed labels in both learning modes. These counters and bounded
+slice observations demonstrate in-kernel learning and its scheduling effect;
+they do not establish a performance improvement.
+
+Continuation sampling captured 19 observations, of which 18 changed the
+selected budget relative to the old committed-only calculation. Deduplicating
+the recorded tuples leaves 14 observations, 13 changed. Repeated snapshots
+can describe the same decision, so the 19 samples are not claimed as distinct
+callbacks. In one witness, committed service was zero and pending service was
+1,033,125 ns against a 1,021,728 ns prediction. The corrected calculation
+selected the existing 2,000,000 ns exhaustion fallback; the old calculation
+would have selected 1,021,728 ns. The selected budgets matched the independently
+recomputed pending-service calculation.
+
+### Independent service comparison
+
+All 156 comparisons against thread CPU clocks and procfs passed the declared
+tolerances. The maximum absolute BPF-versus-CPU-clock difference was
+1,894,455 ns (1.894455 ms). The maximum CPU-clock-versus-procfs difference was
+844,916 ns (0.844916 ms).
+
+The 48 long CPU, yield, affinity and late-opt-in controls with at least one
+second of independently measured CPU service, including the fairness workers,
+had a maximum BPF-versus-CPU-clock difference of 1,718,000 ns (1.718 ms) and
+maximum relative difference of 0.0859041%. The worst long control was online
+late opt-in: CPU clock 1,999,903,787 ns, procfs 2,000,748,703 ns and BPF
+2,001,621,787 ns, with zero completed labels or training updates.
+
+Across all 156 comparisons, the maximum relative difference was 12.326%.
+Short fork/exec controls magnify startup and teardown boundary differences:
+the independent measured interval and complete BPF association do not have
+identical boundaries. Passing the absolute/relative tolerance for those
+controls does not support a universal sub-percent service-accuracy claim.
+
+### Finite fairness and lifecycle results
+
+Each fairness run used eight equal-weight competitors on four CPUs for nine
+seconds. Every worker received service; all Jain indices exceeded 0.9 and all
+observed progress gaps stayed below the one-second acceptance bound.
+
+| Mode | Jain index | Maximum observed runnable progress gap |
+| --- | ---: | ---: |
+| Fixed | 0.999999954534 | 7.046628 ms |
+| Shadow | 0.999999945728 | 30.658648 ms |
+| Online | 0.999999519596 | 74.701708 ms |
+
+These finite equal-weight observations do not prove universal starvation
+freedom, fairness under adversarial workloads, or long-term production safety.
+The audited callback ordering is specific to Linux v7.0; this execution does
+not establish compatibility with other kernels or architectures.
+
+The original churn case independently completed 4,200 children and retained
+3,787 task snapshots, including eight recent children. The added full-preemption
+case ran eight overlapping parents pinned to CPU 0, each creating and reaping
+1,000 children. It recorded 8,000 distinct child TIDs and 8,000 independent
+completion records. The known lower bound of new associations was 8,008
+(children plus parents), and the observed initialization delta was exactly
+8,008. After detach, global initialization and exit counts both equaled
+8,160, with zero live associations and zero counter, allocation or snapshot
+failure counters.
+
+The concurrent case retained 3,745 child snapshots and 3,753 total snapshots,
+within the 4,096-entry bound. Expected LRU eviction affects telemetry, so these
+retained entries cannot enumerate every completed child. The regression proves
+the independent completion count, the association-count lower bound and exact
+final global balance. It does not prove that every possible lost-update
+interleaving occurred, inspect every live task-storage allocation, or test
+allocation failure injection.
+
+The [actual kernel map inventory](../results/phase2/map-footprint.json)
+reported a 576-byte task-storage value and a 440-byte snapshot value. The
+4,096-entry LRU map reported 2,098,048 bytes of
+memlock, including map overhead; its raw snapshot values account for
+1,802,240 bytes. Live task storage uses one 576-byte value per active
+association plus kernel overhead. Its total depends on the number of live
+tasks and is not bounded by the retained snapshot capacity. Kernel map
+metadata is not a complete measurement of total live task-storage allocation.
+
+All 23 owned-map release checks across the original lifecycle, fairness and
+concurrent-fork cases observed disappearance of the loader-owned task-storage
+and snapshot map IDs within the five-second bound. The maximum measured drain
+was 172.476994 ms. Disappearance was polled, so this is an observed latency
+including polling overhead, not the exact instant of kernel deallocation.
+
+### Recovery observations
+
+Each mechanism was tested three times. All 15 attempts restored the default
+Linux scheduler, balanced final association counters and left sched_ext
+disabled. Recovery timings are observed elapsed seconds, including polling.
+
+| Mechanism | Repetition 1 | Repetition 2 | Repetition 3 |
+| --- | ---: | ---: | ---: |
+| SIGINT | 0.064645078 | 0.031499459 | 0.031518715 |
+| SIGTERM | 0.031603122 | 0.031594877 | 0.031859674 |
+| SIGKILL | 0.031407664 | 0.031709961 | 0.031439799 |
+| SysRq-S | 0.051843149 | 0.050629529 | 0.052668290 |
+| Watchdog | 2.489730008 | 2.505141662 | 2.510805226 |
+
+The watchdog cases produced a real runnable-task stall, a positive injected
+stall counter and sched_ext exit kind `1026`; the SysRq cases reported exit
+kind `67`. Fault injection was restricted to the disposable guest. Successful
+recovery in these attempts does not replace broader fault and sustained-load
+testing.

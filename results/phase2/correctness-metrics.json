@@ -1,0 +1,425 @@
+{
+  "input": "build/phase2-artifacts/phase2a-final-validated/validation.json",
+  "input_sha256": "ece862960a510346aa117bc13df8e3b98f0375b74556bf63f2b112294211924b",
+  "validated_source_commit": "109ce711bfad52c9f2ddfe2ba760b29258d58c25",
+  "source_commit_provenance": "Final validation ran the same fresh Git-bundle clone at109ce711bfad52c9f2ddfe2ba760b29258d58c25 as the final benchmarks. validation.json itself does not embed a commit; see build-verifier.json and environment.json for external provenance.",
+  "audit_passed": true,
+  "completed": true,
+  "final_state": "disabled",
+  "kernel": "7.0.0-38-generic",
+  "architecture": "aarch64",
+  "lifecycle_case_count": 19,
+  "modes": {
+    "fixed": {
+      "runs": 1361,
+      "completed_bursts": 1346,
+      "training_updates": 0,
+      "adaptive_runs": 0,
+      "adaptive_slices": 0,
+      "inferences": 0,
+      "matching_dispatch_slices": 1356,
+      "min_selected_slice_ns": 2000000,
+      "max_selected_slice_ns": 2000000
+    },
+    "shadow": {
+      "runs": 1363,
+      "completed_bursts": 1350,
+      "training_updates": 1350,
+      "adaptive_runs": 0,
+      "adaptive_slices": 0,
+      "inferences": 1351,
+      "matching_dispatch_slices": 1358,
+      "min_selected_slice_ns": 2000000,
+      "max_selected_slice_ns": 2000000
+    },
+    "online": {
+      "runs": 1363,
+      "completed_bursts": 1348,
+      "training_updates": 1348,
+      "adaptive_runs": 1351,
+      "adaptive_slices": 1619,
+      "inferences": 1349,
+      "matching_dispatch_slices": 1358,
+      "min_selected_slice_ns": 500000,
+      "max_selected_slice_ns": 5000000
+    }
+  },
+  "continuation": {
+    "observations": 19,
+    "changed_observations": 18,
+    "unique_observations": 14,
+    "unique_changed_observations": 13,
+    "representative_changed": {
+      "tid": 81536,
+      "pending_ns": 1033125,
+      "consumed_ns": 1033125,
+      "prediction_ns": 1021728,
+      "selected_ns": 2000000,
+      "expected_ns": 2000000,
+      "committed_ns": 0,
+      "legacy_expected_ns": 1021728,
+      "pending_changed_slice": true
+    }
+  },
+  "service_all": {
+    "count": 156,
+    "maximum_bpf_absolute_error_ns": 1894455,
+    "maximum_bpf_relative_error_percent": 12.325994985189517,
+    "maximum_clock_proc_difference_ns": 844916,
+    "maximum_error_case": {
+      "tid": 81653,
+      "role": "burst",
+      "clock_cpu_ns": 777061537,
+      "proc_schedstat_ns": 777129829,
+      "bpf_runtime_ns": 775167082,
+      "bpf_absolute_error_ns": 1894455,
+      "tolerance_ns": 20000000,
+      "exited": true,
+      "completed_bursts": 767,
+      "training_updates": 0,
+      "mode": "fixed",
+      "scenario": "threads",
+      "bpf_relative_error_percent": 0.24379729401019112
+    }
+  },
+  "service_long_controls": {
+    "count": 48,
+    "maximum_bpf_absolute_error_ns": 1718000,
+    "maximum_bpf_relative_error_percent": 0.08590413254715237,
+    "maximum_clock_proc_difference_ns": 844916,
+    "maximum_error_case": {
+      "tid": 81891,
+      "role": "lateoptin",
+      "clock_cpu_ns": 1999903787,
+      "proc_schedstat_ns": 2000748703,
+      "bpf_runtime_ns": 2001621787,
+      "bpf_absolute_error_ns": 1718000,
+      "tolerance_ns": 39998075.74,
+      "exited": true,
+      "completed_bursts": 0,
+      "training_updates": 0,
+      "mode": "online",
+      "scenario": "lateoptin",
+      "bpf_relative_error_percent": 0.08590413254715237
+    }
+  },
+  "long_control_definition": "CPU/yield/affinity/late-opt-in rows with >=1 second independently measured CPU service, including finite fairness controls.",
+  "fairness": [
+    {
+      "mode": "fixed",
+      "jain_index": 0.9999999545339743,
+      "max_observed_runnable_gap_ns": 7046628,
+      "competitors": 8,
+      "available_cpus": 4,
+      "duration_seconds": 9
+    },
+    {
+      "mode": "shadow",
+      "jain_index": 0.9999999457282288,
+      "max_observed_runnable_gap_ns": 30658648,
+      "competitors": 8,
+      "available_cpus": 4,
+      "duration_seconds": 9
+    },
+    {
+      "mode": "online",
+      "jain_index": 0.9999995195956528,
+      "max_observed_runnable_gap_ns": 74701708,
+      "competitors": 8,
+      "available_cpus": 4,
+      "duration_seconds": 9
+    }
+  ],
+  "single_parent_churn": {
+    "workers_completed": 4200,
+    "retained_tasks": 3787,
+    "retained_recent_children": 8
+  },
+  "concurrent_fork": {
+    "pinned_cpu": 0,
+    "overlapping_parents": 8,
+    "children_per_parent": 1000,
+    "children_per_batch": 8,
+    "children_created": 8000,
+    "children_reaped": 8000,
+    "independent_completion_records": 8000,
+    "distinct_child_tids": 8000,
+    "preemption_mode": "(full) lazy",
+    "retained_child_snapshots": 3745,
+    "retained_tasks": 3753,
+    "known_minimum_new_associations": 8008,
+    "observed_new_init_associations": 8008,
+    "live_before": 149,
+    "live_drained": 148
+  },
+  "concurrent_fork_final_counters": {
+    "init_tasks": 8160,
+    "exit_tasks": 8160,
+    "live_tasks": 0,
+    "counter_errors": 0,
+    "alloc_failures": 0,
+    "snapshot_failures": 0
+  },
+  "map_releases": [
+    {
+      "kind": "lifecycle",
+      "mode": "fixed",
+      "scenario": "cpu",
+      "elapsed_seconds": 0.059715839000091364
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "fixed",
+      "scenario": "yield",
+      "elapsed_seconds": 0.056939977999718394
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "fixed",
+      "scenario": "affinity",
+      "elapsed_seconds": 0.17247699400013516
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "fixed",
+      "scenario": "lateoptin",
+      "elapsed_seconds": 0.055826494000029925
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "fixed",
+      "scenario": "threads",
+      "elapsed_seconds": 0.0613742049999928
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "fixed",
+      "scenario": "forkexec",
+      "elapsed_seconds": 0.05715638099991338
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "shadow",
+      "scenario": "cpu",
+      "elapsed_seconds": 0.055363309000313166
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "shadow",
+      "scenario": "yield",
+      "elapsed_seconds": 0.05860139799915487
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "shadow",
+      "scenario": "affinity",
+      "elapsed_seconds": 0.05838402999961545
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "shadow",
+      "scenario": "lateoptin",
+      "elapsed_seconds": 0.05629341399981058
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "shadow",
+      "scenario": "threads",
+      "elapsed_seconds": 0.059355463000429154
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "shadow",
+      "scenario": "forkexec",
+      "elapsed_seconds": 0.05908567500046047
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "online",
+      "scenario": "cpu",
+      "elapsed_seconds": 0.17147734699938155
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "online",
+      "scenario": "yield",
+      "elapsed_seconds": 0.16600529000061215
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "online",
+      "scenario": "affinity",
+      "elapsed_seconds": 0.16298676800033718
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "online",
+      "scenario": "lateoptin",
+      "elapsed_seconds": 0.06444808099968213
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "online",
+      "scenario": "threads",
+      "elapsed_seconds": 0.06087159199978487
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "online",
+      "scenario": "forkexec",
+      "elapsed_seconds": 0.16735469899958844
+    },
+    {
+      "kind": "lifecycle",
+      "mode": "fixed",
+      "scenario": "churn",
+      "elapsed_seconds": 0.05527130700011185
+    },
+    {
+      "kind": "fairness",
+      "mode": "fixed",
+      "scenario": null,
+      "elapsed_seconds": 0.05451028599964047
+    },
+    {
+      "kind": "fairness",
+      "mode": "shadow",
+      "scenario": null,
+      "elapsed_seconds": 0.13024678500005393
+    },
+    {
+      "kind": "fairness",
+      "mode": "online",
+      "scenario": null,
+      "elapsed_seconds": 0.16703961300027004
+    },
+    {
+      "kind": "concurrent_fork",
+      "mode": "fixed",
+      "scenario": "eight_parents_8000_children",
+      "elapsed_seconds": 0.05586898099954851
+    }
+  ],
+  "maximum_map_release_seconds": 0.17247699400013516,
+  "recovery_count": 15,
+  "recovery": [
+    {
+      "repetition": 0,
+      "mechanism": "sigint",
+      "recovery_seconds": 0.06464507800046704,
+      "exit_kind": null
+    },
+    {
+      "repetition": 0,
+      "mechanism": "sigterm",
+      "recovery_seconds": 0.03160312199997861,
+      "exit_kind": null
+    },
+    {
+      "repetition": 0,
+      "mechanism": "sigkill",
+      "recovery_seconds": 0.03140766399974382,
+      "exit_kind": null
+    },
+    {
+      "repetition": 0,
+      "mechanism": "sysrq",
+      "recovery_seconds": 0.05184314899997844,
+      "exit_kind": 67
+    },
+    {
+      "repetition": 0,
+      "mechanism": "watchdog",
+      "recovery_seconds": 2.4897300080001514,
+      "exit_kind": 1026
+    },
+    {
+      "repetition": 1,
+      "mechanism": "sigint",
+      "recovery_seconds": 0.03149945899986051,
+      "exit_kind": null
+    },
+    {
+      "repetition": 1,
+      "mechanism": "sigterm",
+      "recovery_seconds": 0.03159487699940655,
+      "exit_kind": null
+    },
+    {
+      "repetition": 1,
+      "mechanism": "sigkill",
+      "recovery_seconds": 0.03170996100016055,
+      "exit_kind": null
+    },
+    {
+      "repetition": 1,
+      "mechanism": "sysrq",
+      "recovery_seconds": 0.05062952900061646,
+      "exit_kind": 67
+    },
+    {
+      "repetition": 1,
+      "mechanism": "watchdog",
+      "recovery_seconds": 2.5051416619999145,
+      "exit_kind": 1026
+    },
+    {
+      "repetition": 2,
+      "mechanism": "sigint",
+      "recovery_seconds": 0.031518714999947406,
+      "exit_kind": null
+    },
+    {
+      "repetition": 2,
+      "mechanism": "sigterm",
+      "recovery_seconds": 0.031859673999861116,
+      "exit_kind": null
+    },
+    {
+      "repetition": 2,
+      "mechanism": "sigkill",
+      "recovery_seconds": 0.03143979900050908,
+      "exit_kind": null
+    },
+    {
+      "repetition": 2,
+      "mechanism": "sysrq",
+      "recovery_seconds": 0.052668289999928675,
+      "exit_kind": 67
+    },
+    {
+      "repetition": 2,
+      "mechanism": "watchdog",
+      "recovery_seconds": 2.5108052260002296,
+      "exit_kind": 1026
+    }
+  ],
+  "recovery_ranges": {
+    "sigint": {
+      "minimum_seconds": 0.03149945899986051,
+      "maximum_seconds": 0.06464507800046704
+    },
+    "sigterm": {
+      "minimum_seconds": 0.03159487699940655,
+      "maximum_seconds": 0.031859673999861116
+    },
+    "sigkill": {
+      "minimum_seconds": 0.03140766399974382,
+      "maximum_seconds": 0.03170996100016055
+    },
+    "sysrq": {
+      "minimum_seconds": 0.05062952900061646,
+      "maximum_seconds": 0.052668289999928675
+    },
+    "watchdog": {
+      "minimum_seconds": 2.4897300080001514,
+      "maximum_seconds": 2.5108052260002296
+    }
+  },
+  "limitations": [
+    "Fairness is a finite nine-second equal-weight workload on four vCPUs, not universal starvation freedom, adversarial fairness, or long-term safety.",
+    "The fork regression checks independent 8000 child completions and at least8008 new associations, plus exact global init/exit balance after detach; it does not prove that every possible lost update is triggered, inspect every live storage allocation, or inject allocation failure.",
+    "LRU retained snapshots are bounded observations; eviction means they cannot enumerate every exited child.",
+    "Portable helper tests and kernel-specific callback assumptions do not establish cross-kernel compatibility."
+  ]
+}

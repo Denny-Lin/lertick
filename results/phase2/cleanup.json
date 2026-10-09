@@ -1,0 +1,9 @@
+{
+  "utc": "2026-10-09T14:16:18.717868+00:00",
+  "sched_ext_state": "disabled",
+  "bpf_stats_enabled": "0",
+  "preemption_mode": "full (lazy)",
+  "swap_after": "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n",
+  "workload_processes": "",
+  "vm_shutdown": "Graceful QEMU system_powerdown completed; monitor socket disappeared and serial log ended with reboot: Power down."
+}

@@ -1,0 +1,47 @@
+{
+  "architecture": "aarch64",
+  "arguments": {
+    "bpf_runtime": "True",
+    "cpus": "0,1,2,3",
+    "duration": "10.0",
+    "extra_scheduler": "[('scx_bpfland', PosixPath('/home/ubuntu/reference/scx-v1.1.2/target/release/scx_bpfland'))]",
+    "kernel_build": "/home/ubuntu/reference/linux7",
+    "kernel_source": "/home/ubuntu/reference/linux-7.0",
+    "memory_mib": "3600",
+    "output": "/home/ubuntu/phase2-benchmark-final",
+    "perf": "/usr/bin/perf",
+    "policies": "default,scx_simple,fixed,shadow,ewma,online,scx_bpfland",
+    "profile": "False",
+    "reference": "/home/ubuntu/reference/scx-c-examples/build/scheds/c/scx_simple",
+    "repetitions": "5",
+    "resume": "False",
+    "seed": "20261009",
+    "smoke": "False",
+    "warmup": "2.0",
+    "without_wake_observer": "False",
+    "workloads": "cpu,shortburst,wakeheavy,mixed,multicore,affinity,kernelcompile,memory"
+  },
+  "benchmark_sources": {
+    "benchmarks/phase2_workload.c": "d138132aa14dec94fcabf98eefc4650de8da0231c23e739c31432ec281725173",
+    "benchmarks/run_phase2.py": "6212d8d0d8c51b486fb5f48e973fb7de33c253131c7cce92bfe63893aaa6ec93",
+    "benchmarks/wake_latency.bt": "7daca1d262f0176995d72ef2798f16ff29fae53cfe69423f0af58199927d826e"
+  },
+  "compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "environment": {
+    "cmdline": "BOOT_IMAGE=/vmlinuz-7.0.0-38-generic root=UUID=86f7cf19-9959-4dba-91b1-0052c9d45c21 ro console=tty1 console=ttyAMA0",
+    "cpuinfo": "processor\t: 0\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 1\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 2\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 3\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0",
+    "meminfo": "MemTotal:        3986084 kB\nMemFree:         2027168 kB\nMemAvailable:    3610488 kB\nBuffers:           40896 kB\nCached:          1661796 kB\nSwapCached:         8904 kB\nActive:           496324 kB\nInactive:        1236084 kB\nActive(anon):      31168 kB\nInactive(anon):     6264 kB\nActive(file):     465156 kB\nInactive(file):  1229820 kB\nUnevictable:       26236 kB\nMlocked:           26236 kB\nSwapTotal:       2097148 kB\nSwapFree:        2069820 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              1700 kB\nWriteback:             0 kB\nAnonPages:         50868 kB\nMapped:            41668 kB\nShmem:               264 kB\nKReclaimable:      48168 kB\nSlab:             110384 kB\nSReclaimable:      48168 kB\nSUnreclaim:        62216 kB\nKernelStack:        2400 kB\nShadowCallStack:     624 kB\nPageTables:        11284 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:     4090188 kB\nCommitted_AS:     267172 kB\nVmallocTotal:   135288315904 kB\nVmallocUsed:       13496 kB\nVmallocChunk:          0 kB\nPercpu:             1936 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:     65536 kB\nFilePmdMapped:         0 kB\nCmaTotal:          32768 kB\nCmaFree:          231056 kB\nBalloon:               0 kB\nGPUActive:             0 kB\nGPUReclaim:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB",
+    "os_release": "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.5 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo"
+  },
+  "kernel": "7.0.0-38-generic",
+  "preemption_mode": "full (lazy)",
+  "programs": {
+    "/home/ubuntu/lertick-phase2-final/build/phase2_workload": "ce5e88e996022a9197e08fface0f52b1ebe1da72bd385acee58da9056c3044dd",
+    "/home/ubuntu/lertick-phase2-final/build/scx_lertick": "b2ab6f8f294ba4766f32482db6b0a2277b1fd61d9e37166d52a20b9d732f298f",
+    "/home/ubuntu/reference/scx-c-examples/build/scheds/c/scx_simple": "9b9562fa5bb52b968b56b6564a02cf6160ff249aa25f882ae70e014357ab212a",
+    "/home/ubuntu/reference/scx-v1.1.2/target/release/scx_bpfland": "606fcc9e789bb7cfb5e5e51824a56d9556ad595d03fda048daded4dc9aa908bb"
+  },
+  "smoke_only": false,
+  "source_git_commit": "109ce711bfad52c9f2ddfe2ba760b29258d58c25",
+  "swap": "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n/home/ubuntu/reference/phase2-benchmark.swap file\t\t2097148\t\t27328\t\t-1"
+}

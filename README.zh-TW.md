@@ -10,7 +10,10 @@
 週期並讀取遙測。
 
 **目前為已通過實際 Linux 部署的 Phase 1 實驗原型，尚非正式生產排程器。**
-不宣稱優於 Linux EEVDF 或其他 sched_ext 排程器。Phase 2 尚未開始。
+Phase 2A 已在相同 Linux 客體通過正確性與安全測試；Phase 2B 完成 280 個基準
+trial 與 80 個成本／觀測控制 trial。線性模型未顯示相對 fixed 的可靠吞吐量
+增益，兩類 workload 的喚醒延遲反而退步。參閱
+[Phase 2 結果](docs/PHASE2_RESULTS.md)。不宣稱普遍優於 Linux EEVDF 或其他排程器。
 
 ## 技術功能與架構
 
@@ -30,6 +33,7 @@
 | `fixed` | 停用 | 預設固定 2 ms |
 | `shadow` | eBPF 內訓練與推論 | 預設固定 2 ms |
 | `online` | eBPF 內訓練與推論 | 暖身後依預測設定有界限時間片 |
+| `ewma` | 歷史 burst EWMA；不訓練線性模型 | 暖身後依 EWMA 設定有界限時間片 |
 
 架構流程為：喚醒時擷取歷史特徵 → eBPF 預測 → 暖身／固定值回退／時間片裁切
 → weighted virtual-time 派送 → 實際 CPU 執行量累積 → 確認睡眠後完成 burst
@@ -92,6 +96,26 @@ QEMU 10.2.1 與 HVF 硬體加速，配置四個 vCPU 及 4 GiB RAM。編譯、ve
 預設時間片差異、暖身、記錄成本、虛擬化及主機排程都限制短期測量的解讀。
 [完整報告](docs/PHASE1_RESULTS.md)保留限制與實際數據。
 
+## Phase 2 正確性與測量
+
+Linux suite 通過 19 個 lifecycle case、156 個獨立 CPU clock／procfs 使用量
+檢查、4,200-task churn、full preemption 下額外 8,000 個 fork/exec 子工作、
+三個有限公平性 trial 及 15 個回復測試。持續執行
+工作會把尚未 commit 的實際 CPU service 納入預算選擇；只有 stopping commit
+使用量與公平性費用。保留 snapshot 的 LRU map 與真正的 task/model storage 分離。
+
+[基準指南](benchmarks/README.md)比較 Linux 預設、官方 scx_simple、fixed、shadow、
+EWMA、online 及相容的 scx_bpfland，涵蓋八種 CPU workload，保留原始資料、
+隨機順序、核心 wake-to-switch 延遲、預測誤差、成本及不確定性。
+360 個最終 trial 全數通過。online 相對 fixed 的核心喚醒 p99 在 mixed 與
+multicore 分別增加約 214% 與 147%；所有 online/fixed 吞吐量區間都包含零變化。
+每類有有效標籤的 workload，線性模型的同 episode MAE 均高於 EWMA。
+兩類 workload 額外啟用核心計時器後，算術區段的平均值為每次線性更新約
+24–26 ns、推論約 14–15 ns。客體計數器約每 41.7 ns 一個 tick；這些數值是
+量化計時結果的平均，包含觀測成本，不代表單次操作有該精度，也不能解讀為
+未加儀器的實體硬體成本。
+參閱[正確性報告](docs/PHASE2_CORRECTNESS.md)與[實際結果](docs/PHASE2_RESULTS.md)。
+
 ## 安全與回復
 
 只在可丟棄 VM 中進行 privileged 實驗，並保留獨立的主機控制路徑。loader 預設
@@ -117,16 +141,20 @@ cat /sys/kernel/sched_ext/state
 
 ## 限制與專案範圍
 
-目前只驗證一個 ARM64 客體／核心組合。其他核心、實體硬體、長期成本、task
-churn、affinity/migration、公平性與飢餓壓力測試尚未完成。持續執行工作可能在
-最新 CPU 區段扣除前取得另一個有界限預測時間片；此已知限制在重新命名時保留。
+目前只驗證一個 ARM64 客體／核心組合。Phase 2A 已修正持續執行工作的 pending
+CPU service 扣除，並通過 lifecycle、4,200-task churn、affinity/migration、
+有限公平性與重複回復測試。其他核心、實體硬體、長期生產行為、配置失敗注入、
+PID 回繞重用及普遍公平／無飢餓保證仍未驗證。
 時間片界限適用新派送預算，不保證精確實際執行時間，也不限制恢復時的剩餘預算。
 
 記憶體配置最佳化、回收、DAMON/DAMOS、NUMA 記憶體放置及聯合 CPU／記憶體
 管理不在專案範圍；相關發現僅保留於[背景研究檔案](docs/planning/README.md)，
 不作為開發或備選方向。CPU 拓撲與 BPF map 用量仍屬排程器驗證資訊。
 
-Phase 2 的實作或效能工作需另行明確批准。參閱 [CONTRIBUTING](CONTRIBUTING.md)、
+Phase 2 已批准；目前證據不支持開始 Phase 2C 參數最佳化，建議先重新檢驗
+預測值映射到時間片的決策。
+Phase 2 commits 只保留本機，推送仍需批准。[Phase 2 結果](docs/PHASE2_RESULTS.md)
+另記實際測量，原 Phase 1 證據保持不變。參閱 [CONTRIBUTING](CONTRIBUTING.md)、
 [安全政策](SECURITY.md)及[決策記錄](docs/DECISIONS.md)。
 
 原創文件、模型與工作負載採 [MIT](LICENSE)；官方範例衍生的排程器、loader

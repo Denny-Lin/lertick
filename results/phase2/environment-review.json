@@ -1,0 +1,146 @@
+{
+  "original_preemption_mode": "full (lazy) \n",
+  "correctness_preemption_mode": "(full) lazy \n",
+  "kernel": "Linux lertick-vm 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 17:12:37 UTC 2 aarch64 aarch64 aarch64 GNU/Linux",
+  "config_sha256": "8dd5a335cdf3a2dfe140f781f48aef3e76ffb262880a189e2108e0d63524b277",
+  "btf_sha256": "b711da58768d304757a88b8b9a6776f520fb307246d3f37bf6c18b2e8f25b0b6",
+  "preempt_config": [
+    "CONFIG_PREEMPT_BUILD=y",
+    "# CONFIG_PREEMPT is not set",
+    "CONFIG_PREEMPT_LAZY=y",
+    "# CONFIG_PREEMPT_RT is not set",
+    "CONFIG_PREEMPT_COUNT=y",
+    "CONFIG_PREEMPTION=y",
+    "CONFIG_PREEMPT_DYNAMIC=y",
+    "CONFIG_PREEMPT_RCU=y",
+    "CONFIG_PREEMPT_NOTIFIERS=y",
+    "# CONFIG_PREEMPT_TRACER is not set",
+    "# CONFIG_PREEMPTIRQ_DELAY_TEST is not set"
+  ],
+  "clock_checks": [
+    {
+      "monotonic_before_ns": 4490787949131,
+      "boottime_ns": 4490787949548,
+      "monotonic_after_ns": 4490787949964,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787950964,
+      "boottime_ns": 4490787951089,
+      "monotonic_after_ns": 4490787951173,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787951673,
+      "boottime_ns": 4490787951756,
+      "monotonic_after_ns": 4490787951798,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787952048,
+      "boottime_ns": 4490787952131,
+      "monotonic_after_ns": 4490787952173,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787952339,
+      "boottime_ns": 4490787952423,
+      "monotonic_after_ns": 4490787952464,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787952714,
+      "boottime_ns": 4490787952798,
+      "monotonic_after_ns": 4490787952839,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787953006,
+      "boottime_ns": 4490787953048,
+      "monotonic_after_ns": 4490787953131,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787953256,
+      "boottime_ns": 4490787953339,
+      "monotonic_after_ns": 4490787953381,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787953589,
+      "boottime_ns": 4490787953631,
+      "monotonic_after_ns": 4490787953714,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787953964,
+      "boottime_ns": 4490787955006,
+      "monotonic_after_ns": 4490787955089,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787955256,
+      "boottime_ns": 4490787955339,
+      "monotonic_after_ns": 4490787955381,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787955631,
+      "boottime_ns": 4490787955672,
+      "monotonic_after_ns": 4490787955756,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787956006,
+      "boottime_ns": 4490787956047,
+      "monotonic_after_ns": 4490787956131,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787956256,
+      "boottime_ns": 4490787956339,
+      "monotonic_after_ns": 4490787956381,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787956506,
+      "boottime_ns": 4490787956589,
+      "monotonic_after_ns": 4490787956631,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787956756,
+      "boottime_ns": 4490787956839,
+      "monotonic_after_ns": 4490787956881,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787957047,
+      "boottime_ns": 4490787957089,
+      "monotonic_after_ns": 4490787957172,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787957297,
+      "boottime_ns": 4490787957381,
+      "monotonic_after_ns": 4490787957422,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787957589,
+      "boottime_ns": 4490787957631,
+      "monotonic_after_ns": 4490787957714,
+      "boot_within_mono_bracket": true
+    },
+    {
+      "monotonic_before_ns": 4490787957839,
+      "boottime_ns": 4490787957922,
+      "monotonic_after_ns": 4490787957964,
+      "boot_within_mono_bracket": true
+    }
+  ],
+  "bpftrace_version": "bpftrace v0.20.2",
+  "sched_ext_state": "disabled",
+  "build_log": "clang-18 -Ivendor -Isrc -Isrc/shared -Ibuild -I/home/ubuntu/deps/install/include  -O2 -g -target bpf -mcpu=v3 -Wall -Wno-compare-distinct-pointer-types -D__TARGET_ARCH_arm64 -Ivendor/bpf-compat -I/usr/include/aarch64-linux-gnu -c src/bpf/scx_lertick.bpf.c -o build/scx_lertick.bpf.o\nIn file included from src/bpf/scx_lertick.bpf.c:19:\nIn file included from vendor/scx/common.bpf.h:21:\nbuild/vmlinux.h:69147:2: warning: declaration does not declare anything [-Wmissing-declarations]\n 69147 |         struct aes_enckey;\n       |         ^\nbuild/vmlinux.h:85401:3: warning: declaration does not declare anything [-Wmissing-declarations]\n 85401 |                 struct ns_tree;\n       |                 ^\nbuild/vmlinux.h:108771:2: warning: declaration does not declare anything [-Wmissing-declarations]\n 108771 |         struct __filename_head;\n        |         ^\nbuild/vmlinux.h:152894:2: warning: declaration does not declare anything [-Wmissing-declarations]\n 152894 |         union pipe_index;\n        |         ^\nbuild/vmlinux.h:171167:4: warning: declaration does not declare anything [-Wmissing-declarations]\n 171167 |                         struct freelist_counters;\n        |                         ^\n5 warnings generated.\nbpftool gen skeleton build/scx_lertick.bpf.o name scx_lertick > build/scx_lertick.bpf.skel.h.tmp\nmv build/scx_lertick.bpf.skel.h.tmp build/scx_lertick.bpf.skel.h\ncc -Ivendor -Isrc -Isrc/shared -Ibuild -I/home/ubuntu/deps/install/include  -O2 -g -std=gnu11 -Wall -Wextra src/userspace/scx_lertick.c -o build/scx_lertick -L/home/ubuntu/deps/install/lib -lbpf -lelf -lzstd -pthread -lz  -lelf -lz\nIn file included from vendor/scx/common.h:74,\n                 from src/userspace/scx_lertick.c:26:\nvendor/scx/compat.h: In function \u2018__COMPAT_read_enum\u2019:\nvendor/scx/compat.h:44:31: warning: comparison of integer expressions of different signedness: \u2018int\u2019 and \u2018__u32\u2019 {aka \u2018unsigned int\u2019} [-Wsign-compare]\n   44 |                 for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {\n      |                               ^\nvendor/scx/compat.h:55:31: warning: comparison of integer expressions of different signedness: \u2018int\u2019 and \u2018__u32\u2019 {aka \u2018unsigned int\u2019} [-Wsign-compare]\n   55 |                 for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {\n      |                               ^\nvendor/scx/compat.h: In function \u2018__COMPAT_struct_has_field\u2019:\nvendor/scx/compat.h:99:23: warning: comparison of integer expressions of different signedness: \u2018int\u2019 and \u2018__u32\u2019 {aka \u2018unsigned int\u2019} [-Wsign-compare]\n   99 |         for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {\n      |                       ^\nbuild/test_model\n{\"test\":\"synthetic_holdout\",\"samples\":1000,\"model_squared_error\":563987,\"fixed_squared_error\":156938088319}\n{\"test\":\"model\",\"status\":\"passed\",\"oracle_trials\":200121}\nbuild/test_accounting\naccounting: 202000 oracle cases and callback-order traces passed\n",
+  "observer_smoke_log": "PASS r0 mixed online\nPASS r0 mixed default\n"
+}

@@ -1,0 +1,664 @@
+{
+  "timestamp_utc": "2026-10-09T14:12:47.605804+00:00",
+  "head": "109ce711bfad52c9f2ddfe2ba760b29258d58c25",
+  "scope": "Host-only; no extraction, guest access, tracked changes, or matching credential values printed",
+  "inventory": {
+    "entries": 22,
+    "archives": 22,
+    "duplicate_entries": false,
+    "missing_archives": [],
+    "unlisted_archives": []
+  },
+  "archives": [
+    {
+      "file": "results/phase2/raw/aborted-manifest.tar.gz",
+      "bytes": 7213,
+      "sha256": "2e9feacfac1a0e568f39458b4e6aa991921b3313cd9a8ba5ef267e8287a187a9",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 6,
+      "regular_files": 6,
+      "directories": 0,
+      "regular_uncompressed_bytes": 115770,
+      "extensions": {
+        ".json": 5,
+        ".log": 1
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/aborted-r00.tar.gz",
+      "bytes": 35630890,
+      "sha256": "4a732f582b6a61ee7bef805af72d6bbe35f613a82f4a06dc85f348b01e0b585d",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 493,
+      "regular_files": 437,
+      "directories": 56,
+      "regular_uncompressed_bytes": 362250953,
+      "extensions": {
+        ".json": 56,
+        ".jsonl": 137,
+        ".log": 202,
+        ".csv": 42
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/aborted-r01.tar.gz",
+      "bytes": 35967560,
+      "sha256": "831ce94073cbf11edd7d04ea2da39c1316fd0aaf5008d627d8b4fee7d28f5d7c",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 491,
+      "regular_files": 435,
+      "directories": 56,
+      "regular_uncompressed_bytes": 369655780,
+      "extensions": {
+        ".json": 56,
+        ".jsonl": 137,
+        ".log": 201,
+        ".csv": 41
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/aborted-r02.tar.gz",
+      "bytes": 22081988,
+      "sha256": "536dfa531ae20d0916f5bba946c64923e878a9c08e9fb191100ae89740d525ff",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 358,
+      "regular_files": 320,
+      "directories": 38,
+      "regular_uncompressed_bytes": 243893733,
+      "extensions": {
+        ".json": 38,
+        ".jsonl": 91,
+        ".log": 150,
+        ".csv": 41
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/analysis-input.tar.gz",
+      "bytes": 517637,
+      "sha256": "7c9a505d667edb04af4bacddd75f75c701df52d9ee98d0e5b5b7378b8b28ad2c",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 382,
+      "regular_files": 382,
+      "directories": 0,
+      "regular_uncompressed_bytes": 4803005,
+      "extensions": {
+        ".json": 382
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/diagnostics.tar.gz",
+      "bytes": 643984,
+      "sha256": "60951066188809b80e06c1f62d1b2eb77b1f0edf5ccbfeee741e58f7fb1804c2",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 33,
+      "regular_files": 33,
+      "directories": 0,
+      "regular_uncompressed_bytes": 11914930,
+      "extensions": {
+        ".log": 28,
+        ".jsonl": 4,
+        ".json": 1
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/phase2-atomic-concurrency.tar.gz",
+      "bytes": 975129,
+      "sha256": "af757410a1ca6bd0d6c29323b11ef986181f60af0a2a425791044bd1920c9bda",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 17,
+      "regular_files": 16,
+      "directories": 1,
+      "regular_uncompressed_bytes": 23763483,
+      "extensions": {
+        ".txt": 1,
+        ".json": 3,
+        ".log": 11,
+        ".jsonl": 1
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/phase2-atomic-observer-smoke.tar.gz",
+      "bytes": 140346,
+      "sha256": "bfb2e8d5e95f5adc3a8495243a118b66812823adf0e0d7e8ba67aeb384d12486",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 20,
+      "regular_files": 17,
+      "directories": 3,
+      "regular_uncompressed_bytes": 1070790,
+      "extensions": {
+        ".json": 7,
+        ".jsonl": 5,
+        ".log": 5
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/phase2-bench-smoke3.tar.gz",
+      "bytes": 448526,
+      "sha256": "4439982333ee6454f4c06090607a7e22c04036aa432f7284f9bfb40dcccb202b",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 58,
+      "regular_files": 50,
+      "directories": 8,
+      "regular_uncompressed_bytes": 3615385,
+      "extensions": {
+        ".json": 12,
+        ".jsonl": 18,
+        ".log": 20
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/phase2-no-observers.tar.gz",
+      "bytes": 8503183,
+      "sha256": "436d6a95869bdf4d8b127d0a1af8530390df30c644f08bb29c7ef4494e2fcbee",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 126,
+      "regular_files": 105,
+      "directories": 21,
+      "regular_uncompressed_bytes": 85163903,
+      "extensions": {
+        ".json": 25,
+        ".jsonl": 40,
+        ".log": 40
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/phase2-observer-control.tar.gz",
+      "bytes": 8722288,
+      "sha256": "26925d3e0c6f1c828c24b14201a6481a1e9065160b27bd4edb6253c4ce3ff3ea",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 126,
+      "regular_files": 105,
+      "directories": 21,
+      "regular_uncompressed_bytes": 85366508,
+      "extensions": {
+        ".json": 25,
+        ".jsonl": 40,
+        ".log": 40
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/phase2-overhead-profile.tar.gz",
+      "bytes": 18672000,
+      "sha256": "4bbdbe65c0e9eb206bbd3ab10aaddf4175102c8eca7a55969f96a0dc3fb7bc0d",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 326,
+      "regular_files": 285,
+      "directories": 41,
+      "regular_uncompressed_bytes": 174799946,
+      "extensions": {
+        ".json": 45,
+        ".jsonl": 120,
+        ".log": 120
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/phase2-special-smoke.tar.gz",
+      "bytes": 871184,
+      "sha256": "217ad4b457088ed0f943254e18126ba0e5c54b5d2946357484730f3e555cf147",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 40,
+      "regular_files": 35,
+      "directories": 5,
+      "regular_uncompressed_bytes": 10363422,
+      "extensions": {
+        ".json": 9,
+        ".csv": 4,
+        ".log": 14,
+        ".jsonl": 8
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/phase2a-final-validated.tar.gz",
+      "bytes": 1855788,
+      "sha256": "bb3d1e249f0c9c86aecbf324bec62e99233402c59e2b80a582cc139fdafa1308",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 208,
+      "regular_files": 204,
+      "directories": 4,
+      "regular_uncompressed_bytes": 42383384,
+      "extensions": {
+        ".txt": 4,
+        ".json": 50,
+        ".log": 109,
+        ".jsonl": 41
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/phase2a-validated.tar.gz",
+      "bytes": 969251,
+      "sha256": "6126feb7d1d37002efbbac2b3f03101806b6824ce2c7c55def35d0f602e78365",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 196,
+      "regular_files": 192,
+      "directories": 4,
+      "regular_uncompressed_bytes": 19669958,
+      "extensions": {
+        ".txt": 4,
+        ".log": 100,
+        ".jsonl": 40,
+        ".json": 48
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/primary-manifest.tar.gz",
+      "bytes": 48870,
+      "sha256": "86bb4ad3a788c07790f503dceb6a25d2efe9b1f450f25ad79158492ac6ad2586",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 6,
+      "regular_files": 6,
+      "directories": 0,
+      "regular_uncompressed_bytes": 539590,
+      "extensions": {
+        ".json": 5,
+        ".log": 1
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/primary-r00.tar.gz",
+      "bytes": 35919323,
+      "sha256": "32e15eee8f93898d8f7374344a8c08cf9cef3b7a546ee5c7f0732d3a55403425",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 489,
+      "regular_files": 433,
+      "directories": 56,
+      "regular_uncompressed_bytes": 360111844,
+      "extensions": {
+        ".json": 56,
+        ".jsonl": 137,
+        ".log": 200,
+        ".csv": 40
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/primary-r01.tar.gz",
+      "bytes": 35859606,
+      "sha256": "c43dcb5c4f70ed6806f0958051f89dcc48213b93310be065e53ff481790422b9",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 493,
+      "regular_files": 437,
+      "directories": 56,
+      "regular_uncompressed_bytes": 365081458,
+      "extensions": {
+        ".json": 56,
+        ".jsonl": 137,
+        ".log": 202,
+        ".csv": 42
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/primary-r02.tar.gz",
+      "bytes": 35259099,
+      "sha256": "ccc66f8ed2c3de749e95900689c5644d68cbfb2485a41765bde00efe81437a2d",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 491,
+      "regular_files": 435,
+      "directories": 56,
+      "regular_uncompressed_bytes": 366368164,
+      "extensions": {
+        ".json": 56,
+        ".jsonl": 137,
+        ".log": 201,
+        ".csv": 41
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/primary-r03.tar.gz",
+      "bytes": 35210446,
+      "sha256": "6241edfe3a5d998774e429df5c7285f862912cff45549e9f4d481244f058c299",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 491,
+      "regular_files": 435,
+      "directories": 56,
+      "regular_uncompressed_bytes": 360798852,
+      "extensions": {
+        ".json": 56,
+        ".jsonl": 137,
+        ".log": 201,
+        ".csv": 41
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/primary-r04.tar.gz",
+      "bytes": 35241233,
+      "sha256": "2482c7ed045db27f269a8d472f8e3bcc4aa22d21aaeea39b14a540ece6dc0a18",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 493,
+      "regular_files": 437,
+      "directories": 56,
+      "regular_uncompressed_bytes": 363073637,
+      "extensions": {
+        ".json": 56,
+        ".jsonl": 137,
+        ".log": 202,
+        ".csv": 42
+      },
+      "violations": []
+    },
+    {
+      "file": "results/phase2/raw/validation-attempts.tar.gz",
+      "bytes": 593640,
+      "sha256": "a6934e68b540559efb4c337e36fb4f16e39bf5d2c763c0e656363bdbe6603ddd",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 121,
+      "regular_files": 110,
+      "directories": 11,
+      "regular_uncompressed_bytes": 5526344,
+      "extensions": {
+        ".txt": 4,
+        ".log": 58,
+        ".jsonl": 30,
+        ".json": 18
+      },
+      "violations": []
+    }
+  ],
+  "historical_evidence": {
+    "baseline": "fba7ee4b3cc0bf015e022f4edaa28fb44623afcc",
+    "files": [
+      {
+        "file": "docs/PHASE1_RESULTS.md",
+        "sha256_at_rebrand": "3c0af6529911b2e40f71446470eb5b8d8bc795e65becafed19731b80e40a17e4",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "docs/REBRAND_VALIDATION.md",
+        "sha256_at_rebrand": "d138faf2bab06c59c98aa86ca95b4109d362622e7f6cfc5761c7497baac79f85",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/phase1/README.md",
+        "sha256_at_rebrand": "a9ef18e7757c9327171ed21bd0e8256961250bc8dffdc52cfcf278160cbfe4d3",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/phase1/commands.txt",
+        "sha256_at_rebrand": "336be7b7f3853e776511db3e1bafed585528b1abd6b6ad9e5a7d796d73b23e0e",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/phase1/environment.txt",
+        "sha256_at_rebrand": "ace91e4fe2a56cc44675c84154dfc7b3b1f442c5ddf06275595497b7f826bd23",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/phase1/final-build.log",
+        "sha256_at_rebrand": "40b01b8a513c0a169bedea3ba051bb01e87a7a4e4b73a234091e85b447a0fcad",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/phase1/host.json",
+        "sha256_at_rebrand": "d5a52bfb548d97fd9834bbe9346b9b5fb4a5b8c21e211f00310ec59336607cf1",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/phase1/image-sha256.txt",
+        "sha256_at_rebrand": "7e2fe7e93a15def8f11dfda16505db7b7dde28b0f744f85cffbc234f300d73da",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/phase1/online-verifier.jsonl",
+        "sha256_at_rebrand": "687816421aeea5bf2d7382a530718edd217c8c8068149ae9d5c54a6ab09afa27",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/phase1/online-verifier.log.gz",
+        "sha256_at_rebrand": "dda86bdc9cb92a5a8b96d8adf09cb7d5d1ced35fbd4fb1832c227faef95f515c",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/phase1/qemu-helper-smoke.jsonl",
+        "sha256_at_rebrand": "ce07a2d8fd14bf7b6023228db61a00ea4e8da55abac916661b3bc9155ce8b102",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/phase1/raw-evidence.tar.gz",
+        "sha256_at_rebrand": "2c190911b17655587fd3faf093ff2cc14838ac5d74ffca8d20b1b2f0912a16eb",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/phase1/source-and-binary-sha256.txt",
+        "sha256_at_rebrand": "d0fa1d094b743a33e059600bc44f32ccf99053c822a53bc0862e8113146b173d",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/phase1/validation.json",
+        "sha256_at_rebrand": "cebc03b13f8e94e16e25d6a84ce273613229ab316cf207164599834f88963de0",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/rebrand/README.md",
+        "sha256_at_rebrand": "64d17db66b088b6c4f8e9297cd0e757073e48f5ff594a4f25940535d0ef9d09e",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/rebrand/build.log",
+        "sha256_at_rebrand": "0c0c089c163286c1bc8ba875068a2f0d7653418ca7b187352feebd96a65d218e",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/rebrand/commands.txt",
+        "sha256_at_rebrand": "5850d8d811670b16812a76ee18bbeb21c5384b193f6bda039d6f1a83ad5b36ca",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/rebrand/environment.txt",
+        "sha256_at_rebrand": "1f72fbe7a63410c7e61b26c503dcd248bacba01cd7e83356300d3dae527f8463",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/rebrand/online-verifier.jsonl",
+        "sha256_at_rebrand": "68412e5cf84eece81225be89781b00bafc27aa91ed70bb0b16bfd6905ba889a0",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/rebrand/online-verifier.log.gz",
+        "sha256_at_rebrand": "6bb3f8dd2be4a33d3fe82a995e70d9e7719294a0f0b0347f41058838943afe4d",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/rebrand/raw-evidence.tar.gz",
+        "sha256_at_rebrand": "f45abd6d8a302c0463dc267943ee3bac25a38f9eb81b3d584876c23e28ef9003",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/rebrand/regression.log",
+        "sha256_at_rebrand": "34d7e4d4b8c9aaf99a0b2efc3b2427793a211c0d1f3b2fb83c421fcdbe02a058",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/rebrand/source-and-binary-sha256.txt",
+        "sha256_at_rebrand": "cb06a49cca97f8df5880da77bccea5e883dffd9b7a7206ce195eb7691087151f",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      },
+      {
+        "file": "results/rebrand/validation.json",
+        "sha256_at_rebrand": "9199f260b271d3ec87fa760e752b5a01130ba25888c262ab1cca2aba34f33010",
+        "head_byte_equal": true,
+        "index_byte_equal": true,
+        "working_byte_equal": true
+      }
+    ],
+    "all_byte_equal": true
+  },
+  "historical_archive_scans": [
+    {
+      "file": "results/phase1/raw-evidence.tar.gz",
+      "bytes": 297749,
+      "sha256": "2c190911b17655587fd3faf093ff2cc14838ac5d74ffca8d20b1b2f0912a16eb",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 78,
+      "regular_files": 77,
+      "directories": 1,
+      "regular_uncompressed_bytes": 3254459,
+      "extensions": {
+        ".log": 61,
+        ".jsonl": 14,
+        ".json": 1,
+        ".txt": 1
+      },
+      "violations": []
+    },
+    {
+      "file": "results/rebrand/raw-evidence.tar.gz",
+      "bytes": 301530,
+      "sha256": "f45abd6d8a302c0463dc267943ee3bac25a38f9eb81b3d584876c23e28ef9003",
+      "inventory_size_matches": true,
+      "inventory_sha256_matches": true,
+      "under_100MB": true,
+      "members": 78,
+      "regular_files": 77,
+      "directories": 1,
+      "regular_uncompressed_bytes": 3262809,
+      "extensions": {
+        ".log": 61,
+        ".jsonl": 14,
+        ".json": 1,
+        ".txt": 1
+      },
+      "violations": []
+    }
+  ],
+  "git_content_scan": {
+    "tracked_and_index_files": 100,
+    "untracked_publication_files": 33,
+    "staged_changes": [],
+    "findings": []
+  },
+  "limitations": [
+    "Known-signature and literal-assignment credential scan, not proof against every possible unknown secret format",
+    "Archive verifier logs legitimately contain small source/disassembly excerpts; no source files or source bundles are included"
+  ],
+  "passed": true,
+  "elapsed_seconds": 156.347,
+  "supplemental_scan": {
+    "archive_regular_files_scanned": 4915,
+    "tracked_files_scanned": 100,
+    "findings": [],
+    "passed": true
+  },
+  "final_text_rescan": {
+    "tracked_files": 100,
+    "untracked_publication_files": 33,
+    "staged_changes": [],
+    "findings": []
+  },
+  "totals": {
+    "archive_bytes": 314139184,
+    "largest_archive_bytes": 35967560,
+    "regular_archive_files": 4915,
+    "archive_directories": 549,
+    "regular_uncompressed_bytes": 3260330839
+  }
+}

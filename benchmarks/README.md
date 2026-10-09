@@ -114,7 +114,10 @@ trial. Kernel compilation reports build completion plus compiler wake latency.
 The timer deadline metric remains separately
 labeled because timer delivery time is not the scheduler's wake timestamp.
 The observer uses documented bpftrace tracepoints and
-[timestamp/string helpers](https://bpftrace.org/docs/0.21).
+[v0.20.2 timestamp/string helpers](https://github.com/bpftrace/bpftrace/blob/v0.20.2/docs/reference_guide.md).
+It explicitly selects `nsecs(monotonic)`, matching the workload's measurement
+window even after guest suspend. The earlier bare-`nsecs` observer used BOOTTIME;
+its partial experiment is preserved and excluded from the final comparison.
 
 `--bpf-runtime` temporarily enables `kernel.bpf_stats_enabled` and restores its
 original value. It snapshots `bpftool -j prog show` for scheduler program IDs
@@ -123,8 +126,29 @@ runtime and call counts include calibration, warmup and raw-output time;
 per-callback means are more useful than unnormalized totals. This accounting
 also has cost. `--profile` enables additional in-kernel training/inference
 timers; it is for a separate overhead study, and should not silently replace the
-primary performance run. Matched `--without-wake-observer` runs quantify probe
-perturbation; omit `--bpf-runtime` as well to measure runtime-accounting cost.
+primary performance run. Separate `--without-wake-observer` controls assess
+probe perturbation; omit `--bpf-runtime` as well to assess runtime-accounting
+effects, retaining the cross-session caveat below.
+
+Run the separate studies sequentially, after the primary experiment, with the
+same committed source and binaries:
+
+```sh
+sudo python3 benchmarks/run_phase2.py --output build/phase2-overhead-profile \
+  --policies fixed,shadow,ewma,online --workloads mixed,wakeheavy \
+  --repetitions 5 --duration 10 --warmup 2 --profile --bpf-runtime
+sudo python3 benchmarks/run_phase2.py --output build/phase2-observer-control \
+  --policies fixed,online --workloads mixed,wakeheavy \
+  --repetitions 5 --duration 10 --warmup 2 \
+  --without-wake-observer --bpf-runtime
+sudo python3 benchmarks/run_phase2.py --output build/phase2-no-observers \
+  --policies fixed,online --workloads mixed,wakeheavy \
+  --repetitions 5 --duration 10 --warmup 2 --without-wake-observer
+```
+
+These use the same repetition seed, but separate experiments occur at different
+times. Cross-session contrasts are unpaired and use independent trial resampling;
+they do not remove host drift or establish an exact instrumentation tax.
 
 Prediction error is prequential: the wake-time prediction is compared with the
 subsequent verified sleep-delimited CPU episode before that label changes the
@@ -139,6 +163,10 @@ approximate and include some warmup and output overhead. CPU burst truth and
 application timings use the workload's exact common window. Optional internal
 timers report mean training/inference cost per operation; BPF program runtime
 reports whole callbacks including dispatch, accounting and model work.
+The recorded guest uses a 24 MHz architectural counter (about 41.7 ns per tick).
+A mean below one tick averages quantized intervals across many calls and does
+not provide that precision for an individual operation. Timers include helper
+cost and do not measure uninstrumented arithmetic or bare-metal cycles.
 
 ## Raw results and interpretation
 
@@ -158,6 +186,25 @@ are descriptive within one workload and policy; five repetitions cannot show
 causation. Small trial counts, multiple comparisons and QEMU timing limit any
 performance conclusion. Confirm promising effects with longer independent and
 bare-metal runs. No Linux EEVDF or other scheduler superiority is assumed.
+
+The [Phase 2 evidence archive](../results/phase2/README.md) includes extraction
+and integrity-check commands. Once extracted, reproduce the host analysis:
+
+```sh
+python3 benchmarks/analyze_phase2.py \
+  --primary build/phase2-artifacts/phase2-benchmark-final \
+  --study profile=build/phase2-artifacts/phase2-overhead-profile \
+  --study observer-control=build/phase2-artifacts/phase2-observer-control \
+  --study no-observers=build/phase2-artifacts/phase2-no-observers \
+  --output build/phase2-analysis
+```
+
+The analyzer rejects incomplete primary experiments and mismatched kernel,
+preemption mode, benchmark sources or workload/loader binary fingerprints.
+It reports global MAE alongside retained RMSE, cross-checks snapshot coverage,
+and keeps separate-session observer contrasts distinct from randomized-block
+policy contrasts. It executes no Linux workload and needs only Python's standard
+library. The deliberately aborted earlier run is excluded from final analysis.
 
 ## Preserved Phase 1 workload
 
