@@ -16,6 +16,7 @@ enum lertick_mode {
 	LERTICK_MODE_FIXED = 0,
 	LERTICK_MODE_SHADOW = 1,
 	LERTICK_MODE_ONLINE = 2,
+	LERTICK_MODE_EWMA = 3,
 };
 
 enum lertick_stat {
@@ -36,6 +37,18 @@ enum lertick_stat {
 	LERTICK_STAT_PREDICTION_NS_SUM,
 	LERTICK_STAT_SELECTED_SLICE_NS_SUM,
 	LERTICK_STAT_MATCHING_DISPATCH_SLICES,
+	LERTICK_STAT_CONTINUATION_SLICES,
+	LERTICK_STAT_CONTINUATION_PENDING_NS,
+	LERTICK_STAT_INIT_TASKS,
+	LERTICK_STAT_EXIT_TASKS,
+	LERTICK_STAT_TRAINING_TIME_NS,
+	LERTICK_STAT_INFERENCE_TIME_NS,
+	LERTICK_STAT_PREDICTION_SAMPLES,
+	LERTICK_STAT_LINEAR_ABS_ERROR_NS,
+	LERTICK_STAT_EWMA_ABS_ERROR_NS,
+	LERTICK_STAT_WAKE_SAMPLES,
+	LERTICK_STAT_WAKE_TO_RUN_NS,
+	LERTICK_STAT_WAKE_TO_RUN_MAX_NS,
 	LERTICK_STAT_COUNT,
 };
 
@@ -84,6 +97,24 @@ struct lertick_task_snapshot {
 	__u64 last_runtime_delta_ns;
 	__u64 last_sleep_interval_ns;
 	__u64 last_queue_depth;
+	__u64 continuation_slices;
+	__u64 continuing_pending_ns;
+	__u64 continuing_consumed_ns;
+	__u64 continuing_prediction_ns;
+	__u64 continuing_selected_slice_ns;
+	__u64 continuing_model_updates;
+	__u64 continuing_episode_valid;
+	__u64 prediction_samples;
+	/* Active prediction error: linear in shadow/online, EWMA in ewma mode. */
+	__u64 linear_abs_error_ns;
+	__u64 ewma_abs_error_ns;
+	__u64 linear_squared_error_us2;
+	__u64 ewma_squared_error_us2;
+	__u64 raw_burst_ns_sum;
+	__u64 clipped_targets;
+	__u64 wake_samples;
+	__u64 wake_to_run_ns;
+	__u64 wake_to_run_max_ns;
 	__s32 model_weight_q16[LERTICK_FEATURES];
 	__s32 features_q16[LERTICK_FEATURES];
 	__s32 last_target_q16;

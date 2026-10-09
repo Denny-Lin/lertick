@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Lertick Phase 1: global weighted-vtime scheduling with bounded slices.
+ * Lertick: global weighted-vtime scheduling with bounded slices.
  *
  * DSQ policy and CPU selection derive from the official scx_simple example;
  * task-storage allocation follows scx_qmap. Reference revision:
@@ -18,6 +18,7 @@
  */
 #include <scx/common.bpf.h>
 #include "shared/lertick.h"
+#include "shared/accounting.h"
 
 char _license[] SEC("license") = "GPL";
 
@@ -28,9 +29,12 @@ const volatile u64 max_slice_ns = LERTICK_MAX_SLICE_NS;
 const volatile u32 min_train_samples = LERTICK_MIN_TRAIN_SAMPLES;
 /* Zero selects comm names beginning with "lertick"; otherwise select a TGID. */
 const volatile u32 tracked_tgid;
+const volatile bool track_all;
 /* Disposable-VM watchdog test only; userspace gates this behind partial mode. */
 const volatile bool fault_stall;
 const volatile u32 stall_tgid;
+/* Optional diagnostic clocks; primary benchmarks leave this disabled. */
+const volatile bool profile_model;
 
 #define SHARED_DSQ 0
 #define LERTICK_QUEUE_REFERENCE 16U
@@ -47,6 +51,8 @@ struct task_ctx {
 	u64 last_burst_ns;
 	u64 ewma_burst_ns;
 	u64 prediction_ns;
+	u64 ewma_prediction_ns;
+	u64 wake_ns;
 	u64 selected_slice_ns;
 	bool episode_active;
 	bool episode_valid;
@@ -66,7 +72,7 @@ struct {
 } task_ctx_stor SEC(".maps");
 
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
 	__uint(max_entries, LERTICK_MAX_TASK_SNAPSHOTS);
 	__type(key, u32);
 	__type(value, struct lertick_task_snapshot);
@@ -87,8 +93,18 @@ static __always_inline void stat_add(u32 idx, u64 amount)
 		*value += amount;
 }
 
+static __always_inline void stat_max(u32 idx, u64 amount)
+{
+	u64 *value = bpf_map_lookup_elem(&stats, &idx);
+
+	if (value && amount > *value)
+		*value = amount;
+}
+
 static __always_inline bool is_tracked(struct task_struct *p)
 {
+	if (track_all)
+		return true;
 	if (tracked_tgid)
 		return p->tgid == tracked_tgid;
 	return p->comm[0] == 'l' && p->comm[1] == 'e' &&
@@ -164,6 +180,8 @@ static __always_inline void begin_episode(struct task_struct *p,
 	tctx->episode_valid = tctx->has_slept && (enq_flags & SCX_ENQ_WAKEUP);
 	tctx->episode_runtime_ns = 0;
 	tctx->prediction_ns = 0;
+	tctx->ewma_prediction_ns = tctx->ewma_burst_ns;
+	tctx->wake_ns = tctx->episode_valid ? now : 0;
 	if (!tctx->tracked)
 		return;
 	tctx->snapshot.last_censor_reason = tctx->episode_valid ? LERTICK_CENSOR_NONE :
@@ -179,7 +197,12 @@ static __always_inline void begin_episode(struct task_struct *p,
 	tctx->snapshot.last_sleep_interval_ns = sleep_ns;
 	tctx->snapshot.last_queue_depth = queued;
 	if (mode != LERTICK_MODE_FIXED && tctx->episode_valid) {
-		__s32 pred = lertick_model_predict_q16(&tctx->model, tctx->features);
+		u64 started = profile_model ? bpf_ktime_get_ns() : 0;
+		__s32 pred = mode == LERTICK_MODE_EWMA ? tctx->features[2] :
+			lertick_model_predict_q16(&tctx->model, tctx->features);
+
+		if (profile_model)
+			stat_add(LERTICK_STAT_INFERENCE_TIME_NS, bpf_ktime_get_ns() - started);
 
 		tctx->prediction_ns = (__u64)pred * LERTICK_REFERENCE_NS / LERTICK_Q;
 		tctx->snapshot.last_prediction_q16 = pred;
@@ -189,15 +212,17 @@ static __always_inline void begin_episode(struct task_struct *p,
 	}
 }
 
-static __always_inline u64 choose_slice(struct task_ctx *tctx)
+static __always_inline u64 choose_slice(struct task_ctx *tctx, u64 consumed_ns)
 {
 	u64 slice = fixed_slice_ns;
 	bool adaptive = false;
 
-	if (tctx && mode == LERTICK_MODE_ONLINE && tctx->tracked &&
-	    tctx->episode_valid && tctx->model.updates >= min_train_samples &&
-	    tctx->prediction_ns > tctx->episode_runtime_ns) {
-		slice = tctx->prediction_ns - tctx->episode_runtime_ns;
+	if (tctx && (mode == LERTICK_MODE_ONLINE || mode == LERTICK_MODE_EWMA) &&
+	    tctx->tracked && tctx->episode_valid &&
+	    (mode == LERTICK_MODE_EWMA ? tctx->snapshot.completed_bursts :
+	     tctx->model.updates) >= min_train_samples &&
+	    tctx->prediction_ns > consumed_ns) {
+		slice = tctx->prediction_ns - consumed_ns;
 		adaptive = true;
 	}
 	if (slice < min_slice_ns)
@@ -252,7 +277,7 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		}
 	}
 	if (idle && !is_fault_target(p)) {
-		u64 slice = choose_slice(tctx);
+		u64 slice = choose_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
 
 		stat_add(LERTICK_STAT_LOCAL_ENQUEUE, 1);
 		scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL, slice, 0);
@@ -274,7 +299,7 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	}
 	if (tctx)
 		refresh_tracking(p, tctx);
-	slice = choose_slice(tctx);
+	slice = choose_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
 	/* Sleeper credit is bounded independently of model output. */
 	if (time_before(vtime, vtime_now - max_slice_ns))
 		vtime = vtime_now - max_slice_ns;
@@ -290,7 +315,38 @@ void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 	if (!scx_bpf_dsq_move_to_local(SHARED_DSQ) && prev &&
 	    (prev->scx.flags & SCX_TASK_QUEUED) && !is_fault_target(prev)) {
 		struct task_ctx *tctx = task_ctx(prev);
-		u64 slice = choose_slice(tctx);
+		struct lertick_service_sample service = {0};
+		u64 slice;
+
+		/*
+		 * Linux v7.0 balance_one() updates sum_exec_runtime before
+		 * dispatch(), but may keep prev without stopping()/running().
+		 * Read the pending segment for the remaining-prediction decision;
+		 * committing it here would double-charge it in stopping().
+		 */
+		if (tctx) {
+			refresh_tracking(prev, tctx);
+			service = lertick_service_sample(tctx->episode_runtime_ns,
+				tctx->runtime_start_ns, prev->se.sum_exec_runtime,
+				tctx->running);
+			if (!service.valid) {
+				tctx->episode_valid = false;
+				tctx->snapshot.last_censor_reason = LERTICK_CENSOR_ACCOUNTING;
+				stat_add(LERTICK_STAT_COUNTER_ERRORS, 1);
+			}
+		}
+		slice = choose_slice(tctx, service.consumed_ns);
+		if (tctx && tctx->tracked) {
+			tctx->snapshot.continuation_slices++;
+			tctx->snapshot.continuing_pending_ns = service.pending_ns;
+			tctx->snapshot.continuing_consumed_ns = service.consumed_ns;
+			tctx->snapshot.continuing_prediction_ns = tctx->prediction_ns;
+			tctx->snapshot.continuing_selected_slice_ns = slice;
+			tctx->snapshot.continuing_model_updates = tctx->model.updates;
+			tctx->snapshot.continuing_episode_valid = tctx->episode_valid;
+			stat_add(LERTICK_STAT_CONTINUATION_SLICES, 1);
+			stat_add(LERTICK_STAT_CONTINUATION_PENDING_NS, service.pending_ns);
+		}
 
 		stat_add(LERTICK_STAT_LOCAL_ENQUEUE, 1);
 		scx_bpf_dsq_insert(prev, SCX_DSQ_LOCAL, slice, 0);
@@ -330,6 +386,18 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 	if (!tctx)
 		return;
 	refresh_tracking(p, tctx);
+	if (tctx->wake_ns && tctx->episode_valid && tctx->tracked) {
+		u64 latency = bpf_ktime_get_ns() - tctx->wake_ns;
+
+		tctx->snapshot.wake_samples++;
+		tctx->snapshot.wake_to_run_ns += latency;
+		if (latency > tctx->snapshot.wake_to_run_max_ns)
+			tctx->snapshot.wake_to_run_max_ns = latency;
+		stat_add(LERTICK_STAT_WAKE_SAMPLES, 1);
+		stat_add(LERTICK_STAT_WAKE_TO_RUN_NS, latency);
+		stat_max(LERTICK_STAT_WAKE_TO_RUN_MAX_NS, latency);
+	}
+	tctx->wake_ns = 0;
 	tctx->runtime_start_ns = p->se.sum_exec_runtime;
 	tctx->running = true;
 	if (tctx->tracked) {
@@ -353,25 +421,29 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 {
 	struct task_ctx *tctx = task_ctx(p);
-	u64 runtime, delta;
+	struct lertick_service_sample service;
+	u64 delta;
 	u32 weight = p->scx.weight;
 
 	if (!tctx || !tctx->running)
 		return;
+	/* comm can change while a task continues without a running callback. */
+	refresh_tracking(p, tctx);
+	service = lertick_service_sample(tctx->episode_runtime_ns,
+			tctx->runtime_start_ns, p->se.sum_exec_runtime, true);
 	tctx->running = false;
-	runtime = p->se.sum_exec_runtime;
-	if (runtime < tctx->runtime_start_ns) {
+	if (!service.valid) {
 		tctx->episode_valid = false;
 		tctx->snapshot.last_censor_reason = LERTICK_CENSOR_ACCOUNTING;
 		stat_add(LERTICK_STAT_COUNTER_ERRORS, 1);
 		return;
 	}
-	delta = runtime - tctx->runtime_start_ns;
+	delta = service.pending_ns;
 	/* No bounded slice is treated as executed service for accounting. */
 	if (!weight)
 		weight = 1;
 	p->scx.dsq_vtime += delta * 100 / weight;
-	tctx->episode_runtime_ns += delta;
+	tctx->episode_runtime_ns = service.consumed_ns;
 	stat_add(LERTICK_STAT_RUNTIME_NS, delta);
 	if (tctx->tracked) {
 		tctx->snapshot.total_runtime_ns += delta;
@@ -404,6 +476,27 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 				       LERTICK_CENSOR_ATTACH_OR_UNVERIFIED_WAKE);
 		} else {
 			__s32 target = lertick_scale_ns_q16(burst, LERTICK_REFERENCE_NS);
+			u64 bounded = burst > LERTICK_REFERENCE_NS ? LERTICK_REFERENCE_NS : burst;
+
+			/* Prequential errors: wake-time predictions, before this label updates history. */
+			if (mode != LERTICK_MODE_FIXED &&
+			    tctx->snapshot.completed_bursts >= min_train_samples) {
+				u64 err = tctx->prediction_ns > bounded ?
+					tctx->prediction_ns - bounded : bounded - tctx->prediction_ns;
+				u64 ewma_err = tctx->ewma_prediction_ns > bounded ?
+					tctx->ewma_prediction_ns - bounded : bounded - tctx->ewma_prediction_ns;
+
+				tctx->snapshot.prediction_samples++;
+				tctx->snapshot.linear_abs_error_ns += err;
+				tctx->snapshot.ewma_abs_error_ns += ewma_err;
+				tctx->snapshot.linear_squared_error_us2 += (err / 1000) * (err / 1000);
+				tctx->snapshot.ewma_squared_error_us2 += (ewma_err / 1000) * (ewma_err / 1000);
+				tctx->snapshot.raw_burst_ns_sum += burst;
+				tctx->snapshot.clipped_targets += burst > LERTICK_REFERENCE_NS;
+				stat_add(LERTICK_STAT_PREDICTION_SAMPLES, 1);
+				stat_add(LERTICK_STAT_LINEAR_ABS_ERROR_NS, err);
+				stat_add(LERTICK_STAT_EWMA_ABS_ERROR_NS, ewma_err);
+			}
 
 			tctx->snapshot.completed_bursts++;
 			tctx->snapshot.last_burst_ns = burst;
@@ -412,9 +505,13 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 			if (burst > tctx->snapshot.max_burst_ns)
 				tctx->snapshot.max_burst_ns = burst;
 			stat_add(LERTICK_STAT_COMPLETED_BURSTS, 1);
-			if (mode != LERTICK_MODE_FIXED) {
+			if (mode == LERTICK_MODE_SHADOW || mode == LERTICK_MODE_ONLINE) {
+				u64 started = profile_model ? bpf_ktime_get_ns() : 0;
+
 				tctx->snapshot.last_training_error_q16 =
 					lertick_model_train(&tctx->model, tctx->features, target);
+				if (profile_model)
+					stat_add(LERTICK_STAT_TRAINING_TIME_NS, bpf_ktime_get_ns() - started);
 				stat_add(LERTICK_STAT_TRAINING_UPDATES, 1);
 			}
 			tctx->last_burst_ns = burst;
@@ -445,6 +542,7 @@ s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 	}
 	lertick_model_init(&tctx->model);
 	refresh_tracking(p, tctx);
+	stat_add(LERTICK_STAT_INIT_TASKS, 1);
 	return 0;
 }
 
@@ -474,6 +572,7 @@ void BPF_STRUCT_OPS(lertick_exit_task, struct task_struct *p,
 
 	if (!tctx)
 		return;
+	stat_add(LERTICK_STAT_EXIT_TASKS, 1);
 	censor_episode(tctx, LERTICK_CENSOR_EXIT);
 	tctx->episode_active = false;
 	tctx->episode_valid = false;

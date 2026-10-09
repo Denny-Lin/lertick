@@ -51,6 +51,18 @@ static const char *const stat_names[LERTICK_STAT_COUNT] = {
 	[LERTICK_STAT_PREDICTION_NS_SUM] = "prediction_ns_sum",
 	[LERTICK_STAT_SELECTED_SLICE_NS_SUM] = "selected_slice_ns_sum",
 	[LERTICK_STAT_MATCHING_DISPATCH_SLICES] = "matching_dispatch_slices",
+	[LERTICK_STAT_CONTINUATION_SLICES] = "continuation_slices",
+	[LERTICK_STAT_CONTINUATION_PENDING_NS] = "continuation_pending_ns",
+	[LERTICK_STAT_INIT_TASKS] = "init_tasks",
+	[LERTICK_STAT_EXIT_TASKS] = "exit_tasks",
+	[LERTICK_STAT_TRAINING_TIME_NS] = "training_time_ns",
+	[LERTICK_STAT_INFERENCE_TIME_NS] = "inference_time_ns",
+	[LERTICK_STAT_PREDICTION_SAMPLES] = "prediction_samples",
+	[LERTICK_STAT_LINEAR_ABS_ERROR_NS] = "linear_abs_error_ns",
+	[LERTICK_STAT_EWMA_ABS_ERROR_NS] = "ewma_abs_error_ns",
+	[LERTICK_STAT_WAKE_SAMPLES] = "wake_samples",
+	[LERTICK_STAT_WAKE_TO_RUN_NS] = "wake_to_run_ns",
+	[LERTICK_STAT_WAKE_TO_RUN_MAX_NS] = "wake_to_run_max_ns",
 };
 
 static int print_libbpf(enum libbpf_print_level level, const char *fmt, va_list args)
@@ -219,7 +231,7 @@ static int emit_snapshot(FILE *out, struct scx_lertick *skel, const char *phase,
 	__u64 *cpu_values;
 	__u32 key, next;
 	struct lertick_task_snapshot s;
-	unsigned count = 0;
+	unsigned count = 0, scanned = 0;
 	int err = 0;
 	if (ncpu <= 0) return -1;
 	cpu_values = calloc((size_t)ncpu, sizeof(*cpu_values));
@@ -229,7 +241,11 @@ static int emit_snapshot(FILE *out, struct scx_lertick *skel, const char *phase,
 			err = -1;
 			break;
 		}
-		for (int cpu = 0; cpu < ncpu; cpu++) sums[key] += cpu_values[cpu];
+		for (int cpu = 0; cpu < ncpu; cpu++) {
+			if (key == LERTICK_STAT_WAKE_TO_RUN_MAX_NS) {
+				if (cpu_values[cpu] > sums[key]) sums[key] = cpu_values[cpu];
+			} else sums[key] += cpu_values[cpu];
+		}
 	}
 	free(cpu_values);
 	if (err) return err;
@@ -240,9 +256,13 @@ static int emit_snapshot(FILE *out, struct scx_lertick *skel, const char *phase,
 		if (key) fputc(',', out);
 		json_string(out, stat_names[key]); fprintf(out, ":%llu", U64(sums[key]));
 	}
+	fprintf(out, ",\"live_tasks\":%lld", (long long)sums[LERTICK_STAT_INIT_TASKS] -
+		(long long)sums[LERTICK_STAT_EXIT_TASKS]);
 	fprintf(out, "},\"tasks\":[");
 	err = bpf_map_get_next_key(bpf_map__fd(skel->maps.task_snapshots), NULL, &next);
-	while (!err && count < LERTICK_MAX_TASK_SNAPSHOTS) {
+	/* LRU eviction may invalidate the previous key and restart enumeration. */
+	while (!err && count < LERTICK_MAX_TASK_SNAPSHOTS &&
+	       scanned++ < 2 * LERTICK_MAX_TASK_SNAPSHOTS) {
 		key = next;
 		if (!bpf_map_lookup_elem(bpf_map__fd(skel->maps.task_snapshots), &key, &s)) {
 			if (count++) fputc(',', out);
@@ -262,6 +282,14 @@ static int emit_snapshot(FILE *out, struct scx_lertick *skel, const char *phase,
 			SNAP_U64(adaptive_runs);
 			SNAP_U64(slice_sum_ns); SNAP_U64(last_runtime_delta_ns);
 			SNAP_U64(last_sleep_interval_ns); SNAP_U64(last_queue_depth);
+			SNAP_U64(continuation_slices); SNAP_U64(continuing_pending_ns);
+			SNAP_U64(continuing_consumed_ns); SNAP_U64(continuing_prediction_ns);
+			SNAP_U64(continuing_selected_slice_ns);
+			SNAP_U64(continuing_model_updates); SNAP_U64(continuing_episode_valid);
+			SNAP_U64(prediction_samples); SNAP_U64(linear_abs_error_ns); SNAP_U64(ewma_abs_error_ns);
+			SNAP_U64(linear_squared_error_us2); SNAP_U64(ewma_squared_error_us2);
+			SNAP_U64(raw_burst_ns_sum); SNAP_U64(clipped_targets);
+			SNAP_U64(wake_samples); SNAP_U64(wake_to_run_ns); SNAP_U64(wake_to_run_max_ns);
 #undef SNAP_U64
 			fprintf(out, ",\"model_weight_q16\":[");
 			for (int i = 0; i < LERTICK_FEATURES; i++) fprintf(out, "%s%d", i ? "," : "", s.model_weight_q16[i]);
@@ -293,11 +321,13 @@ static unsigned parse_uint(const char *text, unsigned min, unsigned max)
 
 static void usage(FILE *out, const char *argv0)
 {
-	fprintf(out, "Usage: %s [--mode fixed|shadow|online] [--duration SEC] [--stats-json FILE]\n"
+	fprintf(out, "Usage: %s [--mode fixed|shadow|online|ewma] [--duration SEC] [--stats-json FILE]\n"
 		"  --check                 Probe kernel config, BTF, BPF permission, sched_ext\n"
 		"  --verbose               Emit libbpf debug/verifier diagnostics\n"
+		"  --profile               Time in-kernel model operations (observer cost)\n"
 		"  --sample-ms N           Snapshot interval (100..10000, default 1000)\n"
 		"  --tracked-tgid PID      Track this TGID (default comm prefix lertick)\n"
+		"  --track-all             Learn all tasks (includes compiler descendants)\n"
 		"  --fixed-slice-us N      Fixed/warmup slice (default 2000)\n"
 		"  --min-slice-us N        Prediction slice lower bound (default 500)\n"
 		"  --max-slice-us N        Prediction slice upper bound (default 5000)\n"
@@ -319,18 +349,21 @@ int main(int argc, char **argv)
 	const char *stats_path = "-", *mode_name = "online";
 	unsigned duration = 30, sample_ms = 1000, mode = LERTICK_MODE_ONLINE;
 	unsigned fixed_us = 2000, min_us = 500, max_us = 5000, tracked_tgid = 0, stall_tgid = 0;
-	bool check = false, partial = false, fault = false, danger = false, expect_watchdog = false;
+	bool check = false, partial = false, fault = false, danger = false, expect_watchdog = false, profile = false;
+	bool track_all = false;
 	bool fallback, restored, watchdog_observed = false;
 	__u64 start, next_sample, exit_code;
 	u64 stall_kind = 0, unreg_kind = 0;
 	int opt, status = 0, final_kind;
 	char ops[128] = "unavailable";
 	enum { OPT_CHECK = 1000, OPT_SAMPLE, OPT_TRACK, OPT_FIXED, OPT_MIN, OPT_MAX,
-	       OPT_PARTIAL, OPT_FAULT, OPT_STALL, OPT_DANGER, OPT_EXPECT };
+	       OPT_PARTIAL, OPT_FAULT, OPT_STALL, OPT_DANGER, OPT_EXPECT, OPT_PROFILE, OPT_ALL };
 	static const struct option opts[] = {
 		{ "mode", required_argument, NULL, 'm' }, { "duration", required_argument, NULL, 'd' },
 		{ "stats-json", required_argument, NULL, 'o' }, { "verbose", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' }, { "check", no_argument, NULL, OPT_CHECK },
+		{ "profile", no_argument, NULL, OPT_PROFILE },
+		{ "track-all", no_argument, NULL, OPT_ALL },
 		{ "sample-ms", required_argument, NULL, OPT_SAMPLE }, { "tracked-tgid", required_argument, NULL, OPT_TRACK },
 		{ "fixed-slice-us", required_argument, NULL, OPT_FIXED }, { "min-slice-us", required_argument, NULL, OPT_MIN },
 		{ "max-slice-us", required_argument, NULL, OPT_MAX }, { "partial", no_argument, NULL, OPT_PARTIAL },
@@ -345,6 +378,7 @@ int main(int argc, char **argv)
 			if (!strcmp(optarg, "fixed")) mode = LERTICK_MODE_FIXED;
 			else if (!strcmp(optarg, "shadow")) mode = LERTICK_MODE_SHADOW;
 			else if (!strcmp(optarg, "online")) mode = LERTICK_MODE_ONLINE;
+			else if (!strcmp(optarg, "ewma")) mode = LERTICK_MODE_EWMA;
 			else { usage(stderr, argv[0]); return 2; }
 			break;
 		case 'd': duration = parse_uint(optarg, 1, 3600); break;
@@ -362,6 +396,8 @@ int main(int argc, char **argv)
 		case OPT_STALL: stall_tgid = parse_uint(optarg, 1, 0x7fffffff); break;
 		case OPT_DANGER: danger = true; break;
 		case OPT_EXPECT: expect_watchdog = true; break;
+		case OPT_PROFILE: profile = true; break;
+		case OPT_ALL: track_all = true; break;
 		default: usage(stderr, argv[0]); return 2;
 		}
 	}
@@ -400,6 +436,8 @@ int main(int argc, char **argv)
 	skel->rodata->tracked_tgid = tracked_tgid;
 	skel->rodata->fault_stall = fault;
 	skel->rodata->stall_tgid = stall_tgid;
+	skel->rodata->profile_model = profile;
+	skel->rodata->track_all = track_all;
 	if (partial) {
 		__u64 flag = SCX_OPS_SWITCH_PARTIAL;
 		if (!flag) { fprintf(stderr, "BLOCKER: kernel lacks partial switch flag.\n"); scx_lertick__destroy(skel); return 1; }
@@ -424,9 +462,10 @@ int main(int argc, char **argv)
 	} else {
 		fprintf(out, "{\"event\":\"registered\",\"ops\":"); json_string(out, ops);
 		fprintf(out, ",\"partial\":%s,\"mode\":", partial ? "true" : "false"); json_string(out, mode_name);
-		fprintf(out, ",\"fixed_slice_ns\":%llu,\"min_slice_ns\":%llu,\"max_slice_ns\":%llu,\"timeout_ms\":%llu}\n",
+		fprintf(out, ",\"fixed_slice_ns\":%llu,\"min_slice_ns\":%llu,\"max_slice_ns\":%llu,\"timeout_ms\":%llu,\"profile_model\":%s,\"track_all\":%s}\n",
 			U64((__u64)fixed_us * 1000), U64((__u64)min_us * 1000), U64((__u64)max_us * 1000),
-			U64(skel->struct_ops.lertick_ops->timeout_ms)); fflush(out);
+			U64(skel->struct_ops.lertick_ops->timeout_ms), profile ? "true" : "false",
+			track_all ? "true" : "false"); fflush(out);
 	}
 	start = now_ns(); next_sample = start;
 	while (!status && !exit_req && !UEI_EXITED(skel, uei) && now_ns() - start < (__u64)duration * 1000000000) {

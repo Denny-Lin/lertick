@@ -20,6 +20,8 @@ jobs:
         run: python3 tests/check_docs.py
       - name: Test fixed-point arithmetic and learning
         run: make test-model
+      - name: Test CPU service accounting
+        run: make test-accounting
       - name: Check script syntax
         run: |
           bash -n scripts/preflight.sh scripts/fetch_reference.sh scripts/build_libbpf.sh

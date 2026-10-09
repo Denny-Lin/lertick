@@ -17,7 +17,7 @@ BPF_CFLAGS ?= -O2 -g -target bpf -mcpu=v3 -Wall -Wno-compare-distinct-pointer-ty
 BPF_CFLAGS += -D__TARGET_ARCH_$(TARGET_ARCH) -Ivendor/bpf-compat -I/usr/include/$(MULTIARCH)
 BPF_HEADERS := $(wildcard vendor/scx/*.h) $(wildcard src/shared/*.h)
 
-.PHONY: all clean preflight test-model workload reference
+.PHONY: all clean preflight test-model test-accounting workload reference
 all: $(BUILD)/scx_lertick $(BUILD)/burst_workload
 
 $(BUILD):
@@ -46,6 +46,12 @@ $(BUILD)/test_model: tests/test_model.c src/shared/model.h | $(BUILD)
 
 test-model: $(BUILD)/test_model
 	$(BUILD)/test_model
+
+$(BUILD)/test_accounting: tests/test_accounting.c src/shared/accounting.h src/shared/model.h | $(BUILD)
+	$(CC) -Isrc/shared -O2 -std=c11 -Wall -Wextra -Werror $< -o $@
+
+test-accounting: $(BUILD)/test_accounting
+	$(BUILD)/test_accounting
 
 workload: $(BUILD)/burst_workload
 preflight:
