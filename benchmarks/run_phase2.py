@@ -558,6 +558,7 @@ class Benchmark:
         if set(self.policies) - {"default", "scx_simple", "fixed", "shadow", "online", "ewma", *self.extra}:
             raise RuntimeError("unknown policy")
         manifest = {"kernel": os.uname().release, "architecture": os.uname().machine,
+                    "preemption_mode": read_optional("/sys/kernel/debug/sched/preempt"),
                     "arguments": {key: str(value) for key, value in vars(self.args).items()},
                     "environment": {"cpuinfo": read_optional("/proc/cpuinfo"), "meminfo": read_optional("/proc/meminfo"),
                                     "cmdline": read_optional("/proc/cmdline"), "os_release": read_optional("/etc/os-release")},
@@ -575,7 +576,7 @@ class Benchmark:
             if not self.args.resume:
                 raise RuntimeError("output already contains an experiment; use a fresh directory or --resume")
             original = json.loads(manifest_path.read_text())
-            for key in ("kernel", "architecture", "programs", "benchmark_sources"):
+            for key in ("kernel", "architecture", "preemption_mode", "programs", "benchmark_sources"):
                 if original.get(key) != manifest[key]:
                     raise RuntimeError(f"cannot resume after changing {key}; use a fresh directory")
             for key, value in original["arguments"].items():

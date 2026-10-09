@@ -89,7 +89,12 @@ static __always_inline void stat_add(u32 idx, u64 amount)
 {
 	u64 *value = bpf_map_lookup_elem(&stats, &idx);
 
-	if (value)
+	if (!value)
+		return;
+	/* init_task is unlocked: migration pinning does not exclude preemption. */
+	if (idx == LERTICK_STAT_INIT_TASKS || idx == LERTICK_STAT_ALLOC_FAILURES)
+		__sync_fetch_and_add(value, amount);
+	else
 		*value += amount;
 }
 

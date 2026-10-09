@@ -45,6 +45,12 @@ bounded independently of successful lookups because concurrent LRU eviction
 can invalidate an enumeration key. Periodic snapshots are approximate; final
 reads after detach are stable.
 
+An `exited` snapshot means its sched_ext association ended; unload also ends
+associations for tasks that are still alive. The `live_tasks` counter is logical
+init-minus-exit accounting. It does not measure per-task kernel allocation bytes
+before detach. Owned-map disappearance independently verifies the loader's map
+lifetime after unload.
+
 Task callbacks operate under the kernel's task/runqueue serialization. The
 continuation path reads only the previous task on its locked runqueue.
 `init_task` initializes private association state; successful init/exit counts
@@ -52,6 +58,23 @@ must balance after detach. Per-task coefficients are never updated from a
 separate userspace trainer. The global virtual-time race tolerance remains
 that of the official weighted `scx_simple` example; finite tests do not prove
 universal starvation freedom or fairness.
+
+`init_task` is an unlocked callback. On preemptible ARM64, migration pinning
+does not prevent another fork caller from running on the same CPU between a
+diagnostic counter's load and store. Ordinary struct_ops programs here do not
+request a private stack/recursion guard. `INIT_TASKS` and `ALLOC_FAILURES` now
+use atomic additions; runqueue-serialized hot counters retain their existing
+implementation. This is a statically identified lost-update possibility, not a
+reproduced scheduler service-accounting failure. See the pinned Linux v7.0
+[fork caller](https://github.com/torvalds/linux/blob/v7.0/kernel/sched/core.c),
+[trampoline](https://github.com/torvalds/linux/blob/v7.0/kernel/bpf/trampoline.c)
+and [recursion selection](https://github.com/torvalds/linux/blob/v7.0/include/linux/bpf_verifier.h).
+
+A concurrent-fork test runs eight parents pinned to one CPU, each creating
+1,000 children. It records the actual dynamic preemption mode and requires
+independent completion, bounded telemetry, balanced init/exit counts and
+released owned maps. Full preemption is selected for this regression; the
+guest's original lazy mode is restored for the final performance experiment.
 
 Owned map IDs can remain briefly visible after the loader exits, then disappear.
 The suite measures this drain with a five-second bound and preserves the first
@@ -92,9 +115,17 @@ Inside the disposable four-vCPU Ubuntu guest, after the build in
 
 ```sh
 make test-model test-accounting
+cat /sys/kernel/debug/sched/preempt
+# Recorded guest originally selects lazy; use full for concurrent init stress.
+printf full | sudo tee /sys/kernel/debug/sched/preempt
 sudo python3 tests/validate_phase2.py --output results/local/phase2-correctness
 cat /sys/kernel/sched_ext/state
+printf lazy | sudo tee /sys/kernel/debug/sched/preempt
 ```
+
+Record the previous selected mode and restore that mode on another guest;
+`lazy` is the recorded environment's original value. If full preemption cannot
+be selected, report that blocker rather than claiming this stress was covered.
 
 Expected final state is `disabled`. The runner refuses an existing sched_ext
 scheduler and terminates only children it owns. Allocation failure injection,

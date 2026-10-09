@@ -339,6 +339,116 @@ class Phase2Validation(Validation):
                 self.case(mode, scenario, duration=duration)
         self.case("fixed", "churn", duration=0.0001, workers=8, iterations=4200)
 
+    def concurrent_fork_churn(self):
+        """Stress unlocked init_task callers sharing one CPU under preemption.
+
+        Parent/child completion counts are independent of BPF counters. This
+        complements the original single-parent churn case; LRU eviction means
+        that observing all children through retained snapshots is not required.
+        The caller controls the guest's preemption mode and preserves it in
+        this evidence rather than silently changing kernel policy here.
+        """
+        name = "concurrent-fork-fixed"
+        parent_count, children_per_parent, children_per_batch = 8, 1000, 8
+        expected_children = parent_count * children_per_parent
+        selected_cpu = self.cpu_ids[0]
+        preemption_path = Path("/sys/kernel/debug/sched/preempt")
+        try:
+            preemption_mode = preemption_path.read_text().strip()
+        except OSError:
+            preemption_mode = None
+        if preemption_path.exists():
+            require(preemption_mode is not None and "(full)" in preemption_mode,
+                    f"{name}: selected full preemption is required; observed {preemption_mode!r}. "
+                    "Inside the disposable VM, select it with "
+                    "`printf full | sudo tee /sys/kernel/debug/sched/preempt`, "
+                    "rerun this test, then restore the previous mode. Bare `full` "
+                    "in the available-mode list is not the selected mode.")
+        loader = self.scheduler(name, mode="fixed", duration=240,
+                                extra=("--sample-ms", "1000"))
+        owned_maps = self.owned_maps(name, loader)
+        time.sleep(1.05)
+        before = latest_snapshot(self.output / f"{name}.jsonl")
+        # Pin the parents as well as their children. The C fixture applies
+        # --cpus to workers, while taskset constrains the actual fork callers.
+        processes = [self.launch([
+            "taskset", "--cpu-list", str(selected_cpu), self.lifecycle_binary,
+            "--scenario", "churn", "--duration", "0.0001",
+            "--workers", str(children_per_batch),
+            "--iterations", str(children_per_parent), "--cpus", str(selected_cpu),
+        ], name + f"-parent{index}") for index in range(parent_count)]
+        active_parents = sum(process.poll() is None for process in processes)
+        require(active_parents == parent_count,
+                f"{name}: all eight fork callers did not overlap")
+        deadline = time.monotonic() + 180
+        for process in processes:
+            self.finish(process, timeout=max(0.001, deadline - time.monotonic()))
+        time.sleep(1.05)
+        drained = latest_snapshot(self.output / f"{name}.jsonl")
+        self.stop(loader)
+        map_release = self.maps_released(owned_maps, name)
+        final = latest_snapshot(self.output / f"{name}.jsonl")
+        self.check_counters(final, name)
+        require(final["stats"]["training_updates"] == 0 and
+                final["stats"]["adaptive_slices"] == 0,
+                f"{name}: fixed counter stress unexpectedly changed policy")
+        parent_results, children = [], []
+        for index in range(parent_count):
+            events = rows(self.output / f"{name}-parent{index}.log")
+            completions = [event for event in events if event.get("event") == "worker"]
+            counts = [event for event in events if event.get("event") == "lifecycle"]
+            require(len(counts) == 1 and
+                    counts[0]["created"] == counts[0]["reaped"] == children_per_parent and
+                    counts[0]["exec"] is True,
+                    f"{name}: parent {index} did not create/exec/reap all children")
+            require(len(completions) == children_per_parent,
+                    f"{name}: parent {index} lacks independent child completion records")
+            require(all(child["role"] == "cpu" and child["cpu_ns"] > 0 and
+                        child["schedstat_ns"] > 0 and child["units"] > 0 and
+                        child["affinity_violations"] == 0 for child in completions),
+                    f"{name}: parent {index} has an invalid child execution record")
+            children.extend(completions)
+            parent_results.append({"parent_index": index, "pid": processes[index].pid,
+                                   "created": counts[0]["created"],
+                                   "reaped": counts[0]["reaped"],
+                                   "completion_records": len(completions)})
+        unique_children = {child["tid"] for child in children}
+        require(len(children) == len(unique_children) == expected_children,
+                f"{name}: expected 8000 distinct completed child tasks")
+        # Every parent and child must create an association after the baseline.
+        # Other VM tasks can also initialize; they cannot reduce this lower bound.
+        initialized = final["stats"]["init_tasks"] - before["stats"]["init_tasks"]
+        require(initialized >= expected_children + parent_count,
+                f"{name}: init counter omitted known parent/child associations")
+        tasks = {task["pid"]: task for task in final["tasks"]}
+        retained = [tid for tid in unique_children if tid in tasks]
+        require(retained and all(tasks[tid]["exited"] == 1 for tid in retained),
+                f"{name}: retained children lack final exit evidence")
+        self.result["tests"]["concurrent_fork_churn"] = {
+            "passed": True, "mode": "fixed", "pinned_cpu": selected_cpu,
+            "parents": parent_results, "overlapping_parents": active_parents,
+            "children_per_parent": children_per_parent,
+            "children_per_batch": children_per_batch,
+            "children_created": expected_children, "children_reaped": expected_children,
+            "independent_completion_records": len(children),
+            "distinct_child_tids": len(unique_children),
+            "preemption_mode": preemption_mode,
+            "preemption_mode_path": str(preemption_path),
+            "retained_child_snapshots": len(retained),
+            "retained_tasks": len(final["tasks"]), "eviction_expected": True,
+            "live_before": before["stats"]["live_tasks"],
+            "live_drained": drained["stats"]["live_tasks"],
+            "known_minimum_new_associations": expected_children + parent_count,
+            "observed_new_init_associations": initialized,
+            "final_stats": final["stats"], "maps": owned_maps,
+            "maps_released": True, "map_release": map_release,
+            "proof_scope": "finite same-CPU concurrent fork/exec with exact independent completion counts",
+        }
+        self.save()
+        print(f"PASS {name}: parents={parent_count} children={expected_children} "
+              f"init={final['stats']['init_tasks']} exit={final['stats']['exit_tasks']} "
+              f"preemption={preemption_mode}", flush=True)
+
     def fairness(self):
         for mode in ("fixed", "shadow", "online"):
             name = f"fairness-{mode}"
@@ -407,6 +517,8 @@ class Phase2Validation(Validation):
             self.build_workload()
             if "lifecycle" in self.args.tests:
                 self.lifecycle()
+            if "concurrent-fork" in self.args.tests:
+                self.concurrent_fork_churn()
             if "fairness" in self.args.tests:
                 self.fairness()
             if "recovery" in self.args.tests:
@@ -427,8 +539,8 @@ class Phase2Validation(Validation):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "results/local/phase2a")
-    parser.add_argument("--tests", nargs="+", choices=("lifecycle", "fairness", "recovery"),
-                        default=["lifecycle", "fairness", "recovery"])
+    parser.add_argument("--tests", nargs="+", choices=("lifecycle", "concurrent-fork", "fairness", "recovery"),
+                        default=["lifecycle", "concurrent-fork", "fairness", "recovery"])
     parser.add_argument("--fairness-seconds", type=int, default=9)
     parser.add_argument("--recovery-repetitions", type=int, default=3)
     args = parser.parse_args()

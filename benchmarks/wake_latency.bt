@@ -11,13 +11,13 @@ tracepoint:sched:sched_wakeup_new
  args->comm == "make" || args->comm == "cc1" ||
  args->comm == "cc1plus" || args->comm == "as" || args->comm == "gcc"/
 {
-	@wake[args->pid] = nsecs;
+	@wake[args->pid] = nsecs(monotonic);
 }
 
 tracepoint:sched:sched_switch
 /@wake[args->next_pid]/
 {
-	$now = nsecs;
+	$now = nsecs(monotonic);
 	$pid = args->next_pid;
 	@sequence[$pid]++;
 	/* Compiler descendants are often shorter than sixteen wakes. */
