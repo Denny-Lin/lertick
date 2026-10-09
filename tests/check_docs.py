@@ -18,7 +18,8 @@ REQUIRED = (
     "CODE_OF_CONDUCT.md", "SECURITY.md", "CHANGELOG.md", "docs/DEPLOYMENT.md",
     "src/README.md", "tests/README.md", "benchmarks/README.md",
     "examples/README.md", ".github/workflows/docs.yml", "docs/PHASE1_RESULTS.md",
-    "docs/DECISIONS.md", "THIRD_PARTY.md", "results/phase1/README.md",
+    "docs/DECISIONS.md", "docs/NAMING.md", "docs/REBRAND_VALIDATION.md",
+    "docs/planning/README.md", "THIRD_PARTY.md", "results/phase1/README.md",
 )
 LINK = re.compile(r"!?\[[^\]\n]+\]\((<[^>]+>|[^\s)]+)(?:\s+\"[^\"]*\")?\)")
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")

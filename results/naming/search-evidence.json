@@ -1,0 +1,508 @@
+{
+  "checked_date": "2026-10-09",
+  "selected_name": "Lertick",
+  "repository": "Denny-Lin/lertick",
+  "checks_before_publication": true,
+  "method": "Exact and targeted web searches, public GitHub repository-name searches, primary registry RDAP from IANA bootstrap. No domains purchased.",
+  "rdap_404_meaning": "No registration record; registrar availability, reservation and pricing unconfirmed. Repeat 429 responses retain earlier successful 404 observations.",
+  "candidates": [
+    {
+      "name": "lertick",
+      "web_queries": [
+        "\"lertick\"",
+        "\"lertick\" software OR company OR product"
+      ],
+      "github": {
+        "command": "gh search repos lertick --limit 100 --json fullName,description,stargazersCount,url",
+        "result_count": 0,
+        "exact_basename_count": 0,
+        "results": [],
+        "search_url": "https://github.com/search?q=lertick+in%3Aname&type=repositories"
+      },
+      "domain_records": [
+        {
+          "domain": "lertick.dev",
+          "status": 404,
+          "url": "https://pubapi.registry.google/rdap/domain/lertick.dev"
+        },
+        {
+          "domain": "lertick.org",
+          "status": 404,
+          "url": "https://rdap.publicinterestregistry.org/rdap/domain/lertick.org"
+        },
+        {
+          "domain": "lertick.com",
+          "url": "https://rdap.verisign.com/com/v1/domain/lertick.com",
+          "status": 404,
+          "result": "no registration record"
+        }
+      ],
+      "conflict_notes": "No established product/company/project conflict found; incidental name/OCR result",
+      "sources": [
+        "https://cneha.org/newsletters/1991.pdf"
+      ]
+    },
+    {
+      "name": "rundapt",
+      "web_queries": [
+        "\"rundapt\"",
+        "\"rundapt\" software OR company OR product"
+      ],
+      "github": {
+        "command": "gh search repos rundapt --limit 100 --json fullName,description,stargazersCount,url",
+        "result_count": 0,
+        "exact_basename_count": 0,
+        "results": [],
+        "search_url": "https://github.com/search?q=rundapt+in%3Aname&type=repositories"
+      },
+      "domain_records": [
+        {
+          "domain": "rundapt.dev",
+          "status": 404,
+          "url": "https://pubapi.registry.google/rdap/domain/rundapt.dev"
+        },
+        {
+          "domain": "rundapt.org",
+          "status": 404,
+          "url": "https://rdap.publicinterestregistry.org/rdap/domain/rundapt.org"
+        },
+        {
+          "domain": "rundapt.com",
+          "url": "https://rdap.verisign.com/com/v1/domain/rundapt.com",
+          "status": 200,
+          "result": "registered"
+        }
+      ],
+      "conflict_notes": "No indexed exact-name established product/company/project conflict found",
+      "sources": []
+    },
+    {
+      "name": "aftick",
+      "web_queries": [
+        "\"aftick\"",
+        "\"aftick\" software company product"
+      ],
+      "github": {
+        "name": "aftick",
+        "total_count": 1,
+        "exact_matches": [],
+        "items": [
+          {
+            "name": "guidobucett/360-AFTickets",
+            "url": "https://github.com/guidobucett/360-AFTickets",
+            "stars": 0
+          }
+        ]
+      },
+      "domain_records": [
+        {
+          "domain": "aftick.org",
+          "url": "https://rdap.publicinterestregistry.org/rdap/domain/aftick.org",
+          "http_status": 404,
+          "assessment": "no registration record"
+        },
+        {
+          "domain": "aftick.dev",
+          "url": "https://pubapi.registry.google/rdap/domain/aftick.dev",
+          "http_status": 404,
+          "assessment": "no registration record"
+        },
+        {
+          "domain": "aftick.com",
+          "url": "https://rdap.verisign.com/com/v1/domain/aftick.com",
+          "status": 200,
+          "result": "registered"
+        }
+      ],
+      "conflict_notes": "See candidate table for observed substring or non-brand uses.",
+      "sources": []
+    },
+    {
+      "name": "burstune",
+      "web_queries": [
+        "\"burstune\"",
+        "\"burstune\" software OR company OR product"
+      ],
+      "github": {
+        "command": "gh search repos burstune --limit 100 --json fullName,description,stargazersCount,url",
+        "result_count": 0,
+        "exact_basename_count": 0,
+        "results": [],
+        "search_url": "https://github.com/search?q=burstune+in%3Aname&type=repositories"
+      },
+      "domain_records": [
+        {
+          "domain": "burstune.dev",
+          "status": 429,
+          "url": "https://pubapi.registry.google/rdap/domain/burstune.dev",
+          "previous_observation": {
+            "status": 404,
+            "timing": "Earlier tool call in the same research session, before the batch was rate-limited"
+          }
+        },
+        {
+          "domain": "burstune.org",
+          "status": 404,
+          "url": "https://rdap.publicinterestregistry.org/rdap/domain/burstune.org"
+        },
+        {
+          "domain": "burstune.com",
+          "url": "https://rdap.verisign.com/com/v1/domain/burstune.com",
+          "status": 404,
+          "result": "no registration record"
+        }
+      ],
+      "conflict_notes": "No established product/company/project conflict found; unrelated misspelled-person-name result",
+      "sources": [
+        "https://uspdigital.usp.br/apolo/apoObterAtividade?cod_oferecimentoatv=105917"
+      ]
+    },
+    {
+      "name": "kertick",
+      "web_queries": [
+        "\"kertick\"",
+        "\"kertick\" software OR company OR product"
+      ],
+      "github": {
+        "command": "gh search repos kertick --limit 100 --json fullName,description,stargazersCount,url",
+        "result_count": 0,
+        "exact_basename_count": 0,
+        "results": [],
+        "search_url": "https://github.com/search?q=kertick+in%3Aname&type=repositories"
+      },
+      "domain_records": [
+        {
+          "domain": "kertick.dev",
+          "status": 429,
+          "url": "https://pubapi.registry.google/rdap/domain/kertick.dev",
+          "previous_observation": {
+            "status": 404,
+            "timing": "Earlier tool call in the same research session, before the batch was rate-limited"
+          }
+        },
+        {
+          "domain": "kertick.org",
+          "status": 404,
+          "url": "https://rdap.publicinterestregistry.org/rdap/domain/kertick.org"
+        },
+        {
+          "domain": "kertick.com",
+          "url": "https://rdap.verisign.com/com/v1/domain/kertick.com",
+          "status": 404,
+          "result": "no registration record"
+        }
+      ],
+      "conflict_notes": "No established product/company/project conflict found; surname and personal handles exist",
+      "sources": [
+        "https://www.ancestry.com/last-name-meaning/kertick",
+        "https://vasp.at/forum/viewtopic.php?t=1856"
+      ]
+    },
+    {
+      "name": "lertune",
+      "web_queries": [
+        "\"lertune\"",
+        "\"lertune\" software OR company OR product"
+      ],
+      "github": {
+        "command": "gh search repos lertune --limit 100 --json fullName,description,stargazersCount,url",
+        "result_count": 0,
+        "exact_basename_count": 0,
+        "results": [],
+        "search_url": "https://github.com/search?q=lertune+in%3Aname&type=repositories"
+      },
+      "domain_records": [
+        {
+          "domain": "lertune.dev",
+          "status": 429,
+          "url": "https://pubapi.registry.google/rdap/domain/lertune.dev",
+          "previous_observation": {
+            "status": 404,
+            "timing": "Earlier tool call in the same research session, before the batch was rate-limited"
+          }
+        },
+        {
+          "domain": "lertune.org",
+          "status": 404,
+          "url": "https://rdap.publicinterestregistry.org/rdap/domain/lertune.org"
+        },
+        {
+          "domain": "lertune.com",
+          "url": "https://rdap.verisign.com/com/v1/domain/lertune.com",
+          "status": 404,
+          "result": "no registration record"
+        }
+      ],
+      "conflict_notes": "No established product/company/project conflict found; incidental OCR result",
+      "sources": [
+        "https://www.numdam.org/item/10.5802/pmb.a-6.pdf"
+      ]
+    },
+    {
+      "name": "causched",
+      "web_queries": [
+        "\"causched\"",
+        "\"causched\" software company product"
+      ],
+      "github": {
+        "total_count": 1,
+        "exact_matches": [],
+        "items": [
+          {
+            "full_name": "ZeroPage/CAUScheduler",
+            "url": "https://github.com/ZeroPage/CAUScheduler",
+            "stars": 0
+          }
+        ]
+      },
+      "domain_records": [
+        {
+          "domain": "causched.org",
+          "url": "https://rdap.publicinterestregistry.org/rdap/domain/causched.org",
+          "status": 404,
+          "result": "no registration record"
+        },
+        {
+          "domain": "causched.dev",
+          "url": "https://pubapi.registry.google/rdap/domain/causched.dev",
+          "status": 404,
+          "result": "no registration record"
+        },
+        {
+          "domain": "causched.com",
+          "url": "https://rdap.verisign.com/com/v1/domain/causched.com",
+          "status": 404,
+          "result": "no registration record"
+        }
+      ],
+      "conflict_notes": "See candidate table for observed substring or non-brand uses.",
+      "sources": []
+    },
+    {
+      "name": "runhest",
+      "web_queries": [
+        "\"runhest\"",
+        "\"runhest\" software OR company OR product"
+      ],
+      "github": {
+        "command": "gh search repos runhest --limit 100 --json fullName,description,stargazersCount,url",
+        "result_count": 0,
+        "exact_basename_count": 0,
+        "results": [],
+        "search_url": "https://github.com/search?q=runhest+in%3Aname&type=repositories"
+      },
+      "domain_records": [
+        {
+          "domain": "runhest.dev",
+          "status": 429,
+          "url": "https://pubapi.registry.google/rdap/domain/runhest.dev",
+          "previous_observation": {
+            "status": 404,
+            "timing": "Earlier tool call in the same research session, before the batch was rate-limited"
+          }
+        },
+        {
+          "domain": "runhest.org",
+          "status": 404,
+          "url": "https://rdap.publicinterestregistry.org/rdap/domain/runhest.org"
+        },
+        {
+          "domain": "runhest.com",
+          "url": "https://rdap.verisign.com/com/v1/domain/runhest.com",
+          "status": 404,
+          "result": "no registration record"
+        }
+      ],
+      "conflict_notes": "No indexed exact-name established product/company/project conflict found",
+      "sources": []
+    },
+    {
+      "name": "cadturn",
+      "web_queries": [
+        "\"cadturn\"",
+        "\"cadturn\" software company product"
+      ],
+      "github": {
+        "name": "cadturn",
+        "total_count": 0,
+        "exact_matches": [],
+        "items": []
+      },
+      "domain_records": [
+        {
+          "domain": "cadturn.org",
+          "url": "https://rdap.publicinterestregistry.org/rdap/domain/cadturn.org",
+          "http_status": 404,
+          "assessment": "no registration record"
+        },
+        {
+          "domain": "cadturn.dev",
+          "url": "https://pubapi.registry.google/rdap/domain/cadturn.dev",
+          "http_status": 404,
+          "assessment": "no registration record"
+        },
+        {
+          "domain": "cadturn.com",
+          "url": "https://rdap.verisign.com/com/v1/domain/cadturn.com",
+          "status": 404,
+          "result": "no registration record"
+        }
+      ],
+      "conflict_notes": "See candidate table for observed substring or non-brand uses.",
+      "sources": []
+    },
+    {
+      "name": "cavrun",
+      "web_queries": [
+        "\"cavrun\"",
+        "\"cavrun\" software company product"
+      ],
+      "github": {
+        "total_count": 0,
+        "exact_matches": [],
+        "items": []
+      },
+      "domain_records": [
+        {
+          "domain": "cavrun.org",
+          "url": "https://rdap.publicinterestregistry.org/rdap/domain/cavrun.org",
+          "status": 404,
+          "result": "no registration record"
+        },
+        {
+          "domain": "cavrun.dev",
+          "url": "https://pubapi.registry.google/rdap/domain/cavrun.dev",
+          "status": 404,
+          "result": "no registration record"
+        },
+        {
+          "domain": "cavrun.com",
+          "url": "https://rdap.verisign.com/com/v1/domain/cavrun.com",
+          "status": 404,
+          "result": "no registration record"
+        }
+      ],
+      "conflict_notes": "See candidate table for observed substring or non-brand uses.",
+      "sources": []
+    },
+    {
+      "name": "evotick",
+      "web_queries": [
+        "\"evotick\"",
+        "\"evotick\" software company product"
+      ],
+      "github": {
+        "name": "evotick",
+        "total_count": 8,
+        "exact_matches": [],
+        "items": [
+          {
+            "name": "Whxismou1/EvoTickets",
+            "url": "https://github.com/Whxismou1/EvoTickets",
+            "stars": 2,
+            "description": null
+          },
+          {
+            "name": "ferdintel/evotickets",
+            "url": "https://github.com/ferdintel/evotickets",
+            "stars": 0,
+            "description": null
+          },
+          {
+            "name": "Ness0402/evoticket",
+            "url": "https://github.com/Ness0402/evoticket",
+            "stars": 0,
+            "description": null
+          },
+          {
+            "name": "Sleepy4k/java-evotick",
+            "url": "https://github.com/Sleepy4k/java-evotick",
+            "stars": 0,
+            "description": null
+          },
+          {
+            "name": "EvoTicket/evoticket-performance-tests",
+            "url": "https://github.com/EvoTicket/evoticket-performance-tests",
+            "stars": 0,
+            "description": null
+          },
+          {
+            "name": "jianbot007/Evoticket",
+            "url": "https://github.com/jianbot007/Evoticket",
+            "stars": 0,
+            "description": null
+          },
+          {
+            "name": "Jungle-junkie/evotickets-onboarding",
+            "url": "https://github.com/Jungle-junkie/evotickets-onboarding",
+            "stars": 0,
+            "description": null
+          },
+          {
+            "name": "EvoTicket/EvoTicket_FE",
+            "url": "https://github.com/EvoTicket/EvoTicket_FE",
+            "stars": 0,
+            "description": null
+          }
+        ]
+      },
+      "domain_records": [
+        {
+          "domain": "evotick.org",
+          "url": "https://rdap.publicinterestregistry.org/rdap/domain/evotick.org",
+          "http_status": 404,
+          "assessment": "no registration record"
+        },
+        {
+          "domain": "evotick.dev",
+          "url": "https://pubapi.registry.google/rdap/domain/evotick.dev",
+          "http_status": 404,
+          "assessment": "no registration record"
+        },
+        {
+          "domain": "evotick.com",
+          "url": "https://rdap.verisign.com/com/v1/domain/evotick.com",
+          "status": 200,
+          "result": "registered"
+        }
+      ],
+      "conflict_notes": "See candidate table for observed substring or non-brand uses.",
+      "sources": []
+    },
+    {
+      "name": "aevtick",
+      "web_queries": [
+        "\"aevtick\"",
+        "\"aevtick\" software company product"
+      ],
+      "github": {
+        "name": "aevtick",
+        "total_count": 0,
+        "exact_matches": [],
+        "items": []
+      },
+      "domain_records": [
+        {
+          "domain": "aevtick.org",
+          "url": "https://rdap.publicinterestregistry.org/rdap/domain/aevtick.org",
+          "http_status": 404,
+          "assessment": "no registration record"
+        },
+        {
+          "domain": "aevtick.dev",
+          "url": "https://pubapi.registry.google/rdap/domain/aevtick.dev",
+          "http_status": 404,
+          "assessment": "no registration record"
+        },
+        {
+          "domain": "aevtick.com",
+          "url": "https://rdap.verisign.com/com/v1/domain/aevtick.com",
+          "status": 404,
+          "result": "no registration record"
+        }
+      ],
+      "conflict_notes": "See candidate table for observed substring or non-brand uses.",
+      "sources": []
+    }
+  ]
+}

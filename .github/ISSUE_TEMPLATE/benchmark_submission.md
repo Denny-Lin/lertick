@@ -1,6 +1,6 @@
 ---
 name: Benchmark submission
-about: Submit reproducible raw measurements, including regressions
+about: Submit reproducible Lertick CPU measurements, including regressions
 title: "[benchmark] "
 labels: benchmark
 ---
@@ -13,7 +13,7 @@ Include kernel/config, source SHAs, toolchain, CPU/NUMA/SMT, VM or bare metal, g
 
 ## Protocol and raw trials
 
-Include warmup, randomized order, repetitions, raw CSV/JSON, failed trials, summary script, and confidence intervals. Follow docs/planning/BENCHMARK_PLAN.md.
+Include warmup, randomized order, repetitions, raw CSV/JSON, failed trials, summary script, and confidence intervals. Follow benchmarks/README.md and the CPU sections of docs/planning/BENCHMARK_PLAN.md. The archived memory-controller experiment is outside the project scope.
 
 ## Results and limitations
 

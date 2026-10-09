@@ -1,0 +1,23 @@
+Linux lertick-vm 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 17:12:37 UTC 2 aarch64 aarch64 aarch64 GNU/Linux
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.5 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+disabled
+8dd5a335cdf3a2dfe140f781f48aef3e76ffb262880a189e2108e0d63524b277  /boot/config-7.0.0-38-generic
+b711da58768d304757a88b8b9a6776f520fb307246d3f37bf6c18b2e8f25b0b6  /sys/kernel/btf/vmlinux
+CONFIG_BPF=y
+CONFIG_BPF_SYSCALL=y
+CONFIG_BPF_JIT=y
+CONFIG_SCHED_CLASS_EXT=y
+CONFIG_DEBUG_INFO_BTF=y
+CONFIG_MAGIC_SYSRQ=y

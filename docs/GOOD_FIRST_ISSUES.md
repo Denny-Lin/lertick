@@ -1,6 +1,6 @@
-# Good first issue proposals
+# Lertick contribution proposals
 
-These are proposed tasks, not already-created GitHub issues. The direction was approved and Phase 1 passed Linux validation; see [current results](PHASE1_RESULTS.md) before choosing a follow-up.
+These are proposed tasks, not already-created GitHub issues. Phase 1 passed Linux validation; see [current results](PHASE1_RESULTS.md) before choosing a follow-up. Lertick's active scope is CPU scheduling. Phase 2 implementation needs explicit approval.
 
 | Task | Track | Completion evidence |
 | --- | --- | --- |

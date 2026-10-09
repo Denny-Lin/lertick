@@ -1,6 +1,8 @@
-# Contributing
+# Contributing to Lertick
 
-The ScxSprout direction was approved on 2026-10-09. Phase 1 implements and validates a minimal Linux scheduler. Contributions can improve correctness, compatibility, reproducibility, and documentation. Current maintainership belongs to the repository owner, Denny-Lin; this is a new project with no claimed external contributor community yet.
+Lertick is an experimental CPU scheduler focused on online machine learning in Linux sched_ext and eBPF. Phase 1 implements and validates a minimal Linux scheduler. Contributions can improve correctness, compatibility, reproducibility, and documentation. Current maintainership belongs to the repository owner, Denny-Lin; this is a new project with no claimed external contributor community yet.
+
+Active work covers CPU-burst prediction, bounded adaptive time slices, CPU scheduling decisions, fairness, starvation prevention, low overhead, and reproducible benchmarks. Memory allocation, reclaim, DAMON/DAMOS control, NUMA memory placement, and joint CPU/memory management are outside the project scope. The [Phase 0 archive](docs/planning/README.md) preserves their historical research value without making them development alternatives.
 
 ## Workflow
 
@@ -42,4 +44,4 @@ The recorded Ubuntu ARM64 kernel `7.0.0-38-generic` passed actual runtime valida
 - Are licenses and copied code provenance correct?
 - Does the change keep the MVP small and independently reproducible?
 
-See [good first issue proposals](docs/GOOD_FIRST_ISSUES.md). Performance submissions use the benchmark issue template and [protocol](docs/planning/BENCHMARK_PLAN.md).
+See [good first issue proposals](docs/GOOD_FIRST_ISSUES.md). Performance submissions use the benchmark issue template, [current workload guide](benchmarks/README.md), and CPU sections of the [historical protocol](docs/planning/BENCHMARK_PLAN.md). Phase 2 has not been approved; proposals do not authorize a new implementation phase.

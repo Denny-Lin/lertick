@@ -1,10 +1,10 @@
-# Workload and benchmark boundary
+# Lertick workloads and benchmark boundary
 
 `burst_workload.c` provides controlled CPU bursts with real sleeps and a separate
 continuously runnable CPU role. It calibrates work batches with
 `CLOCK_THREAD_CPUTIME_ID`, then measures each burst's actual CPU time. Burst mode
 initially sleeps for 1ms after calibration to establish a verified wake boundary.
-On Linux the task comm is `sprout_burst` or `sprout_cpu`; JSONL includes Linux PID
+On Linux the task comm is `lertick_burst` or `lertick_cpu`; JSONL includes Linux PID
 and TID.
 
 ```sh
@@ -32,9 +32,12 @@ episodes during its measured run. Burst-mode logging may affect measurements.
 Use identical contention and duration for default Linux, fixed sched_ext and
 online sched_ext trials. Retain raw JSONL, scheduler telemetry, environment
 manifest and failure logs. A small VM comparison is a deployment sanity check.
-The [protocol](../docs/planning/BENCHMARK_PLAN.md) defines the broader experiments;
+The CPU sections of the [historical protocol](../docs/planning/BENCHMARK_PLAN.md)
+provide background for broader experiments;
 no performance improvement follows from compilation or synthetic model tests.
 
-Bare-metal tests are required before broader CPU-performance conclusions. Memory
-pressure and recovery experiments need separate protocols and cannot silently
-be mixed into scheduler results.
+Bare-metal tests are required before broader CPU-performance conclusions.
+Fairness, starvation, task churn, affinity, and scheduling overhead remain CPU
+validation topics. Memory-management experiments are outside Lertick's scope.
+The archived memory-controller protocol is background research only. Phase 2
+has not been approved.

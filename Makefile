@@ -18,7 +18,7 @@ BPF_CFLAGS += -D__TARGET_ARCH_$(TARGET_ARCH) -Ivendor/bpf-compat -I/usr/include/
 BPF_HEADERS := $(wildcard vendor/scx/*.h) $(wildcard src/shared/*.h)
 
 .PHONY: all clean preflight test-model workload reference
-all: $(BUILD)/scx_sprout $(BUILD)/burst_workload
+all: $(BUILD)/scx_lertick $(BUILD)/burst_workload
 
 $(BUILD):
 	mkdir -p $@
@@ -28,14 +28,14 @@ $(BUILD)/vmlinux.h: | $(BUILD)
 	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > $@.tmp
 	mv $@.tmp $@
 
-$(BUILD)/scx_sprout.bpf.o: src/bpf/scx_sprout.bpf.c $(BUILD)/vmlinux.h $(BPF_HEADERS)
+$(BUILD)/scx_lertick.bpf.o: src/bpf/scx_lertick.bpf.c $(BUILD)/vmlinux.h $(BPF_HEADERS)
 	$(CLANG) $(CPPFLAGS) $(BPF_CFLAGS) -c $< -o $@
 
-$(BUILD)/scx_sprout.bpf.skel.h: $(BUILD)/scx_sprout.bpf.o
-	$(BPFTOOL) gen skeleton $< name scx_sprout > $@.tmp
+$(BUILD)/scx_lertick.bpf.skel.h: $(BUILD)/scx_lertick.bpf.o
+	$(BPFTOOL) gen skeleton $< name scx_lertick > $@.tmp
 	mv $@.tmp $@
 
-$(BUILD)/scx_sprout: src/userspace/scx_sprout.c $(BUILD)/scx_sprout.bpf.skel.h $(BPF_HEADERS)
+$(BUILD)/scx_lertick: src/userspace/scx_lertick.c $(BUILD)/scx_lertick.bpf.skel.h $(BPF_HEADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ $(LIBBPF_LIBS) -lelf -lz
 
 $(BUILD)/burst_workload: benchmarks/burst_workload.c | $(BUILD)
@@ -53,4 +53,4 @@ preflight:
 reference:
 	scripts/fetch_reference.sh
 clean:
-	rm -f $(BUILD)/vmlinux.h $(BUILD)/scx_sprout.bpf.o $(BUILD)/scx_sprout.bpf.skel.h $(BUILD)/scx_sprout $(BUILD)/burst_workload $(BUILD)/test_model
+	rm -f $(BUILD)/vmlinux.h $(BUILD)/scx_lertick.bpf.o $(BUILD)/scx_lertick.bpf.skel.h $(BUILD)/scx_lertick $(BUILD)/burst_workload $(BUILD)/test_model

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * ScxSprout Phase 1: global weighted-vtime scheduling with bounded slices.
+ * Lertick Phase 1: global weighted-vtime scheduling with bounded slices.
  *
  * DSQ policy and CPU selection derive from the official scx_simple example;
  * task-storage allocation follows scx_qmap. Reference revision:
@@ -8,7 +8,7 @@
  * Copyright (c) 2022 Meta Platforms, Inc. and affiliates.
  * Copyright (c) 2022 Tejun Heo <tj@kernel.org>
  * Copyright (c) 2022 David Vernet <dvernet@meta.com>
- * Copyright (c) 2026 ScxSprout contributors.
+ * Copyright (c) 2026 Lertick contributors.
  *
  * Model parameters never determine dispatch order or fairness charge. Runtime
  * labels use sum_exec_runtime, including every preempted execution segment.
@@ -17,30 +17,30 @@
  * slice expiration for a completed CPU burst.
  */
 #include <scx/common.bpf.h>
-#include "shared/sprout.h"
+#include "shared/lertick.h"
 
 char _license[] SEC("license") = "GPL";
 
-const volatile u32 mode = SPROUT_MODE_FIXED;
-const volatile u64 fixed_slice_ns = SPROUT_DEFAULT_SLICE_NS;
-const volatile u64 min_slice_ns = SPROUT_MIN_SLICE_NS;
-const volatile u64 max_slice_ns = SPROUT_MAX_SLICE_NS;
-const volatile u32 min_train_samples = SPROUT_MIN_TRAIN_SAMPLES;
-/* Zero selects comm names beginning with "sprout"; otherwise select a TGID. */
+const volatile u32 mode = LERTICK_MODE_FIXED;
+const volatile u64 fixed_slice_ns = LERTICK_DEFAULT_SLICE_NS;
+const volatile u64 min_slice_ns = LERTICK_MIN_SLICE_NS;
+const volatile u64 max_slice_ns = LERTICK_MAX_SLICE_NS;
+const volatile u32 min_train_samples = LERTICK_MIN_TRAIN_SAMPLES;
+/* Zero selects comm names beginning with "lertick"; otherwise select a TGID. */
 const volatile u32 tracked_tgid;
 /* Disposable-VM watchdog test only; userspace gates this behind partial mode. */
 const volatile bool fault_stall;
 const volatile u32 stall_tgid;
 
 #define SHARED_DSQ 0
-#define SPROUT_QUEUE_REFERENCE 16U
+#define LERTICK_QUEUE_REFERENCE 16U
 
 static u64 vtime_now;
 UEI_DEFINE(uei);
 
 struct task_ctx {
-	struct sprout_model model;
-	__s32 features[SPROUT_FEATURES];
+	struct lertick_model model;
+	__s32 features[LERTICK_FEATURES];
 	u64 runtime_start_ns;
 	u64 episode_runtime_ns;
 	u64 last_sleep_ns;
@@ -55,7 +55,7 @@ struct task_ctx {
 	bool tracked;
 	bool slice_was_adaptive;
 	bool started_in_select;
-	struct sprout_task_snapshot snapshot;
+	struct lertick_task_snapshot snapshot;
 };
 
 struct {
@@ -67,14 +67,14 @@ struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, SPROUT_MAX_TASK_SNAPSHOTS);
+	__uint(max_entries, LERTICK_MAX_TASK_SNAPSHOTS);
 	__type(key, u32);
-	__type(value, struct sprout_task_snapshot);
+	__type(value, struct lertick_task_snapshot);
 } task_snapshots SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-	__uint(max_entries, SPROUT_STAT_COUNT);
+	__uint(max_entries, LERTICK_STAT_COUNT);
 	__type(key, u32);
 	__type(value, u64);
 } stats SEC(".maps");
@@ -91,9 +91,10 @@ static __always_inline bool is_tracked(struct task_struct *p)
 {
 	if (tracked_tgid)
 		return p->tgid == tracked_tgid;
-	return p->comm[0] == 's' && p->comm[1] == 'p' &&
-	       p->comm[2] == 'r' && p->comm[3] == 'o' &&
-	       p->comm[4] == 'u' && p->comm[5] == 't';
+	return p->comm[0] == 'l' && p->comm[1] == 'e' &&
+	       p->comm[2] == 'r' && p->comm[3] == 't' &&
+	       p->comm[4] == 'i' && p->comm[5] == 'c' &&
+	       p->comm[6] == 'k';
 }
 
 static __always_inline bool is_fault_target(struct task_struct *p)
@@ -119,7 +120,7 @@ static __always_inline void refresh_tracking(struct task_struct *p,
 			tctx->episode_valid = false;
 	}
 	if (tctx->tracked)
-		__builtin_memcpy(tctx->snapshot.comm, p->comm, SPROUT_COMM_LEN);
+		__builtin_memcpy(tctx->snapshot.comm, p->comm, LERTICK_COMM_LEN);
 }
 
 static __always_inline void publish(struct task_ctx *tctx)
@@ -134,13 +135,13 @@ static __always_inline void publish(struct task_ctx *tctx)
 	tctx->snapshot.prediction_ns = tctx->prediction_ns;
 	tctx->snapshot.training_updates = tctx->model.updates;
 #pragma unroll
-	for (int j = 0; j < SPROUT_FEATURES; j++) {
+	for (int j = 0; j < LERTICK_FEATURES; j++) {
 		tctx->snapshot.model_weight_q16[j] = tctx->model.weight_q16[j];
 		tctx->snapshot.features_q16[j] = tctx->features[j];
 	}
 	pid = tctx->snapshot.pid;
 	if (bpf_map_update_elem(&task_snapshots, &pid, &tctx->snapshot, BPF_ANY))
-		stat_add(SPROUT_STAT_SNAPSHOT_FAILURES, 1);
+		stat_add(LERTICK_STAT_SNAPSHOT_FAILURES, 1);
 }
 
 static __always_inline void censor_episode(struct task_ctx *tctx, u32 reason)
@@ -149,7 +150,7 @@ static __always_inline void censor_episode(struct task_ctx *tctx, u32 reason)
 		return;
 	tctx->snapshot.censored_bursts++;
 	tctx->snapshot.last_censor_reason = reason;
-	stat_add(SPROUT_STAT_CENSORED_BURSTS, 1);
+	stat_add(LERTICK_STAT_CENSORED_BURSTS, 1);
 }
 
 static __always_inline void begin_episode(struct task_struct *p,
@@ -165,26 +166,26 @@ static __always_inline void begin_episode(struct task_struct *p,
 	tctx->prediction_ns = 0;
 	if (!tctx->tracked)
 		return;
-	tctx->snapshot.last_censor_reason = tctx->episode_valid ? SPROUT_CENSOR_NONE :
-		SPROUT_CENSOR_ATTACH_OR_UNVERIFIED_WAKE;
-	tctx->features[0] = SPROUT_Q;
-	tctx->features[1] = sprout_scale_ns_q16(tctx->last_burst_ns,
-					      SPROUT_REFERENCE_NS);
-	tctx->features[2] = sprout_scale_ns_q16(tctx->ewma_burst_ns,
-					      SPROUT_REFERENCE_NS);
-	tctx->features[3] = sprout_scale_ns_q16(sleep_ns, SPROUT_REFERENCE_NS);
-	tctx->features[4] = queued >= SPROUT_QUEUE_REFERENCE ? SPROUT_Q :
-		queued * SPROUT_Q / SPROUT_QUEUE_REFERENCE;
+	tctx->snapshot.last_censor_reason = tctx->episode_valid ? LERTICK_CENSOR_NONE :
+		LERTICK_CENSOR_ATTACH_OR_UNVERIFIED_WAKE;
+	tctx->features[0] = LERTICK_Q;
+	tctx->features[1] = lertick_scale_ns_q16(tctx->last_burst_ns,
+					      LERTICK_REFERENCE_NS);
+	tctx->features[2] = lertick_scale_ns_q16(tctx->ewma_burst_ns,
+					      LERTICK_REFERENCE_NS);
+	tctx->features[3] = lertick_scale_ns_q16(sleep_ns, LERTICK_REFERENCE_NS);
+	tctx->features[4] = queued >= LERTICK_QUEUE_REFERENCE ? LERTICK_Q :
+		queued * LERTICK_Q / LERTICK_QUEUE_REFERENCE;
 	tctx->snapshot.last_sleep_interval_ns = sleep_ns;
 	tctx->snapshot.last_queue_depth = queued;
-	if (mode != SPROUT_MODE_FIXED && tctx->episode_valid) {
-		__s32 pred = sprout_model_predict_q16(&tctx->model, tctx->features);
+	if (mode != LERTICK_MODE_FIXED && tctx->episode_valid) {
+		__s32 pred = lertick_model_predict_q16(&tctx->model, tctx->features);
 
-		tctx->prediction_ns = (__u64)pred * SPROUT_REFERENCE_NS / SPROUT_Q;
+		tctx->prediction_ns = (__u64)pred * LERTICK_REFERENCE_NS / LERTICK_Q;
 		tctx->snapshot.last_prediction_q16 = pred;
 		tctx->snapshot.inferences++;
-		stat_add(SPROUT_STAT_INFERENCES, 1);
-		stat_add(SPROUT_STAT_PREDICTION_NS_SUM, tctx->prediction_ns);
+		stat_add(LERTICK_STAT_INFERENCES, 1);
+		stat_add(LERTICK_STAT_PREDICTION_NS_SUM, tctx->prediction_ns);
 	}
 }
 
@@ -193,7 +194,7 @@ static __always_inline u64 choose_slice(struct task_ctx *tctx)
 	u64 slice = fixed_slice_ns;
 	bool adaptive = false;
 
-	if (tctx && mode == SPROUT_MODE_ONLINE && tctx->tracked &&
+	if (tctx && mode == LERTICK_MODE_ONLINE && tctx->tracked &&
 	    tctx->episode_valid && tctx->model.updates >= min_train_samples &&
 	    tctx->prediction_ns > tctx->episode_runtime_ns) {
 		slice = tctx->prediction_ns - tctx->episode_runtime_ns;
@@ -212,7 +213,7 @@ static __always_inline u64 choose_slice(struct task_ctx *tctx)
 	if (tctx->snapshot.selected_slice_ns &&
 	    tctx->snapshot.selected_slice_ns != slice) {
 		tctx->snapshot.slice_changes++;
-		stat_add(SPROUT_STAT_SLICE_CHANGES, 1);
+		stat_add(LERTICK_STAT_SLICE_CHANGES, 1);
 	}
 	tctx->snapshot.selected_slice_ns = slice;
 	if (!tctx->snapshot.min_selected_slice_ns ||
@@ -222,10 +223,10 @@ static __always_inline u64 choose_slice(struct task_ctx *tctx)
 		tctx->snapshot.max_selected_slice_ns = slice;
 	tctx->snapshot.enqueue_count++;
 	tctx->snapshot.slice_sum_ns += slice;
-	stat_add(SPROUT_STAT_SELECTED_SLICE_NS_SUM, slice);
+	stat_add(LERTICK_STAT_SELECTED_SLICE_NS_SUM, slice);
 	if (adaptive) {
 		tctx->snapshot.adaptive_slices++;
-		stat_add(SPROUT_STAT_ADAPTIVE_SLICES, 1);
+		stat_add(LERTICK_STAT_ADAPTIVE_SLICES, 1);
 		if (!tctx->snapshot.min_adaptive_slice_ns ||
 		    slice < tctx->snapshot.min_adaptive_slice_ns)
 			tctx->snapshot.min_adaptive_slice_ns = slice;
@@ -235,7 +236,7 @@ static __always_inline u64 choose_slice(struct task_ctx *tctx)
 	return slice;
 }
 
-s32 BPF_STRUCT_OPS(sprout_select_cpu, struct task_struct *p, s32 prev_cpu,
+s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		   u64 wake_flags)
 {
 	struct task_ctx *tctx = task_ctx(p);
@@ -253,7 +254,7 @@ s32 BPF_STRUCT_OPS(sprout_select_cpu, struct task_struct *p, s32 prev_cpu,
 	if (idle && !is_fault_target(p)) {
 		u64 slice = choose_slice(tctx);
 
-		stat_add(SPROUT_STAT_LOCAL_ENQUEUE, 1);
+		stat_add(LERTICK_STAT_LOCAL_ENQUEUE, 1);
 		scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL, slice, 0);
 		if (tctx)
 			publish(tctx);
@@ -261,14 +262,14 @@ s32 BPF_STRUCT_OPS(sprout_select_cpu, struct task_struct *p, s32 prev_cpu,
 	return cpu;
 }
 
-void BPF_STRUCT_OPS(sprout_enqueue, struct task_struct *p, u64 enq_flags)
+void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 {
 	struct task_ctx *tctx = task_ctx(p);
 	u64 vtime = p->scx.dsq_vtime;
 	u64 slice;
 
 	if (is_fault_target(p)) {
-		stat_add(SPROUT_STAT_FAULT_STALLS, 1);
+		stat_add(LERTICK_STAT_FAULT_STALLS, 1);
 		return;
 	}
 	if (tctx)
@@ -277,13 +278,13 @@ void BPF_STRUCT_OPS(sprout_enqueue, struct task_struct *p, u64 enq_flags)
 	/* Sleeper credit is bounded independently of model output. */
 	if (time_before(vtime, vtime_now - max_slice_ns))
 		vtime = vtime_now - max_slice_ns;
-	stat_add(SPROUT_STAT_GLOBAL_ENQUEUE, 1);
+	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
 	scx_bpf_dsq_insert_vtime(p, SHARED_DSQ, slice, vtime, enq_flags);
 	if (tctx)
 		publish(tctx);
 }
 
-void BPF_STRUCT_OPS(sprout_dispatch, s32 cpu, struct task_struct *prev)
+void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 {
 	/* Explicitly reinsert a continuing task to avoid the kernel's DFL refill. */
 	if (!scx_bpf_dsq_move_to_local(SHARED_DSQ) && prev &&
@@ -291,14 +292,14 @@ void BPF_STRUCT_OPS(sprout_dispatch, s32 cpu, struct task_struct *prev)
 		struct task_ctx *tctx = task_ctx(prev);
 		u64 slice = choose_slice(tctx);
 
-		stat_add(SPROUT_STAT_LOCAL_ENQUEUE, 1);
+		stat_add(LERTICK_STAT_LOCAL_ENQUEUE, 1);
 		scx_bpf_dsq_insert(prev, SCX_DSQ_LOCAL, slice, 0);
 		if (tctx)
 			publish(tctx);
 	}
 }
 
-void BPF_STRUCT_OPS(sprout_runnable, struct task_struct *p, u64 enq_flags)
+void BPF_STRUCT_OPS(lertick_runnable, struct task_struct *p, u64 enq_flags)
 {
 	struct task_ctx *tctx = task_ctx(p);
 
@@ -317,7 +318,7 @@ void BPF_STRUCT_OPS(sprout_runnable, struct task_struct *p, u64 enq_flags)
 	publish(tctx);
 }
 
-void BPF_STRUCT_OPS(sprout_running, struct task_struct *p)
+void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 {
 	struct task_ctx *tctx = task_ctx(p);
 	u64 observed_slice = p->scx.slice;
@@ -325,7 +326,7 @@ void BPF_STRUCT_OPS(sprout_running, struct task_struct *p)
 	/* As in scx_simple, this cross-CPU monotonic update tolerates small races. */
 	if (time_before(vtime_now, p->scx.dsq_vtime))
 		vtime_now = p->scx.dsq_vtime;
-	stat_add(SPROUT_STAT_RUNS, 1);
+	stat_add(LERTICK_STAT_RUNS, 1);
 	if (!tctx)
 		return;
 	refresh_tracking(p, tctx);
@@ -341,7 +342,7 @@ void BPF_STRUCT_OPS(sprout_running, struct task_struct *p)
 			tctx->snapshot.max_running_slice_ns = observed_slice;
 		if (observed_slice == tctx->selected_slice_ns) {
 			tctx->snapshot.matching_dispatch_slices++;
-			stat_add(SPROUT_STAT_MATCHING_DISPATCH_SLICES, 1);
+			stat_add(LERTICK_STAT_MATCHING_DISPATCH_SLICES, 1);
 		}
 		if (tctx->slice_was_adaptive)
 			tctx->snapshot.adaptive_runs++;
@@ -349,7 +350,7 @@ void BPF_STRUCT_OPS(sprout_running, struct task_struct *p)
 	publish(tctx);
 }
 
-void BPF_STRUCT_OPS(sprout_stopping, struct task_struct *p, bool runnable)
+void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 {
 	struct task_ctx *tctx = task_ctx(p);
 	u64 runtime, delta;
@@ -361,8 +362,8 @@ void BPF_STRUCT_OPS(sprout_stopping, struct task_struct *p, bool runnable)
 	runtime = p->se.sum_exec_runtime;
 	if (runtime < tctx->runtime_start_ns) {
 		tctx->episode_valid = false;
-		tctx->snapshot.last_censor_reason = SPROUT_CENSOR_ACCOUNTING;
-		stat_add(SPROUT_STAT_COUNTER_ERRORS, 1);
+		tctx->snapshot.last_censor_reason = LERTICK_CENSOR_ACCOUNTING;
+		stat_add(LERTICK_STAT_COUNTER_ERRORS, 1);
 		return;
 	}
 	delta = runtime - tctx->runtime_start_ns;
@@ -371,7 +372,7 @@ void BPF_STRUCT_OPS(sprout_stopping, struct task_struct *p, bool runnable)
 		weight = 1;
 	p->scx.dsq_vtime += delta * 100 / weight;
 	tctx->episode_runtime_ns += delta;
-	stat_add(SPROUT_STAT_RUNTIME_NS, delta);
+	stat_add(LERTICK_STAT_RUNTIME_NS, delta);
 	if (tctx->tracked) {
 		tctx->snapshot.total_runtime_ns += delta;
 		tctx->snapshot.last_runtime_delta_ns = delta;
@@ -379,7 +380,7 @@ void BPF_STRUCT_OPS(sprout_stopping, struct task_struct *p, bool runnable)
 	publish(tctx);
 }
 
-void BPF_STRUCT_OPS(sprout_quiescent, struct task_struct *p, u64 deq_flags)
+void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 {
 	struct task_ctx *tctx = task_ctx(p);
 	u64 burst;
@@ -396,30 +397,30 @@ void BPF_STRUCT_OPS(sprout_quiescent, struct task_struct *p, u64 deq_flags)
 	burst = tctx->episode_runtime_ns;
 	if (tctx->episode_active && tctx->tracked) {
 		if (p->flags & PF_EXITING) {
-			censor_episode(tctx, SPROUT_CENSOR_EXIT);
+			censor_episode(tctx, LERTICK_CENSOR_EXIT);
 		} else if (!tctx->episode_valid || !burst) {
 			censor_episode(tctx, tctx->snapshot.last_censor_reason ==
-				       SPROUT_CENSOR_ACCOUNTING ? SPROUT_CENSOR_ACCOUNTING :
-				       SPROUT_CENSOR_ATTACH_OR_UNVERIFIED_WAKE);
+				       LERTICK_CENSOR_ACCOUNTING ? LERTICK_CENSOR_ACCOUNTING :
+				       LERTICK_CENSOR_ATTACH_OR_UNVERIFIED_WAKE);
 		} else {
-			__s32 target = sprout_scale_ns_q16(burst, SPROUT_REFERENCE_NS);
+			__s32 target = lertick_scale_ns_q16(burst, LERTICK_REFERENCE_NS);
 
 			tctx->snapshot.completed_bursts++;
 			tctx->snapshot.last_burst_ns = burst;
 			tctx->snapshot.last_target_q16 = target;
-			tctx->snapshot.last_censor_reason = SPROUT_CENSOR_NONE;
+			tctx->snapshot.last_censor_reason = LERTICK_CENSOR_NONE;
 			if (burst > tctx->snapshot.max_burst_ns)
 				tctx->snapshot.max_burst_ns = burst;
-			stat_add(SPROUT_STAT_COMPLETED_BURSTS, 1);
-			if (mode != SPROUT_MODE_FIXED) {
+			stat_add(LERTICK_STAT_COMPLETED_BURSTS, 1);
+			if (mode != LERTICK_MODE_FIXED) {
 				tctx->snapshot.last_training_error_q16 =
-					sprout_model_train(&tctx->model, tctx->features, target);
-				stat_add(SPROUT_STAT_TRAINING_UPDATES, 1);
+					lertick_model_train(&tctx->model, tctx->features, target);
+				stat_add(LERTICK_STAT_TRAINING_UPDATES, 1);
 			}
 			tctx->last_burst_ns = burst;
 			/* Cap history before arithmetic; target itself is capped at 10ms. */
-			if (burst > SPROUT_REFERENCE_NS)
-				burst = SPROUT_REFERENCE_NS;
+			if (burst > LERTICK_REFERENCE_NS)
+				burst = LERTICK_REFERENCE_NS;
 			tctx->ewma_burst_ns = tctx->ewma_burst_ns ?
 				tctx->ewma_burst_ns * 3 / 4 + burst / 4 : burst;
 		}
@@ -431,78 +432,78 @@ void BPF_STRUCT_OPS(sprout_quiescent, struct task_struct *p, u64 deq_flags)
 	publish(tctx);
 }
 
-s32 BPF_STRUCT_OPS(sprout_init_task, struct task_struct *p,
+s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 		   struct scx_init_task_args *args)
 {
 	struct task_ctx *tctx = bpf_task_storage_get(&task_ctx_stor, p, 0,
 						BPF_LOCAL_STORAGE_GET_F_CREATE);
 
 	if (!tctx) {
-		stat_add(SPROUT_STAT_ALLOC_FAILURES, 1);
+		stat_add(LERTICK_STAT_ALLOC_FAILURES, 1);
 		/* Runtime ownership is essential: reject rather than mischarge vtime. */
 		return -ENOMEM;
 	}
-	sprout_model_init(&tctx->model);
+	lertick_model_init(&tctx->model);
 	refresh_tracking(p, tctx);
 	return 0;
 }
 
-void BPF_STRUCT_OPS(sprout_enable, struct task_struct *p)
+void BPF_STRUCT_OPS(lertick_enable, struct task_struct *p)
 {
 	p->scx.dsq_vtime = vtime_now;
 }
 
-void BPF_STRUCT_OPS(sprout_disable, struct task_struct *p)
+void BPF_STRUCT_OPS(lertick_disable, struct task_struct *p)
 {
 	struct task_ctx *tctx = task_ctx(p);
 
 	if (!tctx)
 		return;
-	censor_episode(tctx, p->flags & PF_EXITING ? SPROUT_CENSOR_EXIT :
-			SPROUT_CENSOR_POLICY_TRANSITION);
+	censor_episode(tctx, p->flags & PF_EXITING ? LERTICK_CENSOR_EXIT :
+			LERTICK_CENSOR_POLICY_TRANSITION);
 	tctx->episode_active = false;
 	tctx->episode_valid = false;
 	tctx->has_slept = false;
 	publish(tctx);
 }
 
-void BPF_STRUCT_OPS(sprout_exit_task, struct task_struct *p,
+void BPF_STRUCT_OPS(lertick_exit_task, struct task_struct *p,
 		    struct scx_exit_task_args *args)
 {
 	struct task_ctx *tctx = task_ctx(p);
 
 	if (!tctx)
 		return;
-	censor_episode(tctx, SPROUT_CENSOR_EXIT);
+	censor_episode(tctx, LERTICK_CENSOR_EXIT);
 	tctx->episode_active = false;
 	tctx->episode_valid = false;
 	tctx->snapshot.exited = 1;
 	publish(tctx);
 }
 
-s32 BPF_STRUCT_OPS_SLEEPABLE(sprout_init)
+s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 {
 	return scx_bpf_create_dsq(SHARED_DSQ, -1);
 }
 
-void BPF_STRUCT_OPS(sprout_exit, struct scx_exit_info *ei)
+void BPF_STRUCT_OPS(lertick_exit, struct scx_exit_info *ei)
 {
 	UEI_RECORD(uei, ei);
 }
 
-SCX_OPS_DEFINE(sprout_ops,
-	.select_cpu = (void *)sprout_select_cpu,
-	.enqueue = (void *)sprout_enqueue,
-	.dispatch = (void *)sprout_dispatch,
-	.runnable = (void *)sprout_runnable,
-	.running = (void *)sprout_running,
-	.stopping = (void *)sprout_stopping,
-	.quiescent = (void *)sprout_quiescent,
-	.init_task = (void *)sprout_init_task,
-	.exit_task = (void *)sprout_exit_task,
-	.enable = (void *)sprout_enable,
-	.disable = (void *)sprout_disable,
-	.init = (void *)sprout_init,
-	.exit = (void *)sprout_exit,
+SCX_OPS_DEFINE(lertick_ops,
+	.select_cpu = (void *)lertick_select_cpu,
+	.enqueue = (void *)lertick_enqueue,
+	.dispatch = (void *)lertick_dispatch,
+	.runnable = (void *)lertick_runnable,
+	.running = (void *)lertick_running,
+	.stopping = (void *)lertick_stopping,
+	.quiescent = (void *)lertick_quiescent,
+	.init_task = (void *)lertick_init_task,
+	.exit_task = (void *)lertick_exit_task,
+	.enable = (void *)lertick_enable,
+	.disable = (void *)lertick_disable,
+	.init = (void *)lertick_init,
+	.exit = (void *)lertick_exit,
 	.timeout_ms = 1000U,
-	.name = "scx_sprout");
+	.name = "scx_lertick");

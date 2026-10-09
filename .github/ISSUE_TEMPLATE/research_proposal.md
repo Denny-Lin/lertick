@@ -1,6 +1,6 @@
 ---
 name: Research or design proposal
-about: Propose a narrow question with prior art and a falsifiable experiment
+about: Propose a CPU-scheduling question with prior art and a falsifiable experiment
 title: "[research] "
 labels: research
 ---
@@ -15,4 +15,4 @@ labels: research
 
 ## Scope, licensing, and risks
 
-Implementation requires the Phase 0 direction-review gate. State what is verified, estimated, and hypothetical.
+State what is verified, estimated, and hypothetical. Keep proposals within Lertick's CPU-scheduling scope: burst prediction, online learning, bounded slices, fairness, starvation prevention, overhead, and reproducible measurements. Memory allocation/reclaim, DAMON/DAMOS, NUMA memory placement, and joint CPU/memory control are background research, not active directions. Phase 2 implementation has not been approved.

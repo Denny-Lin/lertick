@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a documentation or future runtime problem with reproducible evidence
+about: Report a Lertick CPU-scheduler or documentation problem with evidence
 title: "[bug] "
 labels: bug
 ---
@@ -9,11 +9,11 @@ labels: bug
 
 ## Reproduction
 
-Include repository commit, exact commands, and minimal workload. The current repository has no runnable scheduler.
+Include repository commit, exact commands, minimal workload, and selected mode. Lertick includes a runnable experimental scheduler; compilation alone does not prove kernel execution.
 
 ## Environment
 
-For future runtime bugs: Ubuntu image, kernel/config hash, architecture/topology, QEMU accelerator, LLVM/libbpf versions, scheduler state, and verifier logs.
+For runtime bugs: Ubuntu image, kernel/config hash, architecture/topology, QEMU accelerator, LLVM/libbpf versions, scheduler state, and verifier logs.
 
 ## Recovery and impact
 

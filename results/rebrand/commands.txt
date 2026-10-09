@@ -1,0 +1,61 @@
+/home/ubuntu/lertick/build/scx_lertick --check
+/home/ubuntu/lertick/build/scx_lertick --mode fixed --duration 15 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/evidence-fixed.jsonl
+/home/ubuntu/lertick/build/burst_workload --duration 6 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000 --phase-burst-us 6000
+/home/ubuntu/lertick/build/scx_lertick --mode shadow --duration 15 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/evidence-shadow.jsonl
+/home/ubuntu/lertick/build/burst_workload --duration 6 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000 --phase-burst-us 6000
+/home/ubuntu/lertick/build/scx_lertick --mode online --duration 15 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/evidence-online.jsonl
+/home/ubuntu/lertick/build/burst_workload --duration 6 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000 --phase-burst-us 6000
+/home/ubuntu/lertick/build/scx_lertick --mode fixed --duration 30 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/recovery-sigint.jsonl
+/home/ubuntu/lertick/build/burst_workload --duration 1 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/scx_lertick --mode fixed --duration 30 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/recovery-sigterm.jsonl
+/home/ubuntu/lertick/build/burst_workload --duration 1 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/scx_lertick --mode fixed --duration 30 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/recovery-sigkill.jsonl
+/home/ubuntu/lertick/build/burst_workload --duration 1 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/scx_lertick --mode fixed --duration 30 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/recovery-sysrq.jsonl
+/bin/bash -c 'kill -STOP $$; exec /home/ubuntu/lertick/build/burst_workload --role burst --duration 1 --policy-ext --cpu 0 --burst-us 1000 --sleep-us 2000'
+/home/ubuntu/lertick/build/scx_lertick --mode fixed --duration 10 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/recovery-watchdog.jsonl --partial --fault-stall --stall-tgid 1106 --dangerous-vm-test --expect-watchdog
+/home/ubuntu/lertick/build/scx_lertick --mode fixed --duration 19 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/comparison-0-fixed-scheduler.jsonl
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/scx_lertick --mode online --duration 19 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/comparison-0-online-scheduler.jsonl
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/reference/scx-c-examples/build/scheds/c/scx_simple
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/reference/scx-c-examples/build/scheds/c/scx_simple
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/scx_lertick --mode online --duration 19 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/comparison-1-online-scheduler.jsonl
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/scx_lertick --mode fixed --duration 19 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/comparison-1-fixed-scheduler.jsonl
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/reference/scx-c-examples/build/scheds/c/scx_simple
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/scx_lertick --mode fixed --duration 19 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/comparison-2-fixed-scheduler.jsonl
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/scx_lertick --mode online --duration 19 --sample-ms 250 --stats-json /home/ubuntu/lertick/results/local/rebrand/comparison-2-online-scheduler.jsonl
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 5 --role cpu --cpu 0 --burst-us 1000 --sleep-us 2000
+/home/ubuntu/lertick/build/burst_workload --duration 4 --role burst --cpu 0 --burst-us 1000 --sleep-us 2000

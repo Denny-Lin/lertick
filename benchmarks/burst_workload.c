@@ -221,7 +221,7 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 #ifdef __linux__
-	if (prctl(PR_SET_NAME, strcmp(role, "cpu") ? "sprout_burst" : "sprout_cpu",
+	if (prctl(PR_SET_NAME, strcmp(role, "cpu") ? "lertick_burst" : "lertick_cpu",
 		  0, 0, 0))
 		fail("prctl(PR_SET_NAME)");
 	if (cpu >= 0) {

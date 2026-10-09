@@ -4,7 +4,7 @@
  * Copyright (c) 2022 Meta Platforms, Inc. and affiliates.
  * Copyright (c) 2022 Tejun Heo <tj@kernel.org>
  * Copyright (c) 2022 David Vernet <dvernet@meta.com>
- * Modified for ScxSprout on 2026-10-09: finite lifecycle, kernel probes,
+ * Modified for Lertick on 2026-10-09: finite lifecycle, kernel probes,
  * task/model telemetry, bounded policy configuration, and guarded fault tests.
  */
 #define _GNU_SOURCE
@@ -24,8 +24,8 @@
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <scx/common.h>
-#include "sprout.h"
-#include "scx_sprout.bpf.skel.h"
+#include "lertick.h"
+#include "scx_lertick.bpf.skel.h"
 
 #define U64(x) ((unsigned long long)(x))
 #define STATE_PATH "/sys/kernel/sched_ext/state"
@@ -33,24 +33,24 @@
 
 static bool verbose;
 static volatile sig_atomic_t exit_req;
-static const char *const stat_names[SPROUT_STAT_COUNT] = {
-	[SPROUT_STAT_LOCAL_ENQUEUE] = "local_enqueue",
-	[SPROUT_STAT_GLOBAL_ENQUEUE] = "global_enqueue",
-	[SPROUT_STAT_RUNS] = "runs",
-	[SPROUT_STAT_RUNTIME_NS] = "runtime_ns",
-	[SPROUT_STAT_COMPLETED_BURSTS] = "completed_bursts",
-	[SPROUT_STAT_CENSORED_BURSTS] = "censored_bursts",
-	[SPROUT_STAT_TRAINING_UPDATES] = "training_updates",
-	[SPROUT_STAT_INFERENCES] = "inferences",
-	[SPROUT_STAT_ADAPTIVE_SLICES] = "adaptive_slices",
-	[SPROUT_STAT_SLICE_CHANGES] = "slice_changes",
-	[SPROUT_STAT_FAULT_STALLS] = "fault_stalls",
-	[SPROUT_STAT_COUNTER_ERRORS] = "counter_errors",
-	[SPROUT_STAT_ALLOC_FAILURES] = "alloc_failures",
-	[SPROUT_STAT_SNAPSHOT_FAILURES] = "snapshot_failures",
-	[SPROUT_STAT_PREDICTION_NS_SUM] = "prediction_ns_sum",
-	[SPROUT_STAT_SELECTED_SLICE_NS_SUM] = "selected_slice_ns_sum",
-	[SPROUT_STAT_MATCHING_DISPATCH_SLICES] = "matching_dispatch_slices",
+static const char *const stat_names[LERTICK_STAT_COUNT] = {
+	[LERTICK_STAT_LOCAL_ENQUEUE] = "local_enqueue",
+	[LERTICK_STAT_GLOBAL_ENQUEUE] = "global_enqueue",
+	[LERTICK_STAT_RUNS] = "runs",
+	[LERTICK_STAT_RUNTIME_NS] = "runtime_ns",
+	[LERTICK_STAT_COMPLETED_BURSTS] = "completed_bursts",
+	[LERTICK_STAT_CENSORED_BURSTS] = "censored_bursts",
+	[LERTICK_STAT_TRAINING_UPDATES] = "training_updates",
+	[LERTICK_STAT_INFERENCES] = "inferences",
+	[LERTICK_STAT_ADAPTIVE_SLICES] = "adaptive_slices",
+	[LERTICK_STAT_SLICE_CHANGES] = "slice_changes",
+	[LERTICK_STAT_FAULT_STALLS] = "fault_stalls",
+	[LERTICK_STAT_COUNTER_ERRORS] = "counter_errors",
+	[LERTICK_STAT_ALLOC_FAILURES] = "alloc_failures",
+	[LERTICK_STAT_SNAPSHOT_FAILURES] = "snapshot_failures",
+	[LERTICK_STAT_PREDICTION_NS_SUM] = "prediction_ns_sum",
+	[LERTICK_STAT_SELECTED_SLICE_NS_SUM] = "selected_slice_ns_sum",
+	[LERTICK_STAT_MATCHING_DISPATCH_SLICES] = "matching_dispatch_slices",
 };
 
 static int print_libbpf(enum libbpf_print_level level, const char *fmt, va_list args)
@@ -178,7 +178,7 @@ static int kernel_check(FILE *out, bool require_disabled)
 		fprintf(stderr, "Refusing to replace existing sched_ext scheduler: state=%s.\n", state);
 		status = 1;
 	}
-	fd = bpf_map_create(BPF_MAP_TYPE_ARRAY, "sprout_probe", sizeof(__u32), sizeof(__u64), 1, NULL);
+	fd = bpf_map_create(BPF_MAP_TYPE_ARRAY, "lertick_probe", sizeof(__u32), sizeof(__u64), 1, NULL);
 	if (fd < 0) {
 		fprintf(stderr, "BLOCKER: BPF map creation failed: %s. Run as root in the guest.\n", strerror(errno));
 		status = 1;
@@ -212,19 +212,19 @@ static bool wait_state(const char *wanted)
 	return false;
 }
 
-static int emit_snapshot(FILE *out, struct scx_sprout *skel, const char *phase, const char *mode_name)
+static int emit_snapshot(FILE *out, struct scx_lertick *skel, const char *phase, const char *mode_name)
 {
 	int ncpu = libbpf_num_possible_cpus();
-	__u64 sums[SPROUT_STAT_COUNT] = {0};
+	__u64 sums[LERTICK_STAT_COUNT] = {0};
 	__u64 *cpu_values;
 	__u32 key, next;
-	struct sprout_task_snapshot s;
+	struct lertick_task_snapshot s;
 	unsigned count = 0;
 	int err = 0;
 	if (ncpu <= 0) return -1;
 	cpu_values = calloc((size_t)ncpu, sizeof(*cpu_values));
 	if (!cpu_values) return -1;
-	for (key = 0; key < SPROUT_STAT_COUNT; key++) {
+	for (key = 0; key < LERTICK_STAT_COUNT; key++) {
 		if (bpf_map_lookup_elem(bpf_map__fd(skel->maps.stats), &key, cpu_values)) {
 			err = -1;
 			break;
@@ -236,18 +236,18 @@ static int emit_snapshot(FILE *out, struct scx_sprout *skel, const char *phase, 
 	fprintf(out, "{\"event\":\"snapshot\",\"phase\":"); json_string(out, phase);
 	fprintf(out, ",\"mode\":"); json_string(out, mode_name);
 	fprintf(out, ",\"monotonic_ns\":%llu,\"stats\":{", U64(now_ns()));
-	for (key = 0; key < SPROUT_STAT_COUNT; key++) {
+	for (key = 0; key < LERTICK_STAT_COUNT; key++) {
 		if (key) fputc(',', out);
 		json_string(out, stat_names[key]); fprintf(out, ":%llu", U64(sums[key]));
 	}
 	fprintf(out, "},\"tasks\":[");
 	err = bpf_map_get_next_key(bpf_map__fd(skel->maps.task_snapshots), NULL, &next);
-	while (!err && count < SPROUT_MAX_TASK_SNAPSHOTS) {
+	while (!err && count < LERTICK_MAX_TASK_SNAPSHOTS) {
 		key = next;
 		if (!bpf_map_lookup_elem(bpf_map__fd(skel->maps.task_snapshots), &key, &s)) {
 			if (count++) fputc(',', out);
 			fprintf(out, "{\"pid\":%u,\"tgid\":%u,\"comm\":", s.pid, s.tgid);
-			s.comm[SPROUT_COMM_LEN - 1] = 0;
+			s.comm[LERTICK_COMM_LEN - 1] = 0;
 			json_string(out, s.comm);
 #define SNAP_U64(field) fprintf(out, ",\"" #field "\":%llu", U64(s.field))
 			SNAP_U64(runs); SNAP_U64(enqueue_count); SNAP_U64(total_runtime_ns);
@@ -264,9 +264,9 @@ static int emit_snapshot(FILE *out, struct scx_sprout *skel, const char *phase, 
 			SNAP_U64(last_sleep_interval_ns); SNAP_U64(last_queue_depth);
 #undef SNAP_U64
 			fprintf(out, ",\"model_weight_q16\":[");
-			for (int i = 0; i < SPROUT_FEATURES; i++) fprintf(out, "%s%d", i ? "," : "", s.model_weight_q16[i]);
+			for (int i = 0; i < LERTICK_FEATURES; i++) fprintf(out, "%s%d", i ? "," : "", s.model_weight_q16[i]);
 			fprintf(out, "],\"features_q16\":[");
-			for (int i = 0; i < SPROUT_FEATURES; i++) fprintf(out, "%s%d", i ? "," : "", s.features_q16[i]);
+			for (int i = 0; i < LERTICK_FEATURES; i++) fprintf(out, "%s%d", i ? "," : "", s.features_q16[i]);
 			fprintf(out, "],\"last_target_q16\":%d,\"last_prediction_q16\":%d,\"last_training_error_q16\":%d,"
 				"\"last_censor_reason\":%u,\"episode_active\":%u,\"episode_valid\":%u,\"exited\":%u}",
 				s.last_target_q16, s.last_prediction_q16, s.last_training_error_q16,
@@ -297,7 +297,7 @@ static void usage(FILE *out, const char *argv0)
 		"  --check                 Probe kernel config, BTF, BPF permission, sched_ext\n"
 		"  --verbose               Emit libbpf debug/verifier diagnostics\n"
 		"  --sample-ms N           Snapshot interval (100..10000, default 1000)\n"
-		"  --tracked-tgid PID      Track this TGID (default comm prefix sprout)\n"
+		"  --tracked-tgid PID      Track this TGID (default comm prefix lertick)\n"
 		"  --fixed-slice-us N      Fixed/warmup slice (default 2000)\n"
 		"  --min-slice-us N        Prediction slice lower bound (default 500)\n"
 		"  --max-slice-us N        Prediction slice upper bound (default 5000)\n"
@@ -311,13 +311,13 @@ static void usage(FILE *out, const char *argv0)
 
 int main(int argc, char **argv)
 {
-	struct scx_sprout *skel;
+	struct scx_lertick *skel;
 	struct bpf_link *link;
 	FILE *out = stdout;
 	struct sigaction sa = { .sa_handler = signal_exit };
 	struct rlimit memlock = { RLIM_INFINITY, RLIM_INFINITY };
 	const char *stats_path = "-", *mode_name = "online";
-	unsigned duration = 30, sample_ms = 1000, mode = SPROUT_MODE_ONLINE;
+	unsigned duration = 30, sample_ms = 1000, mode = LERTICK_MODE_ONLINE;
 	unsigned fixed_us = 2000, min_us = 500, max_us = 5000, tracked_tgid = 0, stall_tgid = 0;
 	bool check = false, partial = false, fault = false, danger = false, expect_watchdog = false;
 	bool fallback, restored, watchdog_observed = false;
@@ -342,9 +342,9 @@ int main(int argc, char **argv)
 		switch (opt) {
 		case 'm':
 			mode_name = optarg;
-			if (!strcmp(optarg, "fixed")) mode = SPROUT_MODE_FIXED;
-			else if (!strcmp(optarg, "shadow")) mode = SPROUT_MODE_SHADOW;
-			else if (!strcmp(optarg, "online")) mode = SPROUT_MODE_ONLINE;
+			if (!strcmp(optarg, "fixed")) mode = LERTICK_MODE_FIXED;
+			else if (!strcmp(optarg, "shadow")) mode = LERTICK_MODE_SHADOW;
+			else if (!strcmp(optarg, "online")) mode = LERTICK_MODE_ONLINE;
 			else { usage(stderr, argv[0]); return 2; }
 			break;
 		case 'd': duration = parse_uint(optarg, 1, 3600); break;
@@ -387,7 +387,7 @@ int main(int argc, char **argv)
 	}
 	sigemptyset(&sa.sa_mask);
 	sigaction(SIGINT, &sa, NULL); sigaction(SIGTERM, &sa, NULL); sigaction(SIGHUP, &sa, NULL);
-	skel = SCX_OPS_OPEN(sprout_ops, scx_sprout);
+	skel = SCX_OPS_OPEN(lertick_ops, scx_lertick);
 	if (verbose) {
 		struct bpf_program *prog;
 		bpf_object__for_each_program(prog, skel->obj)
@@ -402,31 +402,31 @@ int main(int argc, char **argv)
 	skel->rodata->stall_tgid = stall_tgid;
 	if (partial) {
 		__u64 flag = SCX_OPS_SWITCH_PARTIAL;
-		if (!flag) { fprintf(stderr, "BLOCKER: kernel lacks partial switch flag.\n"); scx_sprout__destroy(skel); return 1; }
-		skel->struct_ops.sprout_ops->flags |= flag;
+		if (!flag) { fprintf(stderr, "BLOCKER: kernel lacks partial switch flag.\n"); scx_lertick__destroy(skel); return 1; }
+		skel->struct_ops.lertick_ops->flags |= flag;
 	}
 	if (expect_watchdog && !__COMPAT_read_enum("scx_exit_kind", "SCX_EXIT_ERROR_STALL", &stall_kind)) {
 		fprintf(stderr, "BLOCKER: cannot identify watchdog exit kind in running kernel BTF.\n");
-		scx_sprout__destroy(skel);
+		scx_lertick__destroy(skel);
 		return 1;
 	}
 	if (!__COMPAT_read_enum("scx_exit_kind", "SCX_EXIT_UNREG", &unreg_kind)) {
 		fprintf(stderr, "BLOCKER: kernel BTF lacks SCX_EXIT_UNREG; cannot validate shutdown/fallback semantics.\n");
-		scx_sprout__destroy(skel);
+		scx_lertick__destroy(skel);
 		return 1;
 	}
-	SCX_OPS_LOAD(skel, sprout_ops, scx_sprout, uei);
+	SCX_OPS_LOAD(skel, lertick_ops, scx_lertick, uei);
 	fprintf(out, "{\"event\":\"loaded\",\"verifier_accepted\":true}\n"); fflush(out);
-	link = SCX_OPS_ATTACH(skel, sprout_ops, scx_sprout);
-	if (!wait_state("enabled") || !read_text(OPS_PATH, ops, sizeof(ops)) || strcmp(ops, "scx_sprout")) {
-		fprintf(stderr, "Registration did not produce enabled scx_sprout (ops=%s).\n", ops);
+	link = SCX_OPS_ATTACH(skel, lertick_ops, scx_lertick);
+	if (!wait_state("enabled") || !read_text(OPS_PATH, ops, sizeof(ops)) || strcmp(ops, "scx_lertick")) {
+		fprintf(stderr, "Registration did not produce enabled scx_lertick (ops=%s).\n", ops);
 		status = 1;
 	} else {
 		fprintf(out, "{\"event\":\"registered\",\"ops\":"); json_string(out, ops);
 		fprintf(out, ",\"partial\":%s,\"mode\":", partial ? "true" : "false"); json_string(out, mode_name);
 		fprintf(out, ",\"fixed_slice_ns\":%llu,\"min_slice_ns\":%llu,\"max_slice_ns\":%llu,\"timeout_ms\":%llu}\n",
 			U64((__u64)fixed_us * 1000), U64((__u64)min_us * 1000), U64((__u64)max_us * 1000),
-			U64(skel->struct_ops.sprout_ops->timeout_ms)); fflush(out);
+			U64(skel->struct_ops.lertick_ops->timeout_ms)); fflush(out);
 	}
 	start = now_ns(); next_sample = start;
 	while (!status && !exit_req && !UEI_EXITED(skel, uei) && now_ns() - start < (__u64)duration * 1000000000) {
@@ -464,7 +464,7 @@ int main(int argc, char **argv)
 	fprintf(out, ",\"message\":"); json_string(out, skel->data->uei.msg);
 	fprintf(out, ",\"default_restored\":%s,\"signal\":%d,\"status\":%d}\n", restored ? "true" : "false", (int)exit_req, status);
 	fflush(out);
-	scx_sprout__destroy(skel);
+	scx_lertick__destroy(skel);
 	if (out != stdout && fclose(out)) status = 1;
 	return status;
 }

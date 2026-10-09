@@ -1,4 +1,4 @@
-# ScxSprout Phase 1: actual Linux deployment results
+# Lertick Phase 1: original Linux deployment results
 
 **Recorded 2026-10-09. Phase 1 passed actual Linux compilation, BPF verifier
 acceptance, sched_ext registration, real task execution, in-eBPF online learning,
@@ -6,9 +6,15 @@ bounded prediction-driven dispatch, and recovery tests.** These are functional
 results from one disposable VM. They do not establish a performance improvement
 or production suitability.
 
+The project is now called **Lertick**. These original measurements were made
+under its earlier **ScxSprout** name. Every `results/phase1/` file is preserved
+byte-for-byte, including `scx_sprout`, `sprout_*`, original paths and hashes.
+Current source links use the renamed files; use the [deployment guide](DEPLOYMENT.md)
+for current commands. This rebrand does not alter the Phase 1 policy.
+
 ## Implementation
 
-- [C/eBPF scheduler](../src/bpf/scx_sprout.bpf.c): official `scx_simple` weighted
+- [C/eBPF scheduler](../src/bpf/scx_lertick.bpf.c): official `scx_simple` weighted
   virtual-time queue and default CPU-selection patterns, per-task storage,
   execution-service accounting, wake-to-sleep labels, three policy modes,
   bounded dispatch slices, counters, and retained snapshots.
@@ -16,7 +22,7 @@ or production suitability.
   projected, error-clipped LMS updates. Features are bias, previous completed
   burst, burst EWMA, sleep interval, and shared-queue occupancy. Training and
   inference run in the BPF callbacks; userspace only reads telemetry.
-- [Loader](../src/userspace/scx_sprout.c): live-kernel preflight, libbpf struct_ops
+- [Loader](../src/userspace/scx_lertick.c): live-kernel preflight, libbpf struct_ops
   loading, registration verification, finite duration, unpinned link ownership,
   signal shutdown, JSONL snapshots, final exit classification, and guarded
   one-task watchdog fault injection in a VM.
@@ -218,6 +224,8 @@ tests before experimenting with performance. Then run longer randomized trials
 on dedicated Linux hardware with frozen-model and EWMA controls. Keep the MVP
 small until those tests support a broader claim.
 
-Validated changes are committed locally on the existing branch. They are not
-pushed to GitHub pending the owner's approval. Complete raw records and exact
-commands are in [the evidence directory](../results/phase1/README.md).
+The original validated implementation is commit `1d2c39e`. Publication was
+approved subject to rebranding and CPU-only scope. The separate
+[rebranding report](REBRAND_VALIDATION.md) records regression checks and
+publication. Complete original records and commands remain unchanged in
+[the evidence directory](../results/phase1/README.md).

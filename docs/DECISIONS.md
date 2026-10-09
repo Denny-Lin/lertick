@@ -1,4 +1,30 @@
-# ScxSprout decisions
+# Lertick decisions
+
+## 2026-10-09: CPU-only scope, final name, and publication approval
+
+The owner approved publishing Phase 1, requested a narrower CPU-only scope, and
+then asked for independent research into a stronger name instead of SchedMind.
+The [12-name comparison](NAMING.md) selected **Lertick**, pronounced **LER-tick**,
+from learning + tick. The repository is `Denny-Lin/lertick`, and the executable
+and sched_ext registration are `scx_lertick`.
+
+Active scope is online machine learning for Linux CPU scheduling using sched_ext
+and eBPF: CPU-burst prediction, in-kernel training/inference, adaptive slices,
+CPU scheduling decisions, fairness, starvation prevention, low overhead, and
+reproducible benchmarks. Memory allocation optimization, memory reclaim,
+DAMON/DAMOS controllers, NUMA memory placement, and joint CPU/memory management
+are background research only, neither active nor backup directions.
+
+The rebranding changes identifiers, workload opt-in names, build/CLI names,
+documentation, and metadata. It preserves the scheduling policy, model,
+arithmetic, accounting, bounds, recovery behavior, and known limitations.
+Original Phase 1 commit `1d2c39e` and all `results/phase1/` files are preserved.
+The [rebranding report](REBRAND_VALIDATION.md) records regression checks.
+
+Publication authorization includes renaming the GitHub repository, updating the
+local remote, and pushing validated commits to `origin/main`. It supersedes the
+earlier instruction to keep Phase 1 local. **No Phase 2 implementation, release,
+or tag is authorized or created as part of this task.**
 
 ## 2026-10-09: approve and validate Phase 1
 
@@ -19,9 +45,9 @@ neural network, userspace trainer, GPU, persistent daemon, Docker-only runtime,
 or performance improvement. The accepted experiment uses QEMU HVF on ARM64;
 Docker was not used.
 
-The user explicitly authorized a local commit on the existing project branch
+At this earlier decision, the user explicitly authorized a local commit on the existing project branch
 and withheld permission to push until reviewing the results. Phase 1 changes
-therefore remain local pending approval. See [actual results](PHASE1_RESULTS.md),
+therefore remained local until the publication approval recorded above. See [actual results](PHASE1_RESULTS.md),
 [deployment commands](DEPLOYMENT.md), and [license provenance](../THIRD_PARTY.md).
 
 The documents under `docs/planning/` retain their original Phase 0 reasoning

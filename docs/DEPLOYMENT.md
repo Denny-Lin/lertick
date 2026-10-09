@@ -1,15 +1,17 @@
-# ScxSprout Linux deployment and reproduction
+# Lertick Linux deployment and reproduction
 
-Phase 1 was approved on 2026-10-09. ScxSprout now has a C/eBPF implementation,
+Phase 1 was approved on 2026-10-09. Lertick now has a C/eBPF implementation,
 libbpf loader, real CPU workload, model tests, and a Linux validation runner.
 The Linux validation compiled the BPF object and loader, passed the verifier in
-fixed, shadow, and online modes, registered `scx_sprout`, and observed real task
+fixed, shadow, and online modes, registered `scx_lertick`, and observed real task
 execution. Online training updated model parameters inside eBPF and predictions
 reached bounded kernel dispatch slices. Normal detach, SIGINT, SIGTERM, SIGKILL,
 SysRq-S, and an actual stalled-task watchdog restored the default Linux
 scheduler. Twelve short comparison runs completed. The measured outcomes and
 limitations are recorded in [PHASE1_RESULTS.md](PHASE1_RESULTS.md); no performance
-improvement is claimed.
+improvement is claimed. Those original records retain the old ScxSprout name.
+Current commands below use Lertick; separate [rebranding regression evidence](REBRAND_VALIDATION.md)
+checks the renamed binary while preserving the original records unchanged.
 
 Run scheduler commands inside the QEMU Linux guest. Docker can supply build
 dependencies, but its shared host kernel cannot replace this deployment test.
@@ -83,14 +85,14 @@ These host commands transfer source without generated BTF headers, VM disks,
 private VM keys, or build outputs:
 
 ```sh
-SPROUT_ARCHIVE="${TMPDIR:-/tmp}/scx-sprout-source.tgz"
+LERTICK_ARCHIVE="${TMPDIR:-/tmp}/lertick-source.tgz"
 COPYFILE_DISABLE=1 tar --no-xattrs --exclude=.git --exclude=build \
-  --exclude=results/local -czf "$SPROUT_ARCHIVE" .
+  --exclude=results/local -czf "$LERTICK_ARCHIVE" .
 scp -i build/vm/id_ed25519 -P 22222 \
   -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
   -o UserKnownHostsFile=build/vm/known_hosts \
-  "$SPROUT_ARCHIVE" ubuntu@127.0.0.1:/home/ubuntu/scx-sprout-source.tgz
-python3 scripts/qemu_vm.py ssh -- 'mkdir -p /home/ubuntu/linux-resource-learning && tar -xzf /home/ubuntu/scx-sprout-source.tgz -C /home/ubuntu/linux-resource-learning'
+  "$LERTICK_ARCHIVE" ubuntu@127.0.0.1:/home/ubuntu/lertick-source.tgz
+python3 scripts/qemu_vm.py ssh -- 'mkdir -p /home/ubuntu/lertick && tar -xzf /home/ubuntu/lertick-source.tgz -C /home/ubuntu/lertick'
 ```
 
 Use the helper to run an explicit guest command, or open an interactive session:
@@ -123,14 +125,14 @@ flags or tools are unavailable.
 Run these commands inside the guest:
 
 ```sh
-cd /home/ubuntu/linux-resource-learning
+cd /home/ubuntu/lertick
 scripts/preflight.sh
 scripts/build_libbpf.sh
 export PKG_CONFIG_PATH="$PWD/build/deps/install/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 make clean
 make CLANG=clang-18 BPFTOOL=bpftool
 make test-model
-sudo build/scx_sprout --check
+sudo build/scx_lertick --check
 ```
 
 Ubuntu's packaged `libbpf-dev` is 1.3.0. The recorded bpftool emits a skeleton
@@ -143,15 +145,15 @@ when rebuilding that existing guest. `LIBBPF_CFLAGS`, `LIBBPF_LIBS`, `CLANG`, an
 `BPFTOOL` can also be overridden through Make.
 
 The build generates `build/vmlinux.h` from this running guest's BTF, compiles
-`src/bpf/scx_sprout.bpf.c` to `build/scx_sprout.bpf.o`, generates a libbpf skeleton,
-and builds `build/scx_sprout` plus `build/burst_workload`. Run `make clean` after a
+`src/bpf/scx_lertick.bpf.c` to `build/scx_lertick.bpf.o`, generates a libbpf skeleton,
+and builds `build/scx_lertick` plus `build/burst_workload`. Run `make clean` after a
 kernel change so a cached header cannot hide a mismatch. `--check` additionally
 loads live BTF, finds `sched_ext_ops`, and tests BPF map creation with the current
 privileges. Loading refuses to replace an already enabled sched_ext scheduler.
 
 Compilation is one evidence gate. The loader emits `loaded` only after kernel
 verifier acceptance and `registered` only after seeing `state=enabled` with
-`/sys/kernel/sched_ext/root/ops=scx_sprout`.
+`/sys/kernel/sched_ext/root/ops=scx_lertick`.
 
 ## Run a finite scheduling experiment
 
@@ -176,22 +178,22 @@ A fixed-policy example, inside the guest:
 
 ```sh
 mkdir -p results/local
-sudo build/scx_sprout --mode fixed --duration 15 --sample-ms 250 \
+sudo build/scx_lertick --mode fixed --duration 15 --sample-ms 250 \
   --stats-json results/local/fixed.jsonl &
-SPROUT_LOADER_PID=$!
+LERTICK_LOADER_PID=$!
 sleep 1
 cat /sys/kernel/sched_ext/state
 cat /sys/kernel/sched_ext/root/ops
 build/burst_workload --duration 10 --role burst --cpu 0 \
   --burst-us 1000 --sleep-us 2000 --phase-burst-us 6000 \
   > results/local/fixed-workload.jsonl
-wait "$SPROUT_LOADER_PID"
+wait "$LERTICK_LOADER_PID"
 cat /sys/kernel/sched_ext/state
 ```
 
 Run the same experiment with `--mode shadow` or `--mode online` and distinct
 output names. The workload names its thread
-`sprout_burst`; the scheduler tracks tasks whose `comm` begins with `sprout`, or
+`lertick_burst`; the scheduler tracks tasks whose `comm` begins with `lertick`, or
 a specified `--tracked-tgid PID`. Workload output measures actual thread CPU
 time, wake response, completion time, and completed work units.
 
@@ -233,7 +235,7 @@ stalled task's real kernel watchdog fallback. Any failed assertion prevents a
 complete-validation claim.
 
 The short comparison randomizes three repetitions of the default Linux
-scheduler, official non-ML `scx_simple`, fixed ScxSprout, and online ScxSprout.
+scheduler, official non-ML `scx_simple`, fixed Lertick, and online Lertick.
 Each run includes two CPU-only controls and one blocking CPU-burst workload,
 all pinned to guest CPU 0. It reports measured completion percentiles and work
 throughput. These short VM measurements establish a baseline; they do not
@@ -282,8 +284,10 @@ overlay from the read-only base.
 
 This is a minimal Phase 1 scheduler. It learns per-task CPU-burst estimates and
 changes bounded slice budgets; CPU placement, NUMA tuning, advanced ML,
-production service installation, and memory-reclaim control remain outside this
-implementation. Root privileges are required in the guest. The official
+and production service installation remain outside Phase 1. Memory allocation,
+reclaim, DAMON/DAMOS, NUMA memory placement, and joint CPU/memory management are
+outside the project scope; archived material is background research only.
+Root privileges are required in the guest. The official
 reference and derived scheduler/helpers retain their GPL notices; see
 [THIRD_PARTY.md](../THIRD_PARTY.md). Only outcomes backed by the committed result
 artifacts belong in the tested-support claim.

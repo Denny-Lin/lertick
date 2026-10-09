@@ -50,7 +50,7 @@ class Validation:
         self.args = args
         self.output = args.output.resolve()
         self.output.mkdir(parents=True, exist_ok=True)
-        self.loader = (ROOT / "build/scx_sprout").resolve()
+        self.loader = (ROOT / "build/scx_lertick").resolve()
         self.workload = (ROOT / "build/burst_workload").resolve()
         self.owned = []
         self.handles = []
@@ -80,8 +80,8 @@ class Validation:
                                "--sample-ms", "250", "--stats-json",
                                self.output / f"{name}.jsonl", *extra], name)
         wait_state("enabled", process)
-        if OPS.read_text().strip() != "scx_sprout":
-            raise RuntimeError("registered ops do not match scx_sprout")
+        if OPS.read_text().strip() != "scx_lertick":
+            raise RuntimeError("registered ops do not match scx_lertick")
         return process
 
     def run_workload(self, name, role="burst", duration=4, phase=False, ext=False):
@@ -109,7 +109,7 @@ class Validation:
             assert any(event.get("verifier_accepted") for event in events)
             assert any(event.get("event") == "registered" for event in events)
             final = next(event for event in reversed(events) if event.get("phase") == "final")
-            task = next(task for task in final["tasks"] if task["comm"] == "sprout_burst")
+            task = next(task for task in final["tasks"] if task["comm"] == "lertick_burst")
             assert task["runs"] > 0 and task["total_runtime_ns"] > 0
             assert task["completed_bursts"] > 50
             assert task["matching_dispatch_slices"] > 0
@@ -132,7 +132,7 @@ class Validation:
                     assert 500000 <= task["min_adaptive_slice_ns"] <= task["max_adaptive_slice_ns"] <= 5000000
                     assert task["slice_changes"] > 0
                     history = [task for event in events for task in event.get("tasks", [])
-                               if task["comm"] == "sprout_burst"]
+                               if task["comm"] == "lertick_burst"]
                     assert any(task["selected_slice_ns"] == task["observed_running_slice_ns"] != 2000000
                                and 500000 <= task["observed_running_slice_ns"] <= 5000000
                                and task["training_updates"] >= 8 and task["adaptive_runs"] > 0
@@ -234,7 +234,7 @@ class Validation:
                     if policy in ("fixed", "online"):
                         events = rows(self.output / f"{name}-scheduler.jsonl")
                         final = next(event for event in reversed(events) if event.get("phase") == "final")
-                        controls = [task for task in final["tasks"] if task["comm"] == "sprout_cpu"]
+                        controls = [task for task in final["tasks"] if task["comm"] == "lertick_cpu"]
                         assert len(controls) == 2
                         assert all(task["runs"] > 0 and task["total_runtime_ns"] > 0 for task in controls)
                         assert all(task["completed_bursts"] == 0 and task["training_updates"] == 0

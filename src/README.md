@@ -2,10 +2,10 @@
 
 ```text
 src/
-  bpf/scx_sprout.bpf.c     sched_ext callbacks, runtime labels and online training
-  userspace/scx_sprout.c   C/libbpf loader, compatibility checks and JSONL telemetry
+  bpf/scx_lertick.bpf.c     sched_ext callbacks, runtime labels and online training
+  userspace/scx_lertick.c   C/libbpf loader, compatibility checks and JSONL telemetry
   shared/model.h          bounded five-feature Q16 model, host/BPF shared arithmetic
-  shared/sprout.h         experiment parameters and telemetry ABI
+  shared/lertick.h         experiment parameters and telemetry ABI
 ```
 
 The scheduler follows the official `scx_simple` global weighted-vtime policy.

@@ -1,6 +1,6 @@
 # Third-party provenance and licensing
 
-The ScxSprout scheduler and loader are derived from the official
+The Lertick scheduler and loader are derived from the official
 [sched-ext/scx-c-examples](https://github.com/sched-ext/scx-c-examples) C examples,
 pinned at commit `370b1cea95c6bb668d5b9261f069d433142b9986`.
 `scx_simple.c` and `scx_simple.bpf.c` supply the struct_ops loading, weighted
@@ -33,3 +33,7 @@ bpftool 7.7 with libbpf 1.7.0; use matching/new enough libbpf development header
 for the skeleton emitted by bpftool. Ubuntu's libbpf 1.3.0 headers lack the
 `bpf_map_skeleton.link` field emitted by this bpftool. An isolated libbpf 1.7.0
 prefix can be selected with `PKG_CONFIG_PATH` without replacing system libbpf.
+
+Phase 1 was originally validated under the ScxSprout name. Historical research
+and raw validation evidence retain that name and the former repository path;
+renaming does not change their attribution, licenses, or recorded measurements.

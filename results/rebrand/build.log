@@ -1,0 +1,44 @@
+mkdir -p build
+bpftool btf dump file /sys/kernel/btf/vmlinux format c > build/vmlinux.h.tmp
+mv build/vmlinux.h.tmp build/vmlinux.h
+clang-18 -Ivendor -Isrc -Isrc/shared -Ibuild -I/home/ubuntu/deps/install/include  -O2 -g -target bpf -mcpu=v3 -Wall -Wno-compare-distinct-pointer-types -D__TARGET_ARCH_arm64 -Ivendor/bpf-compat -I/usr/include/aarch64-linux-gnu -c src/bpf/scx_lertick.bpf.c -o build/scx_lertick.bpf.o
+In file included from src/bpf/scx_lertick.bpf.c:19:
+In file included from vendor/scx/common.bpf.h:21:
+build/vmlinux.h:69147:2: warning: declaration does not declare anything [-Wmissing-declarations]
+ 69147 |         struct aes_enckey;
+       |         ^
+build/vmlinux.h:85401:3: warning: declaration does not declare anything [-Wmissing-declarations]
+ 85401 |                 struct ns_tree;
+       |                 ^
+build/vmlinux.h:108771:2: warning: declaration does not declare anything [-Wmissing-declarations]
+ 108771 |         struct __filename_head;
+        |         ^
+build/vmlinux.h:152894:2: warning: declaration does not declare anything [-Wmissing-declarations]
+ 152894 |         union pipe_index;
+        |         ^
+build/vmlinux.h:171167:4: warning: declaration does not declare anything [-Wmissing-declarations]
+ 171167 |                         struct freelist_counters;
+        |                         ^
+5 warnings generated.
+bpftool gen skeleton build/scx_lertick.bpf.o name scx_lertick > build/scx_lertick.bpf.skel.h.tmp
+mv build/scx_lertick.bpf.skel.h.tmp build/scx_lertick.bpf.skel.h
+cc -Ivendor -Isrc -Isrc/shared -Ibuild -I/home/ubuntu/deps/install/include  -O2 -g -std=gnu11 -Wall -Wextra src/userspace/scx_lertick.c -o build/scx_lertick -L/home/ubuntu/deps/install/lib -lbpf -lelf -lzstd -pthread -lz  -lelf -lz
+In file included from vendor/scx/common.h:74,
+                 from src/userspace/scx_lertick.c:26:
+vendor/scx/compat.h: In function ‘__COMPAT_read_enum’:
+vendor/scx/compat.h:44:31: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__u32’ {aka ‘unsigned int’} [-Wsign-compare]
+   44 |                 for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
+      |                               ^
+vendor/scx/compat.h:55:31: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__u32’ {aka ‘unsigned int’} [-Wsign-compare]
+   55 |                 for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
+      |                               ^
+vendor/scx/compat.h: In function ‘__COMPAT_struct_has_field’:
+vendor/scx/compat.h:99:23: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__u32’ {aka ‘unsigned int’} [-Wsign-compare]
+   99 |         for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
+      |                       ^
+cc -O2 -g -std=gnu11 -Wall -Wextra benchmarks/burst_workload.c -o build/burst_workload -pthread -lm
+make: Nothing to be done for 'workload'.
+cc -Isrc/shared -O2 -std=c11 -Wall -Wextra -Werror tests/test_model.c -o build/test_model
+build/test_model
+{"test":"synthetic_holdout","samples":1000,"model_squared_error":563987,"fixed_squared_error":156938088319}
+{"test":"model","status":"passed","oracle_trials":200121}

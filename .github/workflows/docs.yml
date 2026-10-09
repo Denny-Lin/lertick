@@ -1,4 +1,4 @@
-name: Documentation and model
+name: Lertick checks
 
 on:
   push:

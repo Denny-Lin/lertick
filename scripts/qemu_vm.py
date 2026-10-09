@@ -52,19 +52,19 @@ def prepare():
     key = VM / "id_ed25519"
     if not key.exists():
         run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C",
-             "scx-sprout-local-vm", "-f", key])
+             "lertick-local-vm", "-f", key])
     seed = VM / "seed"
     seed.mkdir(exist_ok=True)
     public_key = key.with_suffix(".pub").read_text().strip()
     (seed / "meta-data").write_text(
-        "instance-id: scx-sprout-phase1-01\nlocal-hostname: scx-sprout-vm\n")
+        "instance-id: lertick-phase1-01\nlocal-hostname: lertick-vm\n")
     (seed / "user-data").write_text(
         "#cloud-config\nusers:\n  - name: ubuntu\n    groups: [sudo]\n"
         "    shell: /bin/bash\n    sudo: ALL=(ALL) NOPASSWD:ALL\n"
         "    lock_passwd: true\n    ssh_authorized_keys:\n      - " + public_key +
         "\nssh_pwauth: false\npackage_update: true\npackages:\n" +
         "".join(f"  - {package}\n" for package in PACKAGES) +
-        "runcmd:\n  - [sh, -c, 'touch /var/tmp/scx-sprout-provisioned']\n")
+        "runcmd:\n  - [sh, -c, 'touch /var/tmp/lertick-provisioned']\n")
     iso = VM / "seed.iso"
     if shutil.which("hdiutil"):
         # hdiutil appends .iso only when it is absent.
@@ -112,7 +112,7 @@ def start(port, accelerator):
     writable_vars = VM / "efi-vars.fd"
     if not writable_vars.exists():
         shutil.copyfile(variables, writable_vars)
-    args = [binary, "-name", "scx-sprout-phase1", "-machine", "virt",
+    args = [binary, "-name", "lertick-phase1", "-machine", "virt",
             "-accel", accelerator, "-cpu", "host" if accelerator != "tcg" else "max",
             "-smp", "4", "-m", "4096", "-drive",
             f"if=pflash,format=raw,readonly=on,file={code}", "-drive",

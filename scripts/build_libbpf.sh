@@ -7,8 +7,8 @@ if [[ $(uname -s) != Linux ]]; then
   exit 1
 fi
 task_root=$(cd "$(dirname "$0")/.." && pwd)
-task_deps=${SPROUT_DEPS_DIR:-"$task_root/build/deps"}
-task_prefix=${SPROUT_LIBBPF_PREFIX:-"$task_deps/install"}
+task_deps=${LERTICK_DEPS_DIR:-"$task_root/build/deps"}
+task_prefix=${LERTICK_LIBBPF_PREFIX:-"$task_deps/install"}
 task_commit=f5dcbae736e5d7f83a35718e01be1a8e3010fa39
 mkdir -p "$task_deps"
 if [[ ! -d "$task_deps/libbpf/.git" ]]; then

@@ -8,8 +8,8 @@ The original host model test runs on macOS or Linux:
 make test-model
 # Or run with arithmetic and memory instrumentation:
 clang -std=c11 -O2 -Wall -Wextra -Werror -fsanitize=undefined,address \
-  -I src/shared tests/test_model.c -o /tmp/scxsprout-test-model
-/tmp/scxsprout-test-model
+  -I src/shared tests/test_model.c -o /tmp/lertick-test-model
+/tmp/lertick-test-model
 ```
 
 It checks 100,000 extreme-input prediction/training cases against an independent

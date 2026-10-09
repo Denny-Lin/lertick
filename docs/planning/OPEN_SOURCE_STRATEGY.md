@@ -1,6 +1,13 @@
 # Open-source strategy
 
-> Historical Phase 0 planning snapshot. The user approved ScxSprout on 2026-10-09. Implementation and actual Linux validation now exist; see [Phase 1 results](../PHASE1_RESULTS.md), [decision record](../DECISIONS.md), and [current licensing](../../THIRD_PARTY.md). Statements below describe the original planning stage.
+> Archived Phase 0 background research, superseded by Lertick's CPU-only scope.
+> Original names (ScxSprout, scx-sprout, and linux-resource-learning), proposed
+> phases, and statements below are preserved as historical reasoning. Memory
+> allocation, reclaim, DAMON/DAMOS, NUMA memory placement, and joint CPU/memory
+> management are background research only, neither active nor backup development
+> directions. See the [archive index](README.md), [current Phase 1 results](../PHASE1_RESULTS.md),
+> [decision record](../DECISIONS.md), and [current licensing](../../THIRD_PARTY.md).
+> Phase 2 implementation has not been approved.
 
 Status: Phase 0 planning. Source/name checks: 2026-10-09. The public umbrella repository is `Denny-Lin/linux-resource-learning`; the proposed CPU scheduler brand is **ScxSprout (`scx-sprout`)**. The name and direction are proposals, not an approved implementation or software release.
 
@@ -14,7 +21,7 @@ We queried GitHub's public repository search API using `<name> in:name`. Search 
 | scx-adapt | 3 | `dogukanmeral/scx-adapt`, `onurkaragur/scx-adapt-experiments`; avoid close overlap |
 | kernlearn | 2 | `crimbs/kernlearn`, `MartenThompson/gp_kernlearn`; avoid |
 | mempilot | 9 | `ViktorAxelsen/MemPilot`, `Cosmos-0118/MemPilot`; crowded |
-| schedmind | 4 | Includes `tanzeela-mahmood/schedmind`; avoid |
+| lertick | 4 | Includes `tanzeela-mahmood/lertick`; avoid |
 | scx-sprout | 0 | Preferred provisional CPU brand; conveys incremental growth |
 | reclaimwise | 0 | Suitable provisional name for a memory-controller backup |
 | memsprig | 0 | Short memory-oriented alternative; meaning less obvious |
