@@ -1,0 +1,2483 @@
+{
+  "validation-bias-carry": {
+    "completed": true,
+    "lifecycle_cases": 19,
+    "service_checks": 132,
+    "fairness": [
+      {
+        "mode": "fixed",
+        "passed": true,
+        "competitors": 8,
+        "available_cpus": 4,
+        "duration_seconds": 9,
+        "jain_index": 0.9999997951648099,
+        "max_observed_runnable_gap_ns": 6112030,
+        "maps": [
+          {
+            "id": 4747,
+            "name": "task_ctx_stor",
+            "type": "task_storage",
+            "max_entries": 0,
+            "btf_id": 3690
+          },
+          {
+            "id": 4748,
+            "name": "task_snapshots",
+            "type": "lru_hash",
+            "max_entries": 4096,
+            "btf_id": 3690
+          }
+        ],
+        "maps_released": true,
+        "map_release": {
+          "elapsed_seconds": 0.0035351599999557948,
+          "polls": 1,
+          "initially_remaining_owned_ids": [],
+          "remaining_owned_ids": []
+        },
+        "service_checks": [
+          {
+            "tid": 76187,
+            "role": "cpu",
+            "clock_cpu_ns": 4498863371,
+            "proc_schedstat_ns": 4498978038,
+            "bpf_runtime_ns": 4499088372,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 225001,
+            "tolerance_ns": 89977267.42,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76189,
+            "role": "cpu",
+            "clock_cpu_ns": 4499584015,
+            "proc_schedstat_ns": 4499705640,
+            "bpf_runtime_ns": 4499831182,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 247167,
+            "tolerance_ns": 89991680.3,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76192,
+            "role": "cpu",
+            "clock_cpu_ns": 4499764871,
+            "proc_schedstat_ns": 4499861204,
+            "bpf_runtime_ns": 4499941454,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 176583,
+            "tolerance_ns": 89995297.42,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76194,
+            "role": "cpu",
+            "clock_cpu_ns": 4501499569,
+            "proc_schedstat_ns": 4501507903,
+            "bpf_runtime_ns": 4501601694,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 102125,
+            "tolerance_ns": 90029991.38,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76195,
+            "role": "cpu",
+            "clock_cpu_ns": 4500753056,
+            "proc_schedstat_ns": 4500763973,
+            "bpf_runtime_ns": 4500947973,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 194917,
+            "tolerance_ns": 90015061.12,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76197,
+            "role": "cpu",
+            "clock_cpu_ns": 4501512054,
+            "proc_schedstat_ns": 4501527929,
+            "bpf_runtime_ns": 4501616804,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 104750,
+            "tolerance_ns": 90030241.08,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76199,
+            "role": "cpu",
+            "clock_cpu_ns": 4503142636,
+            "proc_schedstat_ns": 4503152636,
+            "bpf_runtime_ns": 4503243344,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 100708,
+            "tolerance_ns": 90062852.72,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76201,
+            "role": "cpu",
+            "clock_cpu_ns": 4505565623,
+            "proc_schedstat_ns": 4505577581,
+            "bpf_runtime_ns": 4505624789,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 59166,
+            "tolerance_ns": 90111312.46000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          }
+        ],
+        "proof_scope": "finite equal-weight VM workload"
+      },
+      {
+        "mode": "shadow",
+        "passed": true,
+        "competitors": 8,
+        "available_cpus": 4,
+        "duration_seconds": 9,
+        "jain_index": 0.9999999338874621,
+        "max_observed_runnable_gap_ns": 6066572,
+        "maps": [
+          {
+            "id": 4763,
+            "name": "task_ctx_stor",
+            "type": "task_storage",
+            "max_entries": 0,
+            "btf_id": 3702
+          },
+          {
+            "id": 4764,
+            "name": "task_snapshots",
+            "type": "lru_hash",
+            "max_entries": 4096,
+            "btf_id": 3702
+          }
+        ],
+        "maps_released": true,
+        "map_release": {
+          "elapsed_seconds": 0.004702407999502611,
+          "polls": 1,
+          "initially_remaining_owned_ids": [],
+          "remaining_owned_ids": []
+        },
+        "service_checks": [
+          {
+            "tid": 76213,
+            "role": "cpu",
+            "clock_cpu_ns": 4500390569,
+            "proc_schedstat_ns": 4500441610,
+            "bpf_runtime_ns": 4500540318,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 149749,
+            "tolerance_ns": 90007811.38,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76214,
+            "role": "cpu",
+            "clock_cpu_ns": 4500569333,
+            "proc_schedstat_ns": 4500615667,
+            "bpf_runtime_ns": 4500856916,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 287583,
+            "tolerance_ns": 90011386.66,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76217,
+            "role": "cpu",
+            "clock_cpu_ns": 4499668478,
+            "proc_schedstat_ns": 4499707270,
+            "bpf_runtime_ns": 4499811187,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 142709,
+            "tolerance_ns": 89993369.56,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76219,
+            "role": "cpu",
+            "clock_cpu_ns": 4500446674,
+            "proc_schedstat_ns": 4500455424,
+            "bpf_runtime_ns": 4500559341,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 112667,
+            "tolerance_ns": 90008933.48,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76221,
+            "role": "cpu",
+            "clock_cpu_ns": 4501496216,
+            "proc_schedstat_ns": 4501505132,
+            "bpf_runtime_ns": 4501633256,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 137040,
+            "tolerance_ns": 90029924.32000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76222,
+            "role": "cpu",
+            "clock_cpu_ns": 4501773868,
+            "proc_schedstat_ns": 4501782868,
+            "bpf_runtime_ns": 4501891034,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 117166,
+            "tolerance_ns": 90035477.36,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76224,
+            "role": "cpu",
+            "clock_cpu_ns": 4501473733,
+            "proc_schedstat_ns": 4501484024,
+            "bpf_runtime_ns": 4501579233,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 105500,
+            "tolerance_ns": 90029474.66,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76226,
+            "role": "cpu",
+            "clock_cpu_ns": 4503701741,
+            "proc_schedstat_ns": 4503711241,
+            "bpf_runtime_ns": 4503771950,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 70209,
+            "tolerance_ns": 90074034.82000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          }
+        ],
+        "proof_scope": "finite equal-weight VM workload"
+      },
+      {
+        "mode": "online",
+        "passed": true,
+        "competitors": 8,
+        "available_cpus": 4,
+        "duration_seconds": 9,
+        "jain_index": 0.9999998475270423,
+        "max_observed_runnable_gap_ns": 7023445,
+        "maps": [
+          {
+            "id": 4779,
+            "name": "task_ctx_stor",
+            "type": "task_storage",
+            "max_entries": 0,
+            "btf_id": 3714
+          },
+          {
+            "id": 4780,
+            "name": "task_snapshots",
+            "type": "lru_hash",
+            "max_entries": 4096,
+            "btf_id": 3714
+          }
+        ],
+        "maps_released": true,
+        "map_release": {
+          "elapsed_seconds": 0.0031930360000842484,
+          "polls": 1,
+          "initially_remaining_owned_ids": [],
+          "remaining_owned_ids": []
+        },
+        "service_checks": [
+          {
+            "tid": 76237,
+            "role": "cpu",
+            "clock_cpu_ns": 4499449349,
+            "proc_schedstat_ns": 4499476265,
+            "bpf_runtime_ns": 4499669432,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 220083,
+            "tolerance_ns": 89988986.98,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76240,
+            "role": "cpu",
+            "clock_cpu_ns": 4500152600,
+            "proc_schedstat_ns": 4500172683,
+            "bpf_runtime_ns": 4500357309,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 204709,
+            "tolerance_ns": 90003052.0,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76241,
+            "role": "cpu",
+            "clock_cpu_ns": 4500873493,
+            "proc_schedstat_ns": 4501015701,
+            "bpf_runtime_ns": 4501093535,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 220042,
+            "tolerance_ns": 90017469.86,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76244,
+            "role": "cpu",
+            "clock_cpu_ns": 4499755414,
+            "proc_schedstat_ns": 4499976664,
+            "bpf_runtime_ns": 4500150955,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 395541,
+            "tolerance_ns": 89995108.28,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76246,
+            "role": "cpu",
+            "clock_cpu_ns": 4502170168,
+            "proc_schedstat_ns": 4502185418,
+            "bpf_runtime_ns": 4502266085,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 95917,
+            "tolerance_ns": 90043403.36,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76248,
+            "role": "cpu",
+            "clock_cpu_ns": 4502090799,
+            "proc_schedstat_ns": 4502129591,
+            "bpf_runtime_ns": 4502195299,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 104500,
+            "tolerance_ns": 90041815.98,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76250,
+            "role": "cpu",
+            "clock_cpu_ns": 4503674614,
+            "proc_schedstat_ns": 4503689864,
+            "bpf_runtime_ns": 4503780447,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 105833,
+            "tolerance_ns": 90073492.28,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 76251,
+            "role": "cpu",
+            "clock_cpu_ns": 4504632757,
+            "proc_schedstat_ns": 4504644673,
+            "bpf_runtime_ns": 4504712048,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 79291,
+            "tolerance_ns": 90092655.14,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          }
+        ],
+        "proof_scope": "finite equal-weight VM workload"
+      }
+    ],
+    "recovery_repetitions": 3,
+    "concurrent_fork": {
+      "passed": true,
+      "mode": "fixed",
+      "pinned_cpu": 0,
+      "parents": [
+        {
+          "parent_index": 0,
+          "pid": 68160,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 1,
+          "pid": 68161,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 2,
+          "pid": 68162,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 3,
+          "pid": 68165,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 4,
+          "pid": 68172,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 5,
+          "pid": 68189,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 6,
+          "pid": 68190,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 7,
+          "pid": 68191,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        }
+      ],
+      "overlapping_parents": 8,
+      "children_per_parent": 1000,
+      "children_per_batch": 8,
+      "children_created": 8000,
+      "children_reaped": 8000,
+      "independent_completion_records": 8000,
+      "distinct_child_tids": 8000,
+      "preemption_mode": "(full) lazy",
+      "preemption_mode_path": "/sys/kernel/debug/sched/preempt",
+      "retained_child_snapshots": 3974,
+      "retained_tasks": 3982,
+      "eviction_expected": true,
+      "live_before": 182,
+      "live_drained": 181,
+      "known_minimum_new_associations": 8008,
+      "observed_new_init_associations": 8008,
+      "final_stats": {
+        "local_enqueue": 851,
+        "global_enqueue": 19516,
+        "runs": 28372,
+        "runtime_ns": 2463815986,
+        "completed_bursts": 1983,
+        "censored_bursts": 16016,
+        "training_updates": 0,
+        "inferences": 0,
+        "adaptive_slices": 0,
+        "slice_changes": 0,
+        "fault_stalls": 0,
+        "counter_errors": 0,
+        "alloc_failures": 0,
+        "snapshot_failures": 0,
+        "prediction_ns_sum": 0,
+        "selected_slice_ns_sum": 35982000000,
+        "matching_dispatch_slices": 17991,
+        "continuation_slices": 0,
+        "continuation_pending_ns": 0,
+        "init_tasks": 8193,
+        "exit_tasks": 8193,
+        "training_time_ns": 0,
+        "inference_time_ns": 0,
+        "prediction_samples": 0,
+        "linear_abs_error_ns": 0,
+        "ewma_abs_error_ns": 0,
+        "wake_samples": 9991,
+        "wake_to_run_ns": 50929738980,
+        "wake_to_run_max_ns": 33203809,
+        "cpuperf_sets": 0,
+        "cpuperf_idle_sets": 0,
+        "contract_applied": 0,
+        "contract_stale": 0,
+        "live_tasks": 0
+      },
+      "maps": [
+        {
+          "id": 4731,
+          "name": "task_ctx_stor",
+          "type": "task_storage",
+          "max_entries": 0,
+          "btf_id": 3678
+        },
+        {
+          "id": 4732,
+          "name": "task_snapshots",
+          "type": "lru_hash",
+          "max_entries": 4096,
+          "btf_id": 3678
+        }
+      ],
+      "maps_released": true,
+      "map_release": {
+        "elapsed_seconds": 0.17990481200104114,
+        "polls": 4,
+        "initially_remaining_owned_ids": [
+          4731,
+          4732
+        ],
+        "remaining_owned_ids": []
+      },
+      "proof_scope": "finite same-CPU concurrent fork/exec with exact independent completion counts"
+    }
+  },
+  "validation-bias-trunc": {
+    "completed": true,
+    "lifecycle_cases": 19,
+    "service_checks": 132,
+    "fairness": [
+      {
+        "mode": "fixed",
+        "passed": true,
+        "competitors": 8,
+        "available_cpus": 4,
+        "duration_seconds": 9,
+        "jain_index": 0.999999866388985,
+        "max_observed_runnable_gap_ns": 32046477,
+        "maps": [
+          {
+            "id": 3433,
+            "name": "task_ctx_stor",
+            "type": "task_storage",
+            "max_entries": 0,
+            "btf_id": 2706
+          },
+          {
+            "id": 3434,
+            "name": "task_snapshots",
+            "type": "lru_hash",
+            "max_entries": 4096,
+            "btf_id": 2706
+          }
+        ],
+        "maps_released": true,
+        "map_release": {
+          "elapsed_seconds": 0.004306366001401329,
+          "polls": 1,
+          "initially_remaining_owned_ids": [],
+          "remaining_owned_ids": []
+        },
+        "service_checks": [
+          {
+            "tid": 50645,
+            "role": "cpu",
+            "clock_cpu_ns": 4499569491,
+            "proc_schedstat_ns": 4499595074,
+            "bpf_runtime_ns": 4500099157,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 529666,
+            "tolerance_ns": 89991389.82000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50647,
+            "role": "cpu",
+            "clock_cpu_ns": 4499693744,
+            "proc_schedstat_ns": 4499715994,
+            "bpf_runtime_ns": 4499992578,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 298834,
+            "tolerance_ns": 89993874.88,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50649,
+            "role": "cpu",
+            "clock_cpu_ns": 4499625740,
+            "proc_schedstat_ns": 4499696906,
+            "bpf_runtime_ns": 4500138447,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 512707,
+            "tolerance_ns": 89992514.8,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50651,
+            "role": "cpu",
+            "clock_cpu_ns": 4499711893,
+            "proc_schedstat_ns": 4499894601,
+            "bpf_runtime_ns": 4500163101,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 451208,
+            "tolerance_ns": 89994237.86,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50653,
+            "role": "cpu",
+            "clock_cpu_ns": 4501905940,
+            "proc_schedstat_ns": 4501915356,
+            "bpf_runtime_ns": 4502019773,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 113833,
+            "tolerance_ns": 90038118.8,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50654,
+            "role": "cpu",
+            "clock_cpu_ns": 4501078641,
+            "proc_schedstat_ns": 4501089974,
+            "bpf_runtime_ns": 4501209266,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 130625,
+            "tolerance_ns": 90021572.82000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50657,
+            "role": "cpu",
+            "clock_cpu_ns": 4504005204,
+            "proc_schedstat_ns": 4504014079,
+            "bpf_runtime_ns": 4504165704,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 160500,
+            "tolerance_ns": 90080104.08,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50658,
+            "role": "cpu",
+            "clock_cpu_ns": 4503136087,
+            "proc_schedstat_ns": 4503179503,
+            "bpf_runtime_ns": 4503302544,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 166457,
+            "tolerance_ns": 90062721.74,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          }
+        ],
+        "proof_scope": "finite equal-weight VM workload"
+      },
+      {
+        "mode": "shadow",
+        "passed": true,
+        "competitors": 8,
+        "available_cpus": 4,
+        "duration_seconds": 9,
+        "jain_index": 0.9999999002013911,
+        "max_observed_runnable_gap_ns": 7023027,
+        "maps": [
+          {
+            "id": 3449,
+            "name": "task_ctx_stor",
+            "type": "task_storage",
+            "max_entries": 0,
+            "btf_id": 2718
+          },
+          {
+            "id": 3450,
+            "name": "task_snapshots",
+            "type": "lru_hash",
+            "max_entries": 4096,
+            "btf_id": 2718
+          }
+        ],
+        "maps_released": true,
+        "map_release": {
+          "elapsed_seconds": 0.05871075599861797,
+          "polls": 2,
+          "initially_remaining_owned_ids": [
+            3449,
+            3450
+          ],
+          "remaining_owned_ids": []
+        },
+        "service_checks": [
+          {
+            "tid": 50670,
+            "role": "cpu",
+            "clock_cpu_ns": 4499627588,
+            "proc_schedstat_ns": 4499757130,
+            "bpf_runtime_ns": 4499892839,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 265251,
+            "tolerance_ns": 89992551.76,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50671,
+            "role": "cpu",
+            "clock_cpu_ns": 4500770215,
+            "proc_schedstat_ns": 4500927257,
+            "bpf_runtime_ns": 4501117924,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 347709,
+            "tolerance_ns": 90015404.3,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50674,
+            "role": "cpu",
+            "clock_cpu_ns": 4500501093,
+            "proc_schedstat_ns": 4500574177,
+            "bpf_runtime_ns": 4500782885,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 281792,
+            "tolerance_ns": 90010021.86,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50676,
+            "role": "cpu",
+            "clock_cpu_ns": 4500365712,
+            "proc_schedstat_ns": 4500481170,
+            "bpf_runtime_ns": 4500547295,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 181583,
+            "tolerance_ns": 90007314.24,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50678,
+            "role": "cpu",
+            "clock_cpu_ns": 4501208455,
+            "proc_schedstat_ns": 4501218163,
+            "bpf_runtime_ns": 4501602163,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 393708,
+            "tolerance_ns": 90024169.10000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50680,
+            "role": "cpu",
+            "clock_cpu_ns": 4501162530,
+            "proc_schedstat_ns": 4501172697,
+            "bpf_runtime_ns": 4501315196,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 152666,
+            "tolerance_ns": 90023250.60000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50681,
+            "role": "cpu",
+            "clock_cpu_ns": 4503312918,
+            "proc_schedstat_ns": 4503320959,
+            "bpf_runtime_ns": 4503380042,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 67124,
+            "tolerance_ns": 90066258.36,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50683,
+            "role": "cpu",
+            "clock_cpu_ns": 4504048436,
+            "proc_schedstat_ns": 4504056727,
+            "bpf_runtime_ns": 4504145894,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 97458,
+            "tolerance_ns": 90080968.72,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          }
+        ],
+        "proof_scope": "finite equal-weight VM workload"
+      },
+      {
+        "mode": "online",
+        "passed": true,
+        "competitors": 8,
+        "available_cpus": 4,
+        "duration_seconds": 9,
+        "jain_index": 0.9999998472080086,
+        "max_observed_runnable_gap_ns": 6221446,
+        "maps": [
+          {
+            "id": 3465,
+            "name": "task_ctx_stor",
+            "type": "task_storage",
+            "max_entries": 0,
+            "btf_id": 2730
+          },
+          {
+            "id": 3466,
+            "name": "task_snapshots",
+            "type": "lru_hash",
+            "max_entries": 4096,
+            "btf_id": 2730
+          }
+        ],
+        "maps_released": true,
+        "map_release": {
+          "elapsed_seconds": 0.055805804000556236,
+          "polls": 2,
+          "initially_remaining_owned_ids": [
+            3465,
+            3466
+          ],
+          "remaining_owned_ids": []
+        },
+        "service_checks": [
+          {
+            "tid": 50698,
+            "role": "cpu",
+            "clock_cpu_ns": 4499587945,
+            "proc_schedstat_ns": 4499614403,
+            "bpf_runtime_ns": 4499921945,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 334000,
+            "tolerance_ns": 89991758.9,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50700,
+            "role": "cpu",
+            "clock_cpu_ns": 4499621147,
+            "proc_schedstat_ns": 4499654897,
+            "bpf_runtime_ns": 4499942647,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 321500,
+            "tolerance_ns": 89992422.94,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50702,
+            "role": "cpu",
+            "clock_cpu_ns": 4500041537,
+            "proc_schedstat_ns": 4500474954,
+            "bpf_runtime_ns": 4500648370,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 606833,
+            "tolerance_ns": 90000830.74,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50704,
+            "role": "cpu",
+            "clock_cpu_ns": 4502059792,
+            "proc_schedstat_ns": 4502069084,
+            "bpf_runtime_ns": 4502196209,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 136417,
+            "tolerance_ns": 90041195.84,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50705,
+            "role": "cpu",
+            "clock_cpu_ns": 4499892521,
+            "proc_schedstat_ns": 4499941480,
+            "bpf_runtime_ns": 4500032897,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 140376,
+            "tolerance_ns": 89997850.42,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50707,
+            "role": "cpu",
+            "clock_cpu_ns": 4502223127,
+            "proc_schedstat_ns": 4502251836,
+            "bpf_runtime_ns": 4502346628,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 123501,
+            "tolerance_ns": 90044462.54,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50710,
+            "role": "cpu",
+            "clock_cpu_ns": 4503200180,
+            "proc_schedstat_ns": 4503207888,
+            "bpf_runtime_ns": 4503275888,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 75708,
+            "tolerance_ns": 90064003.60000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 50711,
+            "role": "cpu",
+            "clock_cpu_ns": 4504538237,
+            "proc_schedstat_ns": 4504547862,
+            "bpf_runtime_ns": 4504611570,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 73333,
+            "tolerance_ns": 90090764.74,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          }
+        ],
+        "proof_scope": "finite equal-weight VM workload"
+      }
+    ],
+    "recovery_repetitions": 3,
+    "concurrent_fork": {
+      "passed": true,
+      "mode": "fixed",
+      "pinned_cpu": 0,
+      "parents": [
+        {
+          "parent_index": 0,
+          "pid": 42617,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 1,
+          "pid": 42618,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 2,
+          "pid": 42619,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 3,
+          "pid": 42620,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 4,
+          "pid": 42629,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 5,
+          "pid": 42638,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 6,
+          "pid": 42647,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 7,
+          "pid": 42648,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        }
+      ],
+      "overlapping_parents": 8,
+      "children_per_parent": 1000,
+      "children_per_batch": 8,
+      "children_created": 8000,
+      "children_reaped": 8000,
+      "independent_completion_records": 8000,
+      "distinct_child_tids": 8000,
+      "preemption_mode": "(full) lazy",
+      "preemption_mode_path": "/sys/kernel/debug/sched/preempt",
+      "retained_child_snapshots": 4006,
+      "retained_tasks": 4014,
+      "eviction_expected": true,
+      "live_before": 188,
+      "live_drained": 186,
+      "known_minimum_new_associations": 8008,
+      "observed_new_init_associations": 8008,
+      "final_stats": {
+        "local_enqueue": 868,
+        "global_enqueue": 19644,
+        "runs": 28520,
+        "runtime_ns": 2389362747,
+        "completed_bursts": 2118,
+        "censored_bursts": 16024,
+        "training_updates": 0,
+        "inferences": 0,
+        "adaptive_slices": 0,
+        "slice_changes": 0,
+        "fault_stalls": 0,
+        "counter_errors": 0,
+        "alloc_failures": 0,
+        "snapshot_failures": 0,
+        "prediction_ns_sum": 0,
+        "selected_slice_ns_sum": 36256000000,
+        "matching_dispatch_slices": 18128,
+        "continuation_slices": 0,
+        "continuation_pending_ns": 0,
+        "init_tasks": 8199,
+        "exit_tasks": 8199,
+        "training_time_ns": 0,
+        "inference_time_ns": 0,
+        "prediction_samples": 0,
+        "linear_abs_error_ns": 0,
+        "ewma_abs_error_ns": 0,
+        "wake_samples": 10134,
+        "wake_to_run_ns": 46748727850,
+        "wake_to_run_max_ns": 54611139,
+        "cpuperf_sets": 0,
+        "cpuperf_idle_sets": 0,
+        "contract_applied": 0,
+        "contract_stale": 0,
+        "live_tasks": 0
+      },
+      "maps": [
+        {
+          "id": 3417,
+          "name": "task_ctx_stor",
+          "type": "task_storage",
+          "max_entries": 0,
+          "btf_id": 2694
+        },
+        {
+          "id": 3418,
+          "name": "task_snapshots",
+          "type": "lru_hash",
+          "max_entries": 4096,
+          "btf_id": 2694
+        }
+      ],
+      "maps_released": true,
+      "map_release": {
+        "elapsed_seconds": 0.16946948899931158,
+        "polls": 4,
+        "initially_remaining_owned_ids": [
+          3417,
+          3418
+        ],
+        "remaining_owned_ids": []
+      },
+      "proof_scope": "finite same-CPU concurrent fork/exec with exact independent completion counts"
+    }
+  },
+  "validation-ewma-carry": {
+    "completed": true,
+    "lifecycle_cases": 19,
+    "service_checks": 132,
+    "fairness": [
+      {
+        "mode": "fixed",
+        "passed": true,
+        "competitors": 8,
+        "available_cpus": 4,
+        "duration_seconds": 9,
+        "jain_index": 0.9999998180141705,
+        "max_observed_runnable_gap_ns": 6074571,
+        "maps": [
+          {
+            "id": 5404,
+            "name": "task_ctx_stor",
+            "type": "task_storage",
+            "max_entries": 0,
+            "btf_id": 4182
+          },
+          {
+            "id": 5405,
+            "name": "task_snapshots",
+            "type": "lru_hash",
+            "max_entries": 4096,
+            "btf_id": 4182
+          }
+        ],
+        "maps_released": true,
+        "map_release": {
+          "elapsed_seconds": 0.05683976399996027,
+          "polls": 2,
+          "initially_remaining_owned_ids": [
+            5404,
+            5405
+          ],
+          "remaining_owned_ids": []
+        },
+        "service_checks": [
+          {
+            "tid": 88933,
+            "role": "cpu",
+            "clock_cpu_ns": 4500188522,
+            "proc_schedstat_ns": 4500288689,
+            "bpf_runtime_ns": 4500411398,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 222876,
+            "tolerance_ns": 90003770.44,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88935,
+            "role": "cpu",
+            "clock_cpu_ns": 4500024600,
+            "proc_schedstat_ns": 4500088100,
+            "bpf_runtime_ns": 4500225100,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 200500,
+            "tolerance_ns": 90000492.0,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88936,
+            "role": "cpu",
+            "clock_cpu_ns": 4499986698,
+            "proc_schedstat_ns": 4500003907,
+            "bpf_runtime_ns": 4500410491,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 423793,
+            "tolerance_ns": 89999733.96000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88938,
+            "role": "cpu",
+            "clock_cpu_ns": 4499817804,
+            "proc_schedstat_ns": 4499932346,
+            "bpf_runtime_ns": 4500109888,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 292084,
+            "tolerance_ns": 89996356.08,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88941,
+            "role": "cpu",
+            "clock_cpu_ns": 4500839525,
+            "proc_schedstat_ns": 4500849275,
+            "bpf_runtime_ns": 4500963276,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 123751,
+            "tolerance_ns": 90016790.5,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88942,
+            "role": "cpu",
+            "clock_cpu_ns": 4501796225,
+            "proc_schedstat_ns": 4501806725,
+            "bpf_runtime_ns": 4501897100,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 100875,
+            "tolerance_ns": 90035924.5,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88944,
+            "role": "cpu",
+            "clock_cpu_ns": 4504574679,
+            "proc_schedstat_ns": 4504584595,
+            "bpf_runtime_ns": 4504699428,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 124749,
+            "tolerance_ns": 90091493.58,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88946,
+            "role": "cpu",
+            "clock_cpu_ns": 4504741475,
+            "proc_schedstat_ns": 4504754100,
+            "bpf_runtime_ns": 4504860182,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 118707,
+            "tolerance_ns": 90094829.5,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          }
+        ],
+        "proof_scope": "finite equal-weight VM workload"
+      },
+      {
+        "mode": "shadow",
+        "passed": true,
+        "competitors": 8,
+        "available_cpus": 4,
+        "duration_seconds": 9,
+        "jain_index": 0.9999998706001809,
+        "max_observed_runnable_gap_ns": 39028257,
+        "maps": [
+          {
+            "id": 5420,
+            "name": "task_ctx_stor",
+            "type": "task_storage",
+            "max_entries": 0,
+            "btf_id": 4194
+          },
+          {
+            "id": 5421,
+            "name": "task_snapshots",
+            "type": "lru_hash",
+            "max_entries": 4096,
+            "btf_id": 4194
+          }
+        ],
+        "maps_released": true,
+        "map_release": {
+          "elapsed_seconds": 0.1768821969999408,
+          "polls": 4,
+          "initially_remaining_owned_ids": [
+            5420,
+            5421
+          ],
+          "remaining_owned_ids": []
+        },
+        "service_checks": [
+          {
+            "tid": 88961,
+            "role": "cpu",
+            "clock_cpu_ns": 4500750310,
+            "proc_schedstat_ns": 4500774143,
+            "bpf_runtime_ns": 4501149185,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 398875,
+            "tolerance_ns": 90015006.2,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88962,
+            "role": "cpu",
+            "clock_cpu_ns": 4500092499,
+            "proc_schedstat_ns": 4500330582,
+            "bpf_runtime_ns": 4501108665,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 1016166,
+            "tolerance_ns": 90001849.98,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88964,
+            "role": "cpu",
+            "clock_cpu_ns": 4499956761,
+            "proc_schedstat_ns": 4500036053,
+            "bpf_runtime_ns": 4500640428,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 683667,
+            "tolerance_ns": 89999135.22,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88967,
+            "role": "cpu",
+            "clock_cpu_ns": 4500649427,
+            "proc_schedstat_ns": 4500680760,
+            "bpf_runtime_ns": 4501204677,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 555250,
+            "tolerance_ns": 90012988.54,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88969,
+            "role": "cpu",
+            "clock_cpu_ns": 4500920188,
+            "proc_schedstat_ns": 4500929021,
+            "bpf_runtime_ns": 4501213228,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 293040,
+            "tolerance_ns": 90018403.76,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88970,
+            "role": "cpu",
+            "clock_cpu_ns": 4501514427,
+            "proc_schedstat_ns": 4501538677,
+            "bpf_runtime_ns": 4501691302,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 176875,
+            "tolerance_ns": 90030288.54,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88973,
+            "role": "cpu",
+            "clock_cpu_ns": 4503967673,
+            "proc_schedstat_ns": 4503986882,
+            "bpf_runtime_ns": 4504141382,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 173709,
+            "tolerance_ns": 90079353.46000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88974,
+            "role": "cpu",
+            "clock_cpu_ns": 4504486206,
+            "proc_schedstat_ns": 4504503373,
+            "bpf_runtime_ns": 4504649998,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 163792,
+            "tolerance_ns": 90089724.12,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          }
+        ],
+        "proof_scope": "finite equal-weight VM workload"
+      },
+      {
+        "mode": "online",
+        "passed": true,
+        "competitors": 8,
+        "available_cpus": 4,
+        "duration_seconds": 9,
+        "jain_index": 0.9999998818508561,
+        "max_observed_runnable_gap_ns": 35594180,
+        "maps": [
+          {
+            "id": 5436,
+            "name": "task_ctx_stor",
+            "type": "task_storage",
+            "max_entries": 0,
+            "btf_id": 4206
+          },
+          {
+            "id": 5437,
+            "name": "task_snapshots",
+            "type": "lru_hash",
+            "max_entries": 4096,
+            "btf_id": 4206
+          }
+        ],
+        "maps_released": true,
+        "map_release": {
+          "elapsed_seconds": 0.06458937400020659,
+          "polls": 2,
+          "initially_remaining_owned_ids": [
+            5436,
+            5437
+          ],
+          "remaining_owned_ids": []
+        },
+        "service_checks": [
+          {
+            "tid": 88994,
+            "role": "cpu",
+            "clock_cpu_ns": 4500001489,
+            "proc_schedstat_ns": 4500042530,
+            "bpf_runtime_ns": 4500366280,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 364791,
+            "tolerance_ns": 90000029.78,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88996,
+            "role": "cpu",
+            "clock_cpu_ns": 4500440887,
+            "proc_schedstat_ns": 4500541720,
+            "bpf_runtime_ns": 4500790428,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 349541,
+            "tolerance_ns": 90008817.74,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 88999,
+            "role": "cpu",
+            "clock_cpu_ns": 4499910423,
+            "proc_schedstat_ns": 4499929464,
+            "bpf_runtime_ns": 4500178756,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 268333,
+            "tolerance_ns": 89998208.46000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 89000,
+            "role": "cpu",
+            "clock_cpu_ns": 4500319195,
+            "proc_schedstat_ns": 4500410528,
+            "bpf_runtime_ns": 4500606778,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 287583,
+            "tolerance_ns": 90006383.9,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 89002,
+            "role": "cpu",
+            "clock_cpu_ns": 4502422015,
+            "proc_schedstat_ns": 4502437473,
+            "bpf_runtime_ns": 4502609390,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 187375,
+            "tolerance_ns": 90048440.3,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 89005,
+            "role": "cpu",
+            "clock_cpu_ns": 4501237841,
+            "proc_schedstat_ns": 4501251216,
+            "bpf_runtime_ns": 4501602007,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 364166,
+            "tolerance_ns": 90024756.82000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 89006,
+            "role": "cpu",
+            "clock_cpu_ns": 4503808134,
+            "proc_schedstat_ns": 4503829843,
+            "bpf_runtime_ns": 4503969093,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 160959,
+            "tolerance_ns": 90076162.68,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 89008,
+            "role": "cpu",
+            "clock_cpu_ns": 4503870299,
+            "proc_schedstat_ns": 4503886133,
+            "bpf_runtime_ns": 4504046383,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 176084,
+            "tolerance_ns": 90077405.98,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          }
+        ],
+        "proof_scope": "finite equal-weight VM workload"
+      }
+    ],
+    "recovery_repetitions": 3,
+    "concurrent_fork": {
+      "passed": true,
+      "mode": "fixed",
+      "pinned_cpu": 0,
+      "parents": [
+        {
+          "parent_index": 0,
+          "pid": 80914,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 1,
+          "pid": 80915,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 2,
+          "pid": 80916,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 3,
+          "pid": 80917,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 4,
+          "pid": 80926,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 5,
+          "pid": 80935,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 6,
+          "pid": 80936,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 7,
+          "pid": 80937,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        }
+      ],
+      "overlapping_parents": 8,
+      "children_per_parent": 1000,
+      "children_per_batch": 8,
+      "children_created": 8000,
+      "children_reaped": 8000,
+      "independent_completion_records": 8000,
+      "distinct_child_tids": 8000,
+      "preemption_mode": "(full) lazy",
+      "preemption_mode_path": "/sys/kernel/debug/sched/preempt",
+      "retained_child_snapshots": 4030,
+      "retained_tasks": 4038,
+      "eviction_expected": true,
+      "live_before": 183,
+      "live_drained": 182,
+      "known_minimum_new_associations": 8008,
+      "observed_new_init_associations": 8008,
+      "final_stats": {
+        "local_enqueue": 829,
+        "global_enqueue": 19584,
+        "runs": 28412,
+        "runtime_ns": 2382564703,
+        "completed_bursts": 2072,
+        "censored_bursts": 16016,
+        "training_updates": 0,
+        "inferences": 0,
+        "adaptive_slices": 0,
+        "slice_changes": 0,
+        "fault_stalls": 0,
+        "counter_errors": 0,
+        "alloc_failures": 0,
+        "snapshot_failures": 0,
+        "prediction_ns_sum": 0,
+        "selected_slice_ns_sum": 36162000000,
+        "matching_dispatch_slices": 18081,
+        "continuation_slices": 0,
+        "continuation_pending_ns": 0,
+        "init_tasks": 8194,
+        "exit_tasks": 8194,
+        "training_time_ns": 0,
+        "inference_time_ns": 0,
+        "prediction_samples": 0,
+        "linear_abs_error_ns": 0,
+        "ewma_abs_error_ns": 0,
+        "wake_samples": 10080,
+        "wake_to_run_ns": 49063230080,
+        "wake_to_run_max_ns": 72803525,
+        "cpuperf_sets": 0,
+        "cpuperf_idle_sets": 0,
+        "contract_applied": 0,
+        "contract_stale": 0,
+        "live_tasks": 0
+      },
+      "maps": [
+        {
+          "id": 5388,
+          "name": "task_ctx_stor",
+          "type": "task_storage",
+          "max_entries": 0,
+          "btf_id": 4170
+        },
+        {
+          "id": 5389,
+          "name": "task_snapshots",
+          "type": "lru_hash",
+          "max_entries": 4096,
+          "btf_id": 4170
+        }
+      ],
+      "maps_released": true,
+      "map_release": {
+        "elapsed_seconds": 0.0033681180011626566,
+        "polls": 1,
+        "initially_remaining_owned_ids": [],
+        "remaining_owned_ids": []
+      },
+      "proof_scope": "finite same-CPU concurrent fork/exec with exact independent completion counts"
+    }
+  },
+  "validation-ewma-trunc": {
+    "completed": true,
+    "lifecycle_cases": 19,
+    "service_checks": 132,
+    "fairness": [
+      {
+        "mode": "fixed",
+        "passed": true,
+        "competitors": 8,
+        "available_cpus": 4,
+        "duration_seconds": 9,
+        "jain_index": 0.9999998455166518,
+        "max_observed_runnable_gap_ns": 39300380,
+        "maps": [
+          {
+            "id": 4090,
+            "name": "task_ctx_stor",
+            "type": "task_storage",
+            "max_entries": 0,
+            "btf_id": 3198
+          },
+          {
+            "id": 4091,
+            "name": "task_snapshots",
+            "type": "lru_hash",
+            "max_entries": 4096,
+            "btf_id": 3198
+          }
+        ],
+        "maps_released": true,
+        "map_release": {
+          "elapsed_seconds": 0.17648581499997817,
+          "polls": 4,
+          "initially_remaining_owned_ids": [
+            4090,
+            4091
+          ],
+          "remaining_owned_ids": []
+        },
+        "service_checks": [
+          {
+            "tid": 63397,
+            "role": "cpu",
+            "clock_cpu_ns": 4500519162,
+            "proc_schedstat_ns": 4500548787,
+            "bpf_runtime_ns": 4500606371,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 87209,
+            "tolerance_ns": 90010383.24,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63399,
+            "role": "cpu",
+            "clock_cpu_ns": 4499975954,
+            "proc_schedstat_ns": 4500328746,
+            "bpf_runtime_ns": 4500386912,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 410958,
+            "tolerance_ns": 89999519.08,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63400,
+            "role": "cpu",
+            "clock_cpu_ns": 4500734668,
+            "proc_schedstat_ns": 4500850168,
+            "bpf_runtime_ns": 4500963918,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 229250,
+            "tolerance_ns": 90014693.36,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63402,
+            "role": "cpu",
+            "clock_cpu_ns": 4499844945,
+            "proc_schedstat_ns": 4500020278,
+            "bpf_runtime_ns": 4500675653,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 830708,
+            "tolerance_ns": 89996898.9,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63405,
+            "role": "cpu",
+            "clock_cpu_ns": 4502373841,
+            "proc_schedstat_ns": 4502392216,
+            "bpf_runtime_ns": 4502527716,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 153875,
+            "tolerance_ns": 90047476.82000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63406,
+            "role": "cpu",
+            "clock_cpu_ns": 4503369692,
+            "proc_schedstat_ns": 4503402275,
+            "bpf_runtime_ns": 4503581525,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 211833,
+            "tolerance_ns": 90067393.84,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63409,
+            "role": "cpu",
+            "clock_cpu_ns": 4504573876,
+            "proc_schedstat_ns": 4504582709,
+            "bpf_runtime_ns": 4504669209,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 95333,
+            "tolerance_ns": 90091477.52,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63410,
+            "role": "cpu",
+            "clock_cpu_ns": 4503980228,
+            "proc_schedstat_ns": 4503990561,
+            "bpf_runtime_ns": 4504057268,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 77040,
+            "tolerance_ns": 90079604.56,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          }
+        ],
+        "proof_scope": "finite equal-weight VM workload"
+      },
+      {
+        "mode": "shadow",
+        "passed": true,
+        "competitors": 8,
+        "available_cpus": 4,
+        "duration_seconds": 9,
+        "jain_index": 0.9999998422569721,
+        "max_observed_runnable_gap_ns": 6040279,
+        "maps": [
+          {
+            "id": 4106,
+            "name": "task_ctx_stor",
+            "type": "task_storage",
+            "max_entries": 0,
+            "btf_id": 3210
+          },
+          {
+            "id": 4107,
+            "name": "task_snapshots",
+            "type": "lru_hash",
+            "max_entries": 4096,
+            "btf_id": 3210
+          }
+        ],
+        "maps_released": true,
+        "map_release": {
+          "elapsed_seconds": 0.1264843730004941,
+          "polls": 3,
+          "initially_remaining_owned_ids": [
+            4106,
+            4107
+          ],
+          "remaining_owned_ids": []
+        },
+        "service_checks": [
+          {
+            "tid": 63430,
+            "role": "cpu",
+            "clock_cpu_ns": 4500604226,
+            "proc_schedstat_ns": 4500633101,
+            "bpf_runtime_ns": 4501029935,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 425709,
+            "tolerance_ns": 90012084.52,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63433,
+            "role": "cpu",
+            "clock_cpu_ns": 4499360906,
+            "proc_schedstat_ns": 4499375281,
+            "bpf_runtime_ns": 4499643239,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 282333,
+            "tolerance_ns": 89987218.12,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63435,
+            "role": "cpu",
+            "clock_cpu_ns": 4499833286,
+            "proc_schedstat_ns": 4499915203,
+            "bpf_runtime_ns": 4500406828,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 573542,
+            "tolerance_ns": 89996665.72,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63437,
+            "role": "cpu",
+            "clock_cpu_ns": 4500254275,
+            "proc_schedstat_ns": 4500261483,
+            "bpf_runtime_ns": 4500537150,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 282875,
+            "tolerance_ns": 90005085.5,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63438,
+            "role": "cpu",
+            "clock_cpu_ns": 4500743681,
+            "proc_schedstat_ns": 4500752681,
+            "bpf_runtime_ns": 4500978223,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 234542,
+            "tolerance_ns": 90014873.62,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63440,
+            "role": "cpu",
+            "clock_cpu_ns": 4502519873,
+            "proc_schedstat_ns": 4502530207,
+            "bpf_runtime_ns": 4502925708,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 405835,
+            "tolerance_ns": 90050397.46000001,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63442,
+            "role": "cpu",
+            "clock_cpu_ns": 4503895707,
+            "proc_schedstat_ns": 4503904457,
+            "bpf_runtime_ns": 4504044374,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 148667,
+            "tolerance_ns": 90077914.14,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63444,
+            "role": "cpu",
+            "clock_cpu_ns": 4504420329,
+            "proc_schedstat_ns": 4504428163,
+            "bpf_runtime_ns": 4504515746,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 95417,
+            "tolerance_ns": 90088406.58,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          }
+        ],
+        "proof_scope": "finite equal-weight VM workload"
+      },
+      {
+        "mode": "online",
+        "passed": true,
+        "competitors": 8,
+        "available_cpus": 4,
+        "duration_seconds": 9,
+        "jain_index": 0.9999997899675165,
+        "max_observed_runnable_gap_ns": 78081511,
+        "maps": [
+          {
+            "id": 4122,
+            "name": "task_ctx_stor",
+            "type": "task_storage",
+            "max_entries": 0,
+            "btf_id": 3222
+          },
+          {
+            "id": 4123,
+            "name": "task_snapshots",
+            "type": "lru_hash",
+            "max_entries": 4096,
+            "btf_id": 3222
+          }
+        ],
+        "maps_released": true,
+        "map_release": {
+          "elapsed_seconds": 0.16722704300082114,
+          "polls": 4,
+          "initially_remaining_owned_ids": [
+            4122,
+            4123
+          ],
+          "remaining_owned_ids": []
+        },
+        "service_checks": [
+          {
+            "tid": 63462,
+            "role": "cpu",
+            "clock_cpu_ns": 4499766337,
+            "proc_schedstat_ns": 4499814628,
+            "bpf_runtime_ns": 4500146878,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 380541,
+            "tolerance_ns": 89995326.74,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63463,
+            "role": "cpu",
+            "clock_cpu_ns": 4498944184,
+            "proc_schedstat_ns": 4499025601,
+            "bpf_runtime_ns": 4499267226,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 323042,
+            "tolerance_ns": 89978883.68,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63465,
+            "role": "cpu",
+            "clock_cpu_ns": 4499360949,
+            "proc_schedstat_ns": 4499393157,
+            "bpf_runtime_ns": 4499634240,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 273291,
+            "tolerance_ns": 89987218.98,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63467,
+            "role": "cpu",
+            "clock_cpu_ns": 4501560983,
+            "proc_schedstat_ns": 4501569774,
+            "bpf_runtime_ns": 4501754816,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 193833,
+            "tolerance_ns": 90031219.66,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63470,
+            "role": "cpu",
+            "clock_cpu_ns": 4500830911,
+            "proc_schedstat_ns": 4500846828,
+            "bpf_runtime_ns": 4501400870,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 569959,
+            "tolerance_ns": 90016618.22,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63471,
+            "role": "cpu",
+            "clock_cpu_ns": 4502697925,
+            "proc_schedstat_ns": 4502708966,
+            "bpf_runtime_ns": 4502842757,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 144832,
+            "tolerance_ns": 90053958.5,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63473,
+            "role": "cpu",
+            "clock_cpu_ns": 4504649488,
+            "proc_schedstat_ns": 4504657905,
+            "bpf_runtime_ns": 4504878738,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 229250,
+            "tolerance_ns": 90092989.76,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          },
+          {
+            "tid": 63475,
+            "role": "cpu",
+            "clock_cpu_ns": 4504351762,
+            "proc_schedstat_ns": 4504363512,
+            "bpf_runtime_ns": 4504608887,
+            "bpf_comparison_scope": "timed interval with bounded setup/teardown",
+            "bpf_absolute_error_ns": 257125,
+            "tolerance_ns": 90087035.24,
+            "wait4_lifetime_cpu_ns": null,
+            "bpf_wait4_absolute_error_ns": null,
+            "exited": true,
+            "completed_bursts": 0,
+            "training_updates": 0
+          }
+        ],
+        "proof_scope": "finite equal-weight VM workload"
+      }
+    ],
+    "recovery_repetitions": 3,
+    "concurrent_fork": {
+      "passed": true,
+      "mode": "fixed",
+      "pinned_cpu": 0,
+      "parents": [
+        {
+          "parent_index": 0,
+          "pid": 55375,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 1,
+          "pid": 55376,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 2,
+          "pid": 55377,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 3,
+          "pid": 55386,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 4,
+          "pid": 55395,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 5,
+          "pid": 55396,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 6,
+          "pid": 55397,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        },
+        {
+          "parent_index": 7,
+          "pid": 55398,
+          "created": 1000,
+          "reaped": 1000,
+          "completion_records": 1000
+        }
+      ],
+      "overlapping_parents": 8,
+      "children_per_parent": 1000,
+      "children_per_batch": 8,
+      "children_created": 8000,
+      "children_reaped": 8000,
+      "independent_completion_records": 8000,
+      "distinct_child_tids": 8000,
+      "preemption_mode": "(full) lazy",
+      "preemption_mode_path": "/sys/kernel/debug/sched/preempt",
+      "retained_child_snapshots": 4029,
+      "retained_tasks": 4037,
+      "eviction_expected": true,
+      "live_before": 187,
+      "live_drained": 186,
+      "known_minimum_new_associations": 8008,
+      "observed_new_init_associations": 8008,
+      "final_stats": {
+        "local_enqueue": 835,
+        "global_enqueue": 19582,
+        "runs": 28422,
+        "runtime_ns": 2380350920,
+        "completed_bursts": 2077,
+        "censored_bursts": 16016,
+        "training_updates": 0,
+        "inferences": 0,
+        "adaptive_slices": 0,
+        "slice_changes": 0,
+        "fault_stalls": 0,
+        "counter_errors": 0,
+        "alloc_failures": 0,
+        "snapshot_failures": 0,
+        "prediction_ns_sum": 0,
+        "selected_slice_ns_sum": 36170000000,
+        "matching_dispatch_slices": 18085,
+        "continuation_slices": 0,
+        "continuation_pending_ns": 0,
+        "init_tasks": 8198,
+        "exit_tasks": 8198,
+        "training_time_ns": 0,
+        "inference_time_ns": 0,
+        "prediction_samples": 0,
+        "linear_abs_error_ns": 0,
+        "ewma_abs_error_ns": 0,
+        "wake_samples": 10085,
+        "wake_to_run_ns": 49213956965,
+        "wake_to_run_max_ns": 38035549,
+        "cpuperf_sets": 0,
+        "cpuperf_idle_sets": 0,
+        "contract_applied": 0,
+        "contract_stale": 0,
+        "live_tasks": 0
+      },
+      "maps": [
+        {
+          "id": 4074,
+          "name": "task_ctx_stor",
+          "type": "task_storage",
+          "max_entries": 0,
+          "btf_id": 3186
+        },
+        {
+          "id": 4075,
+          "name": "task_snapshots",
+          "type": "lru_hash",
+          "max_entries": 4096,
+          "btf_id": 3186
+        }
+      ],
+      "maps_released": true,
+      "map_release": {
+        "elapsed_seconds": 0.057334469000124955,
+        "polls": 2,
+        "initially_remaining_owned_ids": [
+          4074,
+          4075
+        ],
+        "remaining_owned_ids": []
+      },
+      "proof_scope": "finite same-CPU concurrent fork/exec with exact independent completion counts"
+    }
+  }
+}

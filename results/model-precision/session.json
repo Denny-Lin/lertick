@@ -1,0 +1,29 @@
+{
+  "commit": "6beaba2",
+  "binary_sha256": "5d93679101efafc62266bbe9b8b284ee71e07e8cdbe1e777b128ec9f328037f4",
+  "started_unix": 1793575363.294305,
+  "validation_configs": [
+    [
+      "bias",
+      "trunc"
+    ],
+    [
+      "ewma",
+      "trunc"
+    ],
+    [
+      "bias",
+      "carry"
+    ],
+    [
+      "ewma",
+      "carry"
+    ]
+  ],
+  "benchmark_seed": 2026110102,
+  "benchmark_protocol": "results/model-precision/PROTOCOL.md",
+  "prior_failure_preserved": "/var/tmp/lertick-precision-b1216f4",
+  "completed": true,
+  "restored_preemption": "full (lazy) \n",
+  "finished_unix": 1793576998.898133
+}

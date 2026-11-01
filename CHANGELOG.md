@@ -2,6 +2,16 @@
 
 ## Unreleased — 2026-11-01
 
+### Optional burst-model evaluation
+
+- Add `--model-init ewma` and `--model-update carry`; preserve bias/trunc defaults.
+  Keep fractional LMS updates and test them against an independent integer oracle.
+- Add a randomized 80-trial factorial, paired analysis and all raw evidence.
+  The combined variant mostly catches up with EWMA on four full-preemption VM
+  workloads; it does not establish better scheduling or a general EWMA advantage.
+- Isolate runnable-control reporting from measured workers and compare fork/exec
+  lifetime BPF service with independent post-exit wait4 totals. Preserve failed runs.
+
 ### CPU frequency targets and the optional Lerwatt plug-in
 
 - Send utilization-based `scx_bpf_cpuperf_set()` targets. Without them, schedutil

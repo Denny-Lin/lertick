@@ -1,0 +1,14 @@
+{
+  "raw/initializer-lazy-pilot.tgz": {
+    "sha256": "f229c411d507f902a38e555a9ae9c315a9ba56b8ec686a9cb85220dc173e9fa4",
+    "bytes": 21623569
+  },
+  "raw/factorial-and-validation.tgz": {
+    "sha256": "a410c17ade4365943dcd8a583ead8bd3038c2dcb001dad5b52a67fab76c73dec",
+    "bytes": 61304364
+  },
+  "raw/initial-validation-failures.tgz": {
+    "sha256": "eb7507928d8d644bc86e3014a285edf9a869db2d615bfdec3fd9de51389596f8",
+    "bytes": 4229704
+  }
+}

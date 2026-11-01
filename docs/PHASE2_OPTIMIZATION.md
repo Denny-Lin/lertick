@@ -1,6 +1,10 @@
-# Phase 2C optimization gate
+# Historical Phase 2C optimization gate
 
-No Phase 2C policy or model optimization was implemented. Final Phase 2A and
+This records the original Phase 2 decision. The later
+[optional model experiment](../results/model-precision/README.md) evaluates
+causal EWMA initialization and fractional updates; defaults remain unchanged.
+
+At that stage, no Phase 2C policy or model optimization was implemented. Final Phase 2A and
 Phase 2B evidence does not justify tuning the linear model for benchmark scores.
 The completed correctness and measurement work is published on the dedicated
 Phase 2 branch, and the owner has approved merging it into `main`.
@@ -58,5 +62,6 @@ comparator's real verifier rejection. They are documented correctness and
 compatibility findings, not discarded performance scores. Final tables use only
 the fresh `109ce71` implementation run.
 
-Phase 2 publication and merging into `main` are approved. Further policy or model
-optimization requires separate approval; no release or tag is authorized.
+At publication, Phase 2 merging into `main` was approved and further model work
+required separate approval. That approval was subsequently given for the linked
+experiment. No release or tag is implied by either experiment.

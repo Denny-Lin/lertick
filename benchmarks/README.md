@@ -1,5 +1,13 @@
 # Lertick CPU scheduling benchmarks
 
+Optional linear-model controls are `--model-init bias|ewma` and
+`--model-update trunc|carry`, defaulting to bias/trunc. Benchmark aliases
+`shadow-ewma-prior`, `shadow-carry` and `shadow-ewma-carry` keep fixed slices;
+the corresponding `online-*` aliases apply prediction budgets. The runner
+records and verifies the actual configuration against each alias. Use
+`analyze_model_init.py` for paired global MAE and same-episode EWMA ratios.
+See [the frozen protocol and complete results](../results/model-precision/README.md).
+
 Phase 2 uses `phase2_workload.c`, `run_phase2.py`, and `wake_latency.bt` for
 repeatable comparisons on the real Linux guest kernel. The original Phase 1
 workload and evidence remain unchanged. The suite measures CPU scheduling;
