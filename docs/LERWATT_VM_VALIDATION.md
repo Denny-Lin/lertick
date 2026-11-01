@@ -120,3 +120,25 @@ identity remained, with no live marker. A separate three-second standalone
 Lertick run on eight vCPUs also exited normally and restored the default
 scheduler. The VM remains running with eight vCPUs and no active simulator,
 controller or sched_ext scheduler.
+
+
+## Thermal-control follow-up
+
+Lerwatt now has a shared raw-temperature guard and tests the one-degree
+margin from startup, with the same filtered temperature line for rule and
+MPC. In the repeated eight-vCPU 79 C hot-start rule run, sensor peaks were
+83.2/83.2/82.2 C (big0/big1/little), with zero kernel throttle steps, versus
+85.9 C and seven steps in the historical run above.
+
+A 140 s hot-start joint-MPC run remained on rule fallback because its models
+were not ready; the harness assertion requiring joint activation failed.
+A separate 240 s cold-start run activated trained joint control at daemon
+90.6 s and recorded 1,519 joint periods, zero kernel throttle steps and normal
+scheduler restoration. Those different-duration runs do not establish a
+throughput comparison. Model readiness was not relaxed to make the test pass.
+
+The joint controller remains opt-in because the equal-line regression matrix
+does not consistently beat rule control on work and stability. Forecast MAE
+and RMSE are measured against future labels separately from controller work.
+See Lerwatt's [current simulation report](https://github.com/Denny-Lin/lerwatt/blob/main/docs/SIMULATION.md)
+and [raw summaries](https://github.com/Denny-Lin/lerwatt/blob/main/results/thermal-control/vm.json).
