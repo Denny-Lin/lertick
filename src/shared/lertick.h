@@ -3,8 +3,12 @@
 #define LERTICK_SHARED_H
 
 #include "model.h"
+#include "cpuperf.h"
 
 #define LERTICK_COMM_LEN 16
+/* CPUs covered by per-CPU loader configuration (cluster and capacity maps). */
+#define LERTICK_MAX_CPUS 512U
+#define LERTICK_NO_CLUSTER 0xffU
 #define LERTICK_REFERENCE_NS 10000000ULL
 #define LERTICK_DEFAULT_SLICE_NS 2000000ULL
 #define LERTICK_MIN_SLICE_NS 500000ULL
@@ -49,7 +53,33 @@ enum lertick_stat {
 	LERTICK_STAT_WAKE_SAMPLES,
 	LERTICK_STAT_WAKE_TO_RUN_NS,
 	LERTICK_STAT_WAKE_TO_RUN_MAX_NS,
+	LERTICK_STAT_CPUPERF_SETS,
+	LERTICK_STAT_CPUPERF_IDLE_SETS,
+	LERTICK_STAT_CONTRACT_APPLIED,
+	LERTICK_STAT_CONTRACT_STALE,
 	LERTICK_STAT_COUNT,
+};
+
+/*
+ * Per-CPU state for performance targets and the optional Lerwatt plug-in.
+ * Only the owning CPU writes the utilization fields; the idle timer reads them
+ * and writes perf_target/perf_sent/util_cap when it lowers an idle CPU's target.
+ * run_ns, latcrit_ns and wake_hist are monotonic: the loader uses differences.
+ */
+struct lertick_cpu_state {
+	__u64 busy_ns;			/* sched_ext busy time in the open window */
+	__u64 window_start_ns;
+	__u64 run_mark_ns;		/* start of the current busy segment; 0 = none */
+	__u64 perf_set_ns;		/* last scx_bpf_cpuperf_set() for this CPU */
+	__u32 util;			/* smoothed wall-clock busy share, 0..1024 */
+	__u32 util_cap;			/* util on the capacity scale, 0..1024 */
+	__u32 perf_target;		/* last target sent, 0..1024 */
+	__u32 perf_sent;		/* nonzero once a target has been sent */
+	__u32 latcrit_running;		/* the running task is latency-critical */
+	__u32 reserved;
+	__u64 run_ns;			/* sched_ext runtime that ended on this CPU */
+	__u64 latcrit_ns;		/* ... of which latency-critical */
+	__u64 wake_hist[LERTICK_WAKE_HIST_BUCKETS];
 };
 
 enum lertick_censor_reason {

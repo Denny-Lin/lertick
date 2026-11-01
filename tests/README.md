@@ -19,6 +19,15 @@ recovery from prediction saturation, and learning on a synthetic signal with
 held-out inputs. Synthetic learning establishes arithmetic behavior only; it
 does not establish real-kernel burst labels or scheduling benefit.
 
+`make test-cpuperf` checks the frequency-target arithmetic against 128-bit and
+floating-point references and runs a closed loop against a schedutil model (25%
+headroom, frequency invariance): from low or high frequency, a steady load
+settles at 80% busy without oscillating. `make test-lerwatt` builds fake sysfs
+trees for cluster discovery and checks demand aggregation and the seqcount
+writer against Lerwatt's reader rule. Neither runs BPF; verifier acceptance of
+`--cpuperf util` and `--lerwatt` must be shown in the guest
+([deployment steps](../docs/DEPLOYMENT.md#cpu-frequency-targets-and-the-lerwatt-plug-in)).
+
 Linux integration must separately prove compilation, verifier acceptance,
 registration, actual task execution, completed burst labels, coefficient
 updates, selected/observed slice agreement and default-scheduler recovery.

@@ -15,9 +15,9 @@ CFLAGS ?= -O2 -g
 CFLAGS += -std=gnu11 -Wall -Wextra
 BPF_CFLAGS ?= -O2 -g -target bpf -mcpu=v3 -Wall -Wno-compare-distinct-pointer-types
 BPF_CFLAGS += -D__TARGET_ARCH_$(TARGET_ARCH) -Ivendor/bpf-compat -I/usr/include/$(MULTIARCH)
-BPF_HEADERS := $(wildcard vendor/scx/*.h) $(wildcard src/shared/*.h)
+BPF_HEADERS := $(wildcard vendor/scx/*.h) $(wildcard vendor/lerwatt/*.h) $(wildcard src/shared/*.h)
 
-.PHONY: all clean preflight test-model test-accounting workload reference
+.PHONY: all clean preflight test-model test-accounting test-cpuperf test-lerwatt workload reference
 all: $(BUILD)/scx_lertick $(BUILD)/burst_workload $(BUILD)/phase2_workload $(BUILD)/lifecycle_workload
 
 $(BUILD):
@@ -35,8 +35,8 @@ $(BUILD)/scx_lertick.bpf.skel.h: $(BUILD)/scx_lertick.bpf.o
 	$(BPFTOOL) gen skeleton $< name scx_lertick > $@.tmp
 	mv $@.tmp $@
 
-$(BUILD)/scx_lertick: src/userspace/scx_lertick.c $(BUILD)/scx_lertick.bpf.skel.h $(BPF_HEADERS)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ $(LIBBPF_LIBS) -lelf -lz
+$(BUILD)/scx_lertick: src/userspace/scx_lertick.c src/userspace/lerwatt_plugin.c src/userspace/lerwatt_plugin.h $(BUILD)/scx_lertick.bpf.skel.h $(BPF_HEADERS)
+	$(CC) $(CPPFLAGS) -Isrc/userspace $(CFLAGS) src/userspace/scx_lertick.c src/userspace/lerwatt_plugin.c -o $@ $(LIBBPF_LIBS) -lelf -lz
 
 $(BUILD)/burst_workload: benchmarks/burst_workload.c | $(BUILD)
 	$(CC) $(CFLAGS) $< -o $@ -pthread -lm
@@ -59,10 +59,22 @@ $(BUILD)/test_accounting: tests/test_accounting.c src/shared/accounting.h src/sh
 test-accounting: $(BUILD)/test_accounting
 	$(BUILD)/test_accounting
 
+$(BUILD)/test_cpuperf: tests/test_cpuperf.c src/shared/cpuperf.h src/shared/model.h | $(BUILD)
+	$(CC) -Isrc/shared -O2 -std=c11 -Wall -Wextra -Werror $< -o $@ -lm
+
+test-cpuperf: $(BUILD)/test_cpuperf
+	$(BUILD)/test_cpuperf
+
+$(BUILD)/test_lerwatt_plugin: tests/test_lerwatt_plugin.c src/userspace/lerwatt_plugin.c src/userspace/lerwatt_plugin.h src/shared/lertick.h src/shared/cpuperf.h vendor/lerwatt/contract.h | $(BUILD)
+	$(CC) -Ivendor -Isrc/shared -Isrc/userspace -O2 -std=gnu11 -Wall -Wextra -Werror tests/test_lerwatt_plugin.c src/userspace/lerwatt_plugin.c -o $@
+
+test-lerwatt: $(BUILD)/test_lerwatt_plugin
+	$(BUILD)/test_lerwatt_plugin
+
 workload: $(BUILD)/burst_workload $(BUILD)/phase2_workload
 preflight:
 	scripts/preflight.sh
 reference:
 	scripts/fetch_reference.sh
 clean:
-	rm -f $(BUILD)/vmlinux.h $(BUILD)/scx_lertick.bpf.o $(BUILD)/scx_lertick.bpf.skel.h $(BUILD)/scx_lertick $(BUILD)/burst_workload $(BUILD)/phase2_workload $(BUILD)/lifecycle_workload $(BUILD)/test_model $(BUILD)/test_accounting
+	rm -f $(BUILD)/vmlinux.h $(BUILD)/scx_lertick.bpf.o $(BUILD)/scx_lertick.bpf.skel.h $(BUILD)/scx_lertick $(BUILD)/burst_workload $(BUILD)/phase2_workload $(BUILD)/lifecycle_workload $(BUILD)/test_model $(BUILD)/test_accounting $(BUILD)/test_cpuperf $(BUILD)/test_lerwatt_plugin
