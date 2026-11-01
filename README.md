@@ -1,13 +1,13 @@
 # Lertick — A Self-Learning CPU Scheduler for Linux
 
-Lertick is an experimental Linux CPU scheduler that learns task CPU-burst duration online inside eBPF and uses sched_ext to select bounded time slices.
+Lertick is a Linux CPU scheduler that learns task CPU-burst duration online inside eBPF and uses sched_ext to select bounded time slices. It runs independently, with optional CPU-frequency targets and Lerwatt power-manager coordination.
 
 [![CI](https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml)
 [Deployment](docs/DEPLOYMENT.md) · [Phase 2 results](docs/PHASE2_RESULTS.md) · [Benchmarks](benchmarks/README.md)
 
-## Current status
+## Validated behavior
 
-**Phase 2A correctness and Phase 2B benchmarking are complete. This is a research prototype with validation on one ARM64 Linux VM.** Compilation, BPF verifier acceptance, sched_ext registration, real task execution, in-kernel updates, adaptive budgets and scheduler recovery passed.
+Compilation, BPF verifier acceptance, sched_ext registration, real task execution, in-kernel updates, adaptive budgets and scheduler recovery have been verified on an ARM64 Linux VM. The historical scheduler benchmark below used four vCPUs; later Lerwatt integration validation used eight.
 
 | Validation | Recorded outcome |
 | --- | --- |
@@ -16,11 +16,9 @@ Lertick is an experimental Linux CPU scheduler that learns task CPU-burst durati
 | Recovery | 15 tests covering SIGINT, SIGTERM, SIGKILL, SysRq-S and watchdog fallback passed |
 | Benchmarks | 7 policies × 8 workload categories × 5 randomized repetitions, plus 80 overhead/control trials; all 360 trials passed |
 
-**A useful learned scheduling advantage remains unproven.** All online/fixed throughput confidence intervals included zero change. Online wake p99 increased about **214% in mixed** and **147% in multicore** contention versus fixed slices. Linear prediction MAE exceeded same-episode EWMA in all six categories with eligible labels. These five-trial VM comparisons are exploratory; they do not establish superiority over Linux EEVDF or other sched_ext schedulers.
+**Learning does not yet establish a scheduling advantage.** All online/fixed throughput confidence intervals included zero change. Online wake p99 increased about **214% in mixed** and **147% in multicore** contention versus fixed slices. Linear prediction MAE exceeded same-episode EWMA in all six categories with eligible labels. These five-trial VM comparisons are exploratory; they do not establish superiority over Linux EEVDF or other sched_ext schedulers.
 
 [Full results, uncertainty and overhead](docs/PHASE2_RESULTS.md) · [Raw evidence and analysis commands](results/phase2/README.md)
-
-Phase 2C optimization is deferred. The next research priority is understanding how predictions affect responsiveness before tuning the model.
 
 ## Features and modes
 
@@ -44,7 +42,7 @@ When every task runs on sched_ext, Linux's schedutil governor reads the schedule
 
 `--lerwatt` attaches the optional [Lerwatt](https://github.com/Denny-Lin/lerwatt) power manager. Lertick pins two small shared maps, publishes per-cluster demand every 100 ms, and applies Lerwatt's energy price, frequency floor and ceiling to its targets. Without the flag, Lertick never touches those maps; without Lerwatt running, the maps go unused. See [the contract](vendor/lerwatt/contract.h).
 
-On the ARM64 VM, `--cpuperf util` and `--lerwatt` passed the verifier, registered and restored the default scheduler. The plug-in applied Lerwatt's limits with one active cluster on a simulated board; multi-cluster operation and real cpufreq hardware remain unverified.
+On the ARM64 VM, `--cpuperf util` and `--lerwatt` passed the verifier, registered and restored the default scheduler. The plug-in applied Lerwatt's limits with all three simulated clusters busy on an eight-vCPU VM; standalone operation also passed. The earlier hot-start run exposed a thermal transient, recorded in the [VM validation](docs/LERWATT_VM_VALIDATION.md). Real cpufreq hardware remains unverified.
 
 Model tracking defaults to tasks with a `lertick` name prefix. `--tracked-tgid PID` selects a process and `--track-all` enables learning for all tasks. Tracking controls model eligibility; it does not restrict which tasks sched_ext schedules. Partial switching is a separate `--partial` option.
 
