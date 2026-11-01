@@ -203,7 +203,9 @@ class Phase2Validation(Validation):
         require(measured["affinity_violations"] == 0, f"{context}: CPU affinity violated")
         return {"tid": measured["tid"], "role": measured["role"],
                 "clock_cpu_ns": cpu, "proc_schedstat_ns": proc, "bpf_runtime_ns": bpf,
-                "bpf_absolute_error_ns": abs(cpu - bpf), "tolerance_ns": tolerance,
+                "bpf_comparison_scope": "process lifetime" if reaped else "timed interval with bounded setup/teardown",
+                "bpf_absolute_error_ns": abs((reaped["lifetime_cpu_ns"] if reaped else cpu) - bpf),
+                "tolerance_ns": tolerance,
                 "wait4_lifetime_cpu_ns": reaped["lifetime_cpu_ns"] if reaped else None,
                 "bpf_wait4_absolute_error_ns": abs(reaped["lifetime_cpu_ns"] - bpf) if reaped else None,
                 "exited": True, "completed_bursts": task["completed_bursts"],
