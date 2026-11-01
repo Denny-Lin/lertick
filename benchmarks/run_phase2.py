@@ -21,6 +21,9 @@ STATE = Path("/sys/kernel/sched_ext/state")
 OPS = Path("/sys/kernel/sched_ext/root/ops")
 BPF_STATS = Path("/proc/sys/kernel/bpf_stats_enabled")
 WORKLOADS = ("cpu", "shortburst", "wakeheavy", "mixed", "multicore", "affinity", "kernelcompile", "memory")
+LERTICK_POLICIES = {name: (name, "bias") for name in ("fixed", "shadow", "online", "ewma")}
+LERTICK_POLICIES.update({"shadow-ewma-prior": ("shadow", "ewma"),
+                         "online-ewma-prior": ("online", "ewma")})
 
 
 def save(path, value):
@@ -229,8 +232,9 @@ class Benchmark:
             raise RuntimeError("Refusing to replace an existing sched_ext scheduler")
         if policy == "default":
             return None
-        if policy in ("fixed", "shadow", "online", "ewma"):
-            command = [ROOT / "build/scx_lertick", "--mode", policy, "--duration", "3600",
+        if policy in LERTICK_POLICIES:
+            mode, model_init = LERTICK_POLICIES[policy]
+            command = [ROOT / "build/scx_lertick", "--mode", mode, "--model-init", model_init, "--duration", "3600",
                        "--sample-ms", "1000", "--stats-json", directory / "scheduler.jsonl"]
             if self.args.profile:
                 command += ["--profile"]
@@ -249,7 +253,7 @@ class Benchmark:
         wait_state("enabled", process)
         actual = OPS.read_text().strip()
         self.registered_ops = actual
-        accepted = actual == wanted if policy in ("fixed", "shadow", "online", "ewma") else actual in (wanted, "scx_" + wanted)
+        accepted = actual == wanted if policy in LERTICK_POLICIES else actual in (wanted, "scx_" + wanted)
         if policy in self.extra and actual.startswith(wanted + "_"):
             accepted = True
         if not accepted:
@@ -329,6 +333,7 @@ class Benchmark:
         if not telemetry.exists():
             return None
         events = rows(telemetry)
+        registered = next((event for event in events if event.get("event") == "registered"), {})
         if not any(event.get("verifier_accepted") for event in events):
             raise RuntimeError("missing verifier acceptance evidence")
         if not events[-1].get("default_restored"):
@@ -368,7 +373,8 @@ class Benchmark:
             timing[prefix + "_timed_calls"] = calls
         return {"measured_counter_delta": delta, "counter_window_note":
                 "last 1-second snapshot before measured window through final unload snapshot; approximate boundary",
-                "prediction": prediction, "internal_profile": timing if self.args.profile else None,
+                "prediction": prediction, "model_init": registered.get("model_init", "bias"),
+                "internal_profile": timing if self.args.profile else None,
                 "final_stats": final["stats"]}
 
     def trial(self, repetition, workload, policy):
@@ -438,6 +444,8 @@ class Benchmark:
                            "wake_observer_enabled": not self.args.without_wake_observer})
             result["registered_ops"] = self.registered_ops
             result["lertick"] = self.lertick_metrics(directory, result)
+            if policy in LERTICK_POLICIES and result["lertick"]["model_init"] != LERTICK_POLICIES[policy][1]:
+                raise RuntimeError("loader initialization does not match the benchmark policy label")
             bpf = []
             for identifier in sorted(scheduler_ids):
                 first, last = before_programs.get(identifier), after_programs.get(identifier)
@@ -519,7 +527,7 @@ class Benchmark:
                                        "note": "positive is higher; throughput and latency have opposite desirability"})
         correlations = []
         for workload in self.workloads:
-            for policy in ("shadow", "online", "ewma"):
+            for policy in ("shadow", "online", "ewma", "shadow-ewma-prior", "online-ewma-prior"):
                 trials = [trial for trial in self.results if trial["workload"] == workload and
                           trial["policy"] == policy and trial.get("burst_completion_ns") and
                           trial.get("lertick") and trial["lertick"]["prediction"]["policy_prediction_mae_ns"] is not None]
@@ -555,7 +563,7 @@ class Benchmark:
             raise RuntimeError("unknown workload category")
         if self.args.repetitions < 1 or not math.isfinite(self.args.duration) or not math.isfinite(self.args.warmup) or self.args.duration <= 0 or self.args.warmup < 0:
             raise RuntimeError("duration and repetition count must be positive; warmup must be finite and nonnegative")
-        if set(self.policies) - {"default", "scx_simple", "fixed", "shadow", "online", "ewma", *self.extra}:
+        if set(self.policies) - {"default", "scx_simple", *LERTICK_POLICIES, *self.extra}:
             raise RuntimeError("unknown policy")
         manifest = {"kernel": os.uname().release, "architecture": os.uname().machine,
                     "preemption_mode": read_optional("/sys/kernel/debug/sched/preempt"),

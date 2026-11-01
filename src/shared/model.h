@@ -74,6 +74,16 @@ LERTICK_INLINE void lertick_model_init(struct lertick_model *model)
 	model->updates = 0;
 }
 
+/* Start from the causal EWMA feature rather than a fixed 2.5 ms estimate.
+ * Subsequent bounded LMS updates and all feature/target rules are unchanged.
+ */
+LERTICK_INLINE void lertick_model_init_ewma(struct lertick_model *model)
+{
+	lertick_model_init(model);
+	model->weight_q16[0] = 0;
+	model->weight_q16[2] = LERTICK_Q;
+}
+
 LERTICK_INLINE __s32 lertick_model_raw_q16(const struct lertick_model *model,
 				       const __s32 features[LERTICK_FEATURES])
 {

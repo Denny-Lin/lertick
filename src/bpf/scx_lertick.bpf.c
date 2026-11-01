@@ -40,6 +40,7 @@ const volatile bool fault_stall;
 const volatile u32 stall_tgid;
 /* Optional diagnostic clocks; primary benchmarks leave this disabled. */
 const volatile bool profile_model;
+const volatile bool model_init_ewma;
 /* LERTICK_CPUPERF_MAX never calls scx_bpf_cpuperf_set(), as before. */
 const volatile u32 cpuperf_mode = LERTICK_CPUPERF_MAX;
 /* Optional Lerwatt plug-in: read lw_contract, keep demand counters. */
@@ -840,7 +841,10 @@ s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 		/* Runtime ownership is essential: reject rather than mischarge vtime. */
 		return -ENOMEM;
 	}
-	lertick_model_init(&tctx->model);
+	if (model_init_ewma)
+		lertick_model_init_ewma(&tctx->model);
+	else
+		lertick_model_init(&tctx->model);
 	refresh_tracking(p, tctx);
 	stat_add(LERTICK_STAT_INIT_TASKS, 1);
 	return 0;

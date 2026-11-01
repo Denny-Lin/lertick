@@ -56,7 +56,8 @@ class Validation:
         self.handles = []
         self.commands = []
         self.result = {"kernel": os.uname().release, "architecture": os.uname().machine,
-                       "tests": {}, "comparison": [], "performance_claim": False}
+                       "tests": {}, "comparison": [], "performance_claim": False,
+                       "model_init": getattr(args, "model_init", "bias")}
 
     def launch(self, command, name):
         self.commands.append(shlex.join(str(value) for value in command))
@@ -76,9 +77,10 @@ class Validation:
     def scheduler(self, name, mode="online", duration=30, extra=()):
         if read_state() != "disabled":
             raise RuntimeError("Refusing to replace an already active sched_ext scheduler")
+        prior = ["--model-init", "ewma"] if getattr(self.args, "model_init", "bias") == "ewma" else []
         process = self.launch([self.loader, "--mode", mode, "--duration", str(duration),
                                "--sample-ms", "250", "--stats-json",
-                               self.output / f"{name}.jsonl", *extra], name)
+                               self.output / f"{name}.jsonl", *prior, *extra], name)
         wait_state("enabled", process)
         if OPS.read_text().strip() != "scx_lertick":
             raise RuntimeError("registered ops do not match scx_lertick")
@@ -300,6 +302,7 @@ def main():
     parser.add_argument("--reference", type=Path)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--seconds", type=int, default=4)
+    parser.add_argument("--model-init", choices=("bias", "ewma"), default="bias")
     args = parser.parse_args()
     if not 1 <= args.repetitions <= 20 or not 2 <= args.seconds <= 60:
         parser.error("repetitions must be 1..20; seconds must be 2..60")

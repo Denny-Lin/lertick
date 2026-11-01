@@ -26,6 +26,7 @@ Compilation, BPF verifier acceptance, sched_ext registration, real task executio
 - Weighted virtual-time dispatch charges actual CPU service independently of predictions.
 - CPU bursts accumulate across preemption and slice expiration; verified wake-to-sleep episodes provide labels. Attachment and exit are censored.
 - Per-task five-feature Q16 linear model with bounded LMS updates. Features: bias, previous burst, burst EWMA, sleep interval and queue depth.
+- `--model-init ewma` initializes that model from causal burst history; the default remains `bias`. Use shadow mode to evaluate the prior while keeping fixed slice budgets.
 - Training and inference execute inside eBPF; the C/libbpf loader handles attachment and JSONL telemetry.
 - Default prediction-selected budgets are 0.5–5 ms after eight valid labels, with a 2 ms fallback. Bounds apply to newly assigned budgets, not exact execution time or resumed remaining budgets.
 
