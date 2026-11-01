@@ -15,6 +15,7 @@
 #include <string.h>
 #include <sys/prctl.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -347,14 +348,23 @@ static void fork_exec(struct options *options)
 		}
 		for (unsigned index = 0; index < count; index++) {
 			int status;
+			struct rusage usage;
+			uint64_t total_cpu_ns;
 
-			if (waitpid(children[index], &status, 0) != children[index])
-				fail("waitpid");
+			if (wait4(children[index], &status, 0, &usage) != children[index])
+				fail("wait4");
 			if (!WIFEXITED(status) || WEXITSTATUS(status)) {
 				fprintf(stderr, "child failed: pid=%ld status=%d\n",
 					(long)children[index], status);
 				exit(EXIT_FAILURE);
 			}
+			total_cpu_ns = (uint64_t)usage.ru_utime.tv_sec * NS_SECOND +
+				(uint64_t)usage.ru_utime.tv_usec * 1000 +
+				(uint64_t)usage.ru_stime.tv_sec * NS_SECOND +
+				(uint64_t)usage.ru_stime.tv_usec * 1000;
+			dprintf(STDOUT_FILENO,
+				"{\"event\":\"reaped\",\"tid\":%ld,\"lifetime_cpu_ns\":%" PRIu64 "}\n",
+				(long)children[index], total_cpu_ns);
 			completed++;
 		}
 	}

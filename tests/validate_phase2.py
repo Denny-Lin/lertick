@@ -173,7 +173,7 @@ class Phase2Validation(Validation):
                     entry["id"] for entry in inventories["initial"])),
                 "remaining_owned_ids": []}
 
-    def compare_service(self, measured, task, context):
+    def compare_service(self, measured, task, context, reaped=None):
         cpu = measured["cpu_ns"]
         proc = measured["schedstat_ns"]
         bpf = task["total_runtime_ns"]
@@ -183,14 +183,29 @@ class Phase2Validation(Validation):
         tolerance = max(20000000, cpu * 0.02)
         require(abs(cpu - proc) <= proc_tolerance,
                 f"{context}: CPU clock {cpu} and proc schedstat {proc} differ excessively")
-        require(abs(cpu - bpf) <= tolerance and abs(proc - bpf) <= tolerance,
-                f"{context}: BPF {bpf} disagrees with CPU clock {cpu}/schedstat {proc}")
+        # Fork/exec snapshots cover the child's entire lifetime, including
+        # exec and loader work before the timed CPU interval. wait4 reports
+        # independent total user+system CPU after exit. Comparing a 20 ms
+        # interval against the whole lifetime can otherwise reject a correct
+        # scheduler merely because setup used more than 20 ms of CPU.
+        if reaped is not None:
+            lifetime = reaped["lifetime_cpu_ns"]
+            tolerance = max(5000000, lifetime * 0.02)
+            require(lifetime > 0 and cpu <= lifetime + 1000000 and proc <= lifetime + 1000000,
+                    f"{context}: independent interval exceeds wait4 lifetime service")
+            require(abs(lifetime - bpf) <= tolerance,
+                    f"{context}: BPF {bpf} disagrees with wait4 lifetime CPU {lifetime}")
+        else:
+            require(abs(cpu - bpf) <= tolerance and abs(proc - bpf) <= tolerance,
+                    f"{context}: BPF {bpf} disagrees with CPU clock {cpu}/schedstat {proc}")
         require(task["exited"] == 1, f"{context}: exited workload retains live snapshot")
         require(task["runs"] > 0, f"{context}: workload did not execute through BPF")
         require(measured["affinity_violations"] == 0, f"{context}: CPU affinity violated")
         return {"tid": measured["tid"], "role": measured["role"],
                 "clock_cpu_ns": cpu, "proc_schedstat_ns": proc, "bpf_runtime_ns": bpf,
                 "bpf_absolute_error_ns": abs(cpu - bpf), "tolerance_ns": tolerance,
+                "wait4_lifetime_cpu_ns": reaped["lifetime_cpu_ns"] if reaped else None,
+                "bpf_wait4_absolute_error_ns": abs(reaped["lifetime_cpu_ns"] - bpf) if reaped else None,
                 "exited": True, "completed_bursts": task["completed_bursts"],
                 "training_updates": task["training_updates"]}
 
@@ -237,8 +252,13 @@ class Phase2Validation(Validation):
         self.check_counters(final, name)
         oracles = [event for event in rows(self.output / f"{name}-workload.log")
                    if event.get("event") == "worker"]
+        reaped = {event["tid"]: event for event in rows(self.output / f"{name}-workload.log")
+                  if event.get("event") == "reaped"}
         expected = workers if scenario == "threads" else iterations if scenario in ("forkexec", "churn") else 1
         require(len(oracles) == expected, f"{name}: missing workload completions")
+        if scenario in ("forkexec", "churn"):
+            require(len(reaped) == iterations and all(event["tid"] in reaped for event in oracles),
+                    f"{name}: missing independent wait4 lifetime CPU records")
         if scenario in ("cpu", "yield", "affinity", "lateoptin", "burst"):
             require(all(event["reporter_pid"] != event["pid"] for event in oracles),
                     f"{name}: result reporting ran in the measured process")
@@ -273,7 +293,8 @@ class Phase2Validation(Validation):
                 require(tid in tasks, f"{name}: no BPF evidence for TID {tid}")
                 task = tasks[tid]
                 context = f"{name}/TID{tid}"
-                result["service_checks"].append(self.compare_service(measured, task, context))
+                result["service_checks"].append(self.compare_service(measured, task, context,
+                                               reaped.get(tid) if scenario == "forkexec" else None))
                 # Threaded CPU workers first block on a barrier. Their final
                 # runnable episode must still be censored on exit, never labeled.
                 # exec can contain genuine blocking loader/page-fault work
