@@ -18,7 +18,7 @@ Contributions are submitted under the applicable file's license. No CLA is curre
 
 C/eBPF follows [Linux kernel coding conventions](https://docs.kernel.org/process/coding-style.html): 8-column tabs, short functions, descriptive identifiers, explicit ownership, and bounded hot-path work. Document units, fixed-point scale, overflow bounds, locking, and verifier assumptions. Task storage is allocated in task initialization; hot-path model loops are bounded.
 
-Documentation uses plain English, descriptive Markdown links, and primary sources. Label statements as **verified**, **estimate**, or **hypothesis** when their status matters. Include checked dates; pin source commits for reproducible experiments. Traditional Chinese improvements are welcome; keep status and limitations consistent with the English README.
+Documentation uses plain English, descriptive Markdown links, and primary sources. Label statements as **verified**, **estimate**, or **hypothesis** when their status matters. Include checked dates; pin source commits for reproducible experiments.
 
 ## Independent contribution tracks
 
