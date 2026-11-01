@@ -45,7 +45,7 @@ The README must let a visitor learn the problem, current maturity, candidate mec
 ## Structure and ownership
 
 ```text
-README.md / README.zh-TW.md       concise English/Traditional Chinese entry points
+README.md                         concise English entry point
 LICENSE                          MIT for original Phase 0 material
 CONTRIBUTING.md                   workflow, style, compatibility, review
 CODE_OF_CONDUCT.md / SECURITY.md  community and reporting expectations

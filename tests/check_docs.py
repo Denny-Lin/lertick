@@ -14,7 +14,7 @@ PLANNING = (
     "BENCHMARK_PLAN.md", "RECOMMENDATION.md",
 )
 REQUIRED = (
-    "README.md", "README.zh-TW.md", "LICENSE", "CONTRIBUTING.md",
+    "README.md", "LICENSE", "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md", "SECURITY.md", "CHANGELOG.md", "docs/DEPLOYMENT.md",
     "src/README.md", "tests/README.md", "benchmarks/README.md",
     "examples/README.md", ".github/workflows/docs.yml", "docs/PHASE1_RESULTS.md",

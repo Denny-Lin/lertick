@@ -72,8 +72,8 @@ See [validation JSON](../results/rebrand/validation.json),
 - The rebranding/scope commit is separate from the original Phase 1 commit.
   Publication targets `origin/main`; no release or tag is created.
 
-The [main README](../README.md) and [Traditional Chinese README](../README.zh-TW.md)
-describe the CPU-only experimental project. Memory-management findings are
+The [main README](../README.md)
+describes the CPU-only experimental project. Memory-management findings are
 retained in the [background archive](planning/README.md), neither active nor
 backup development directions. No superiority over Linux EEVDF or another
 sched_ext scheduler is claimed.

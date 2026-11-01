@@ -3,7 +3,7 @@
 Lertick is an experimental Linux CPU scheduler that learns task CPU-burst duration online inside eBPF and uses sched_ext to select bounded time slices.
 
 [![CI](https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml)
-[繁體中文](README.zh-TW.md) · [Deployment](docs/DEPLOYMENT.md) · [Phase 2 results](docs/PHASE2_RESULTS.md) · [Benchmarks](benchmarks/README.md)
+[Deployment](docs/DEPLOYMENT.md) · [Phase 2 results](docs/PHASE2_RESULTS.md) · [Benchmarks](benchmarks/README.md)
 
 ## Current status
 
@@ -43,6 +43,8 @@ Phase 2C optimization is deferred. The next research priority is understanding h
 When every task runs on sched_ext, Linux's schedutil governor reads the scheduler's `scx_bpf_cpuperf_set()` target instead of CFS utilization, and Linux starts each target at the maximum. A scheduler that never sets one keeps every CPU at its top frequency. `--cpuperf auto` (the default) therefore sends utilization-based targets whenever a cpufreq policy uses schedutil, and leaves the kernel default where nothing reads it, such as a VM without cpufreq, so behavior there is unchanged. `--cpuperf util` and `--cpuperf max` force either choice; `max` is the previous behavior.
 
 `--lerwatt` attaches the optional [Lerwatt](https://github.com/Denny-Lin/lerwatt) power manager. Lertick pins two small shared maps, publishes per-cluster demand every 100 ms, and applies Lerwatt's energy price, frequency floor and ceiling to its targets. Without the flag, Lertick never touches those maps; without Lerwatt running, the maps go unused. See [the contract](vendor/lerwatt/contract.h).
+
+On the ARM64 VM, `--cpuperf util` and `--lerwatt` passed the verifier, registered and restored the default scheduler. The plug-in applied Lerwatt's limits with one active cluster on a simulated board; multi-cluster operation and real cpufreq hardware remain unverified.
 
 Model tracking defaults to tasks with a `lertick` name prefix. `--tracked-tgid PID` selects a process and `--track-all` enables learning for all tasks. Tracking controls model eligibility; it does not restrict which tasks sched_ext schedules. Partial switching is a separate `--partial` option.
 
