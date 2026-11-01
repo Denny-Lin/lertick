@@ -94,7 +94,7 @@ def firmware_paths():
     raise RuntimeError("QEMU ARM64 EDK2 firmware not found; specify a supported installation")
 
 
-def start(port, accelerator):
+def start(port, accelerator, cpus=4):
     if (VM / "monitor.sock").exists():
         raise RuntimeError("VM monitor already exists; inspect status before starting another VM")
     binary = shutil.which("qemu-system-aarch64")
@@ -114,7 +114,7 @@ def start(port, accelerator):
         shutil.copyfile(variables, writable_vars)
     args = [binary, "-name", "lertick-phase1", "-machine", "virt",
             "-accel", accelerator, "-cpu", "host" if accelerator != "tcg" else "max",
-            "-smp", "4", "-m", "4096", "-drive",
+            "-smp", str(cpus), "-m", "4096", "-drive",
             f"if=pflash,format=raw,readonly=on,file={code}", "-drive",
             f"if=pflash,format=raw,file={writable_vars}", "-drive",
             f"if=virtio,format=qcow2,file={VM / 'experiment.qcow2'}", "-drive",
@@ -143,12 +143,15 @@ def main():
     parser.add_argument("action", choices=("prepare", "start", "status", "ssh", "stop"))
     parser.add_argument("--port", type=int, default=22222)
     parser.add_argument("--accelerator", choices=("auto", "hvf", "kvm", "tcg"), default="auto")
+    parser.add_argument("--cpus", type=int, default=4, help="guest vCPU count (default: 4)")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
+    if args.cpus < 1:
+        parser.error("--cpus must be positive")
     if args.action == "prepare":
         prepare()
     elif args.action == "start":
-        start(args.port, args.accelerator)
+        start(args.port, args.accelerator, args.cpus)
     elif args.action == "stop":
         stop()
     elif args.action == "status":
