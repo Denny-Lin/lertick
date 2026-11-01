@@ -22,6 +22,10 @@ jobs:
         run: make test-model
       - name: Test CPU service accounting
         run: make test-accounting
+      - name: Test CPU performance targets
+        run: make test-cpuperf
+      - name: Test the Lerwatt plug-in userspace
+        run: make test-lerwatt
       - name: Compile Linux regression and benchmark workloads
         run: make build/lifecycle_workload build/phase2_workload
       - name: Check script syntax

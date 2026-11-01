@@ -374,6 +374,46 @@ If ordinary guest recovery is unavailable, stop this project's QEMU instance
 through its recorded monitor and retain its serial log before restoring a fresh
 overlay from the read-only base.
 
+## CPU frequency targets and the Lerwatt plug-in
+
+`--cpuperf auto|util|max` controls `scx_bpf_cpuperf_set()`. Linux v7.3 sets every
+CPU's sched_ext target to 1024 when a scheduler attaches, and schedutil uses that
+target instead of CFS utilization while sched_ext runs every task, so `max` (the
+behavior before this option) holds each cpufreq policy at its highest frequency.
+`util` sends the smoothed busy share of each CPU, scaled by its current frequency
+and capacity, from `running`, from every `tick`, and from an 8 ms timer that
+lowers idle CPUs' targets. `auto` selects `util` when any policy's
+`scaling_governor` is `schedutil` or `--lerwatt` is given, and `max` otherwise. In
+a VM without cpufreq, `auto` keeps the previous behavior. The registered event
+records `cpuperf` and `cpuperf_reason`; snapshots then add a `cpus` array.
+
+`--lerwatt` pins `lw_contract` and `lt_demand` under `/sys/fs/bpf/lertick/`
+before attaching, publishes demand every 100 ms, and unpins them at exit; a
+pin failure aborts before the default scheduler is replaced. Clusters are the
+cpufreq policies sorted by first CPU. Without real policies, Lertick uses a
+running `lerwatt-sim` (its marker under `/run/lerwatt-sim` or
+`$LERWATT_SIM_ROOT`), maps CPU N to simulated CPU N and uses the simulated
+capacities; run the guest with `-smp 8` to cover all RK3588 clusters. Lerwatt
+and the simulator attach and re-attach by themselves as Lertick runs start and
+end.
+
+Inside the guest, with Lerwatt built in `../lerwatt`:
+
+```sh
+sudo build/scx_lertick --check
+sudo build/scx_lertick --mode fixed --cpuperf util --duration 20 --sample-ms 1000 \
+  --stats-json results/local/cpuperf.jsonl
+sudo ../lerwatt/build/lerwatt-sim --load procstat --cooling passive --duration 120 &
+sudo ../lerwatt/build/lerwattd --period-ms 100 --duration 100 --telemetry results/local/lerwatt.jsonl &
+sudo build/scx_lertick --mode online --track-all --lerwatt --duration 60 \
+  --stats-json results/local/lerwatt-plugin.jsonl
+```
+
+Check that the first run's final snapshot shows nonzero `cpuperf_sets` and
+`cpuperf_idle_sets`, that the plug-in run's registered event lists the simulated
+clusters, that `contract_applied` grows while `lerwattd` runs, and that both
+Lerwatt programs log `attached` and then `lost` after Lertick exits.
+
 ## Known boundaries
 
 The scheduler retains its minimal Phase 1 architecture, with Phase 2 correctness

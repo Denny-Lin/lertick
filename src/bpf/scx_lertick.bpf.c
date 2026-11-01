@@ -15,10 +15,15 @@
  * Only a verified wake-to-sleep episode is a training example. This deliberately
  * excludes continuously runnable work from training rather than mistaking a
  * slice expiration for a completed CPU burst.
+ *
+ * CPU performance targets (cpuperf_mode) and the Lerwatt plug-in
+ * (lerwatt_enabled) are read-only switches that the loader sets. With both off,
+ * the verifier prunes their branches and scheduling is unchanged.
  */
 #include <scx/common.bpf.h>
 #include "shared/lertick.h"
 #include "shared/accounting.h"
+#include "lerwatt/contract.h"
 
 char _license[] SEC("license") = "GPL";
 
@@ -35,6 +40,15 @@ const volatile bool fault_stall;
 const volatile u32 stall_tgid;
 /* Optional diagnostic clocks; primary benchmarks leave this disabled. */
 const volatile bool profile_model;
+/* LERTICK_CPUPERF_MAX never calls scx_bpf_cpuperf_set(), as before. */
+const volatile u32 cpuperf_mode = LERTICK_CPUPERF_MAX;
+/* Optional Lerwatt plug-in: read lw_contract, keep demand counters. */
+const volatile bool lerwatt_enabled;
+const volatile u32 nr_cpus = 1;
+/* Lerwatt cluster of each CPU; LERTICK_NO_CLUSTER for none. */
+const volatile u8 cpu_cluster[LERTICK_MAX_CPUS];
+/* Nonzero replaces scx_bpf_cpuperf_cap(), e.g. a simulated board's capacity. */
+const volatile u16 cpu_cap_override[LERTICK_MAX_CPUS];
 
 #define SHARED_DSQ 0
 #define LERTICK_QUEUE_REFERENCE 16U
@@ -61,6 +75,9 @@ struct task_ctx {
 	bool tracked;
 	bool slice_was_adaptive;
 	bool started_in_select;
+	/* Lerwatt plug-in only: classification of the current episode. */
+	bool latcrit;
+	u64 lc_last_burst_ns;
 	struct lertick_task_snapshot snapshot;
 };
 
@@ -85,6 +102,45 @@ struct {
 	__type(value, u64);
 } stats SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__uint(max_entries, 1);
+	__type(key, u32);
+	__type(value, struct lertick_cpu_state);
+} cpu_state SEC(".maps");
+
+struct lertick_idle_timer {
+	struct bpf_timer timer;
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(max_entries, 1);
+	__type(key, u32);
+	__type(value, struct lertick_idle_timer);
+} idle_timer_map SEC(".maps");
+
+/*
+ * Lerwatt contract (vendor/lerwatt/contract.h). The loader pins both maps only
+ * with --lerwatt. Lerwatt writes lw_contract; the loader writes lt_demand from
+ * cpu_state. This program never writes either map.
+ */
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(map_flags, BPF_F_MMAPABLE);
+	__uint(max_entries, LW_CONTRACT_MAX_CLUSTERS);
+	__type(key, u32);
+	__type(value, struct lw_contract_rec);
+} lw_contract SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(map_flags, BPF_F_MMAPABLE);
+	__uint(max_entries, LW_CONTRACT_MAX_CLUSTERS);
+	__type(key, u32);
+	__type(value, struct lt_demand_rec);
+} lt_demand SEC(".maps");
+
 static __always_inline void stat_add(u32 idx, u64 amount)
 {
 	u64 *value = bpf_map_lookup_elem(&stats, &idx);
@@ -104,6 +160,209 @@ static __always_inline void stat_max(u32 idx, u64 amount)
 
 	if (value && amount > *value)
 		*value = amount;
+}
+
+/*
+ * Per-CPU utilization, performance targets and Lerwatt demand counters.
+ * Busy time is wall-clock time while a sched_ext task runs on the CPU.
+ */
+static __always_inline bool cpu_tracking(void)
+{
+	return cpuperf_mode == LERTICK_CPUPERF_UTIL || lerwatt_enabled;
+}
+
+static __always_inline struct lertick_cpu_state *cpu_state_local(void)
+{
+	u32 zero = 0;
+
+	return bpf_map_lookup_elem(&cpu_state, &zero);
+}
+
+static __always_inline u32 cpu_capacity(s32 cpu)
+{
+	u32 idx = cpu, cap = 0;
+
+	if (idx < LERTICK_MAX_CPUS)
+		cap = cpu_cap_override[idx];
+	if (!cap)
+		cap = scx_bpf_cpuperf_cap(cpu);
+	return cap;
+}
+
+struct lertick_contract {
+	u32 price_milli;
+	u32 floor_cap;
+	u32 ceiling_cap;
+};
+
+/*
+ * Copy the Lerwatt record of this CPU's cluster. The seqcount check uses
+ * compiler barriers only: every field is an aligned 32- or 64-bit value that is
+ * valid on its own, so a rare copy that mixes two control periods is still a
+ * valid record. Out-of-range values are clamped; stale records are ignored.
+ */
+static __always_inline bool contract_get(s32 cpu, u64 now, struct lertick_contract *out)
+{
+	struct lw_contract_rec *rec;
+	u32 idx = cpu, cluster, seq, version, price, floor, ceiling;
+	u64 until;
+
+	out->price_milli = 0;
+	out->floor_cap = 0;
+	out->ceiling_cap = 0;
+	if (!lerwatt_enabled || idx >= LERTICK_MAX_CPUS)
+		return false;
+	cluster = cpu_cluster[idx];
+	if (cluster >= LW_CONTRACT_MAX_CLUSTERS)
+		return false;
+	rec = bpf_map_lookup_elem(&lw_contract, &cluster);
+	if (!rec)
+		return false;
+	seq = READ_ONCE(rec->seq);
+	barrier();
+	version = READ_ONCE(rec->version);
+	price = READ_ONCE(rec->energy_price_milli);
+	floor = READ_ONCE(rec->floor_cap);
+	ceiling = READ_ONCE(rec->ceiling_cap);
+	until = READ_ONCE(rec->valid_until_ns);
+	barrier();
+	if (!seq || (seq & 1) || READ_ONCE(rec->seq) != seq ||
+	    version != LW_CONTRACT_VERSION || now > until) {
+		stat_add(LERTICK_STAT_CONTRACT_STALE, 1);
+		return false;
+	}
+	out->price_milli = price > LW_MILLI_ONE ? LW_MILLI_ONE : price;
+	out->floor_cap = floor > LW_CAP_ONE ? LW_CAP_ONE : floor;
+	out->ceiling_cap = ceiling > LW_CAP_ONE ? LW_CAP_ONE : ceiling;
+	stat_add(LERTICK_STAT_CONTRACT_APPLIED, 1);
+	return true;
+}
+
+/* Close the open utilization window once it is long enough. Owning CPU only. */
+static __always_inline void cpu_util_update(struct lertick_cpu_state *c, u64 now)
+{
+	u64 elapsed;
+
+	if (!c->window_start_ns || now < c->window_start_ns) {
+		c->window_start_ns = now;
+		c->busy_ns = 0;
+		return;
+	}
+	elapsed = now - c->window_start_ns;
+	if (elapsed < LERTICK_UTIL_MIN_WINDOW_NS)
+		return;
+	c->util = lertick_util_blend(c->util, lertick_busy_frac(c->busy_ns, elapsed),
+				     elapsed, LERTICK_UTIL_TAU_NS);
+	c->busy_ns = 0;
+	c->window_start_ns = now;
+}
+
+static __always_inline u32 cpu_compute_target(struct lertick_cpu_state *c, s32 cpu,
+					      u32 util, u64 now, bool latcrit, bool owner)
+{
+	struct lertick_contract k;
+	u32 cur = scx_bpf_cpuperf_cur(cpu), cap = cpu_capacity(cpu);
+
+	if (owner)
+		c->util_cap = lertick_util_capacity(util, cur, cap);
+	contract_get(cpu, now, &k);
+	return lertick_cpuperf_target(util, cur, cap, k.price_milli,
+				      latcrit ? k.floor_cap : 0, k.ceiling_cap);
+}
+
+static __always_inline void cpu_send(struct lertick_cpu_state *c, s32 cpu, u32 target,
+				     u64 now, bool resend, u32 stat)
+{
+	if (!resend && c->perf_sent && c->perf_target == target)
+		return;
+	scx_bpf_cpuperf_set(cpu, target);
+	WRITE_ONCE(c->perf_target, target);
+	WRITE_ONCE(c->perf_set_ns, now);
+	WRITE_ONCE(c->perf_sent, 1);
+	stat_add(stat, 1);
+}
+
+static __always_inline void cpu_on_stopping(void)
+{
+	struct lertick_cpu_state *c;
+	u64 now;
+
+	if (!cpu_tracking())
+		return;
+	c = cpu_state_local();
+	if (!c)
+		return;
+	now = bpf_ktime_get_ns();
+	if (c->run_mark_ns && now > c->run_mark_ns)
+		c->busy_ns += now - c->run_mark_ns;
+	c->run_mark_ns = 0;
+	c->latcrit_running = 0;
+}
+
+static __always_inline void cpu_account_run(u64 delta_ns, bool latcrit)
+{
+	struct lertick_cpu_state *c;
+
+	if (!lerwatt_enabled)
+		return;
+	c = cpu_state_local();
+	if (!c)
+		return;
+	c->run_ns += delta_ns;
+	if (latcrit)
+		c->latcrit_ns += delta_ns;
+}
+
+static __always_inline void cpu_wake_sample(u64 latency_ns)
+{
+	struct lertick_cpu_state *c;
+	u32 bucket;
+
+	if (!lerwatt_enabled)
+		return;
+	c = cpu_state_local();
+	if (!c)
+		return;
+	bucket = lertick_log2_bucket(latency_ns);
+	if (bucket < LERTICK_WAKE_HIST_BUCKETS)
+		c->wake_hist[bucket]++;
+}
+
+/*
+ * A CPU that goes idle gets no running() or tick(), and schedutil takes the
+ * maximum target over a policy's CPUs, so a stale target would hold the whole
+ * cluster at a high frequency. This timer lowers idle CPUs' targets along the
+ * same moving average the CPU itself would compute. No rq lock is held here,
+ * so scx_bpf_cpuperf_set() takes the target CPU's lock.
+ */
+static int idle_timer_fn(void *map, int *key, struct bpf_timer *timer)
+{
+	u64 now = bpf_ktime_get_ns();
+	u32 zero = 0, ncpus = nr_cpus;
+	s32 cpu;
+
+	if (ncpus > LERTICK_MAX_CPUS)
+		ncpus = LERTICK_MAX_CPUS;
+	bpf_for(cpu, 0, ncpus) {
+		struct lertick_cpu_state *c;
+		u64 start, elapsed;
+		u32 util, target;
+
+		c = bpf_map_lookup_percpu_elem(&cpu_state, &zero, cpu);
+		if (!c || READ_ONCE(c->run_mark_ns))
+			continue;
+		start = READ_ONCE(c->window_start_ns);
+		elapsed = start && now > start ? now - start : 0;
+		util = lertick_util_blend(READ_ONCE(c->util),
+					  lertick_busy_frac(READ_ONCE(c->busy_ns), elapsed),
+					  elapsed, LERTICK_UTIL_TAU_NS);
+		target = cpu_compute_target(c, cpu, util, now, false, false);
+		if (READ_ONCE(c->perf_sent) && READ_ONCE(c->perf_target) == target)
+			continue;
+		cpu_send(c, cpu, target, now, true, LERTICK_STAT_CPUPERF_IDLE_SETS);
+	}
+	bpf_timer_start(timer, LERTICK_IDLE_DECAY_PERIOD_NS, 0);
+	return 0;
 }
 
 static __always_inline bool is_tracked(struct task_struct *p)
@@ -187,6 +446,9 @@ static __always_inline void begin_episode(struct task_struct *p,
 	tctx->prediction_ns = 0;
 	tctx->ewma_prediction_ns = tctx->ewma_burst_ns;
 	tctx->wake_ns = tctx->episode_valid ? now : 0;
+	if (lerwatt_enabled)
+		tctx->latcrit = lertick_latency_critical(tctx->episode_valid, sleep_ns,
+							 tctx->lc_last_burst_ns);
 	if (!tctx->tracked)
 		return;
 	tctx->snapshot.last_censor_reason = tctx->episode_valid ? LERTICK_CENSOR_NONE :
@@ -376,7 +638,31 @@ void BPF_STRUCT_OPS(lertick_runnable, struct task_struct *p, u64 enq_flags)
 			tctx->episode_valid = false;
 		tctx->started_in_select = false;
 	}
+	if (lerwatt_enabled && !tctx->episode_valid)
+		tctx->latcrit = false;
 	publish(tctx);
+}
+
+static __always_inline void cpu_on_running(struct task_struct *p, struct task_ctx *tctx)
+{
+	struct lertick_cpu_state *c;
+	u32 target;
+	u64 now;
+	s32 cpu;
+
+	if (!cpu_tracking())
+		return;
+	c = cpu_state_local();
+	if (!c)
+		return;
+	now = bpf_ktime_get_ns();
+	cpu = scx_bpf_task_cpu(p);
+	c->run_mark_ns = now;
+	c->latcrit_running = tctx && tctx->latcrit;
+	cpu_util_update(c, now);
+	target = cpu_compute_target(c, cpu, c->util, now, c->latcrit_running, true);
+	if (cpuperf_mode == LERTICK_CPUPERF_UTIL)
+		cpu_send(c, cpu, target, now, false, LERTICK_STAT_CPUPERF_SETS);
 }
 
 void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
@@ -388,9 +674,12 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 	if (time_before(vtime_now, p->scx.dsq_vtime))
 		vtime_now = p->scx.dsq_vtime;
 	stat_add(LERTICK_STAT_RUNS, 1);
+	cpu_on_running(p, tctx);
 	if (!tctx)
 		return;
 	refresh_tracking(p, tctx);
+	if (lerwatt_enabled && tctx->wake_ns && tctx->episode_valid)
+		cpu_wake_sample(bpf_ktime_get_ns() - tctx->wake_ns);
 	if (tctx->wake_ns && tctx->episode_valid && tctx->tracked) {
 		u64 latency = bpf_ktime_get_ns() - tctx->wake_ns;
 
@@ -430,6 +719,7 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	u64 delta;
 	u32 weight = p->scx.weight;
 
+	cpu_on_stopping();
 	if (!tctx || !tctx->running)
 		return;
 	/* comm can change while a task continues without a running callback. */
@@ -450,6 +740,7 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	p->scx.dsq_vtime += delta * 100 / weight;
 	tctx->episode_runtime_ns = service.consumed_ns;
 	stat_add(LERTICK_STAT_RUNTIME_NS, delta);
+	cpu_account_run(delta, tctx->latcrit);
 	if (tctx->tracked) {
 		tctx->snapshot.total_runtime_ns += delta;
 		tctx->snapshot.last_runtime_delta_ns = delta;
@@ -527,6 +818,10 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 				tctx->ewma_burst_ns * 3 / 4 + burst / 4 : burst;
 		}
 	}
+	if (lerwatt_enabled) {
+		tctx->lc_last_burst_ns = tctx->episode_runtime_ns;
+		tctx->latcrit = false;
+	}
 	tctx->last_sleep_ns = bpf_ktime_get_ns();
 	tctx->has_slept = true;
 	tctx->episode_active = false;
@@ -585,9 +880,51 @@ void BPF_STRUCT_OPS(lertick_exit_task, struct task_struct *p,
 	publish(tctx);
 }
 
+void BPF_STRUCT_OPS(lertick_tick, struct task_struct *p)
+{
+	struct lertick_cpu_state *c;
+	u32 target;
+	u64 now;
+	s32 cpu;
+
+	if (!cpu_tracking())
+		return;
+	c = cpu_state_local();
+	if (!c)
+		return;
+	now = bpf_ktime_get_ns();
+	if (!c->run_mark_ns) {
+		c->run_mark_ns = now;
+	} else if (now > c->run_mark_ns) {
+		c->busy_ns += now - c->run_mark_ns;
+		c->run_mark_ns = now;
+	}
+	cpu_util_update(c, now);
+	cpu = scx_bpf_task_cpu(p);
+	target = cpu_compute_target(c, cpu, c->util, now, c->latcrit_running, true);
+	/* schedutil drops a request inside its rate limit without a trace: resend. */
+	if (cpuperf_mode == LERTICK_CPUPERF_UTIL)
+		cpu_send(c, cpu, target, now, true, LERTICK_STAT_CPUPERF_SETS);
+}
+
 s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 {
-	return scx_bpf_create_dsq(SHARED_DSQ, -1);
+	struct lertick_idle_timer *t;
+	u32 zero = 0;
+	s32 ret;
+
+	ret = scx_bpf_create_dsq(SHARED_DSQ, -1);
+	if (ret || cpuperf_mode != LERTICK_CPUPERF_UTIL)
+		return ret;
+	t = bpf_map_lookup_elem(&idle_timer_map, &zero);
+	if (!t)
+		return -ESRCH;
+	ret = bpf_timer_init(&t->timer, &idle_timer_map, CLOCK_MONOTONIC);
+	if (!ret)
+		ret = bpf_timer_set_callback(&t->timer, idle_timer_fn);
+	if (!ret)
+		ret = bpf_timer_start(&t->timer, LERTICK_IDLE_DECAY_PERIOD_NS, 0);
+	return ret;
 }
 
 void BPF_STRUCT_OPS(lertick_exit, struct scx_exit_info *ei)
@@ -603,6 +940,7 @@ SCX_OPS_DEFINE(lertick_ops,
 	.running = (void *)lertick_running,
 	.stopping = (void *)lertick_stopping,
 	.quiescent = (void *)lertick_quiescent,
+	.tick = (void *)lertick_tick,
 	.init_task = (void *)lertick_init_task,
 	.exit_task = (void *)lertick_exit_task,
 	.enable = (void *)lertick_enable,

@@ -38,6 +38,12 @@ Phase 2C 最佳化暫緩。下一個研究重點是先理解預測值如何影�
 | `ewma` | 歷史 burst EWMA；不訓練線性模型 | 暖身後依 EWMA 選擇有界限時間片 |
 | `online` | eBPF 內線性模型訓練與推論 | 暖身後依模型預測選擇有界限時間片 |
 
+### CPU 頻率與 Lerwatt 外掛
+
+當所有工作都由 sched_ext 排程時，Linux 的 schedutil governor 改讀排程器透過 `scx_bpf_cpuperf_set()` 設定的目標，不再讀 CFS 的 utilization，而且 Linux 一開始把每顆 CPU 的目標設為最大值。排程器若從不設定，所有 CPU 就一直停在最高頻率。因此 `--cpuperf auto`（預設）在有 cpufreq policy 使用 schedutil 時送出依 utilization 計算的目標；在沒有人讀這個值的地方（例如沒有 cpufreq 的 VM）維持 kernel 預設，行為與先前相同。`--cpuperf util` 與 `--cpuperf max` 可強制選擇，`max` 就是先前的行為。
+
+`--lerwatt` 接上選用的 [Lerwatt](https://github.com/Denny-Lin/lerwatt) 電源管理器：Lertick 固定兩個小型共用 map、每 100 ms 發布各叢集的需求，並把 Lerwatt 的能源價格、頻率下限與上限套用到目標上。不加這個選項時 Lertick 完全不碰這些 map；沒有執行 Lerwatt 時這些 map 也只是閒置。格式見[契約](vendor/lerwatt/contract.h)。
+
 模型預設追蹤名稱以 `lertick` 開頭的工作；`--tracked-tgid PID` 指定程序，`--track-all` 則對所有工作啟用學習。追蹤條件只決定模型資格，不限制 sched_ext 排程哪些工作。僅接管特定排程類別是另一個 `--partial` 選項。
 
 ## 架構

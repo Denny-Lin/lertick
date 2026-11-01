@@ -18,6 +18,10 @@ not generated from the deployment guest. `scripts/fetch_reference.sh` retrieves
 the complete pinned source for inspection and comparison; the build itself does
 not require a network fetch.
 
+`vendor/lerwatt/contract.h` is the MIT-licensed shared-map layout from
+[Lerwatt](https://github.com/Denny-Lin/lerwatt), copied unchanged; Lerwatt holds
+the canonical copy.
+
 The project's original research documents and independently authored material
 retain the root MIT license. That license does not override the GPL notices in
 the scheduler, loader, their build scripts, or vendored helpers. Distributed

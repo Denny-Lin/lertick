@@ -1,5 +1,16 @@
 # Lertick decisions
 
+## 2026-11-01: frequency targets and Lerwatt as an optional plug-in
+
+The owner set the rule: Lertick running alone must keep working as before, and
+Lerwatt is only something that can be attached. Every new path is therefore
+behind a read-only switch that the verifier prunes when off. `--lerwatt` is
+off by default. `--cpuperf auto` changes nothing where schedutil does not read
+sched_ext targets (including the validation VM); where it does, it replaces the
+kernel's always-maximum default, which the owner asked to fix as an existing
+problem. `--cpuperf max` restores the earlier behavior exactly. Verifier
+acceptance of the new paths must be confirmed on the guest kernel before merge.
+
 ## 2026-10-09: Phase 2 publication and merge approval
 
 The owner approved publishing the validated Phase 2A correctness and Phase 2B

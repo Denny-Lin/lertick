@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — 2026-11-01
+
+### CPU frequency targets and the optional Lerwatt plug-in
+
+- Send utilization-based `scx_bpf_cpuperf_set()` targets. Without them, schedutil
+  kept every CPU at its highest frequency while Lertick ran. `--cpuperf auto`
+  (default) enables them only where schedutil reads them; `--cpuperf max` keeps
+  the previous behavior. An idle timer lowers targets of idle CPUs.
+- Add `--lerwatt`: pinned `lw_contract`/`lt_demand` maps (vendored Lerwatt
+  contract), per-cluster demand published every 100 ms, and Lerwatt prices,
+  floors and ceilings applied to targets. Off by default; scheduling without
+  the flag is unchanged.
+- Add `make test-cpuperf` (including a closed loop against a schedutil model)
+  and `make test-lerwatt`, both run in CI.
+
 ## Unreleased — 2026-10-09
 
 ### Phase 2 publication and documentation

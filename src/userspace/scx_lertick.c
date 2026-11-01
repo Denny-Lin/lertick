@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/resource.h>
 #include <sys/utsname.h>
 #include <time.h>
@@ -25,6 +26,7 @@
 #include <bpf/libbpf.h>
 #include <scx/common.h>
 #include "lertick.h"
+#include "lerwatt_plugin.h"
 #include "scx_lertick.bpf.skel.h"
 
 #define U64(x) ((unsigned long long)(x))
@@ -63,6 +65,10 @@ static const char *const stat_names[LERTICK_STAT_COUNT] = {
 	[LERTICK_STAT_WAKE_SAMPLES] = "wake_samples",
 	[LERTICK_STAT_WAKE_TO_RUN_NS] = "wake_to_run_ns",
 	[LERTICK_STAT_WAKE_TO_RUN_MAX_NS] = "wake_to_run_max_ns",
+	[LERTICK_STAT_CPUPERF_SETS] = "cpuperf_sets",
+	[LERTICK_STAT_CPUPERF_IDLE_SETS] = "cpuperf_idle_sets",
+	[LERTICK_STAT_CONTRACT_APPLIED] = "contract_applied",
+	[LERTICK_STAT_CONTRACT_STALE] = "contract_stale",
 };
 
 static int print_libbpf(enum libbpf_print_level level, const char *fmt, va_list args)
@@ -224,7 +230,56 @@ static bool wait_state(const char *wanted)
 	return false;
 }
 
-static int emit_snapshot(FILE *out, struct scx_lertick *skel, const char *phase, const char *mode_name)
+/* Per-CPU state, all possible CPUs; buf holds libbpf_num_possible_cpus() entries. */
+static int read_cpu_state(struct scx_lertick *skel, struct lertick_cpu_state *buf)
+{
+	__u32 zero = 0;
+
+	return bpf_map_lookup_elem(bpf_map__fd(skel->maps.cpu_state), &zero, buf);
+}
+
+static int emit_cpus(FILE *out, struct scx_lertick *skel)
+{
+	int ncpu = libbpf_num_possible_cpus();
+	struct lertick_cpu_state *v;
+
+	if (ncpu <= 0)
+		return -1;
+	v = calloc((size_t)ncpu, sizeof(*v));
+	if (!v)
+		return -1;
+	if (read_cpu_state(skel, v)) {
+		free(v);
+		return -1;
+	}
+	fprintf(out, ",\"cpus\":[");
+	for (int i = 0; i < ncpu; i++)
+		fprintf(out, "%s{\"cpu\":%d,\"util\":%u,\"util_cap\":%u,\"perf\":%u,\"perf_sent\":%u}",
+			i ? "," : "", i, v[i].util, v[i].util_cap, v[i].perf_target, v[i].perf_sent);
+	fputc(']', out);
+	free(v);
+	return 0;
+}
+
+static int publish_demand(struct scx_lertick *skel, struct lt_demand_rec *mem,
+			  const struct ltlw_topology *topo, bool cpuperf_util,
+			  struct ltlw_demand_state *st, struct lertick_cpu_state *buf)
+{
+	struct lt_demand_rec recs[LW_CONTRACT_MAX_CLUSTERS];
+	bool valid[LW_CONTRACT_MAX_CLUSTERS];
+	int ncpu = libbpf_num_possible_cpus();
+
+	if (ncpu <= 0 || read_cpu_state(skel, buf))
+		return -1;
+	ltlw_demand_compute(topo, buf, ncpu, cpuperf_util, st, now_ns(), recs, valid);
+	for (int c = 0; c < LW_CONTRACT_MAX_CLUSTERS; c++)
+		if (valid[c])
+			ltlw_publish(&mem[c], &recs[c]);
+	return 0;
+}
+
+static int emit_snapshot(FILE *out, struct scx_lertick *skel, const char *phase, const char *mode_name,
+			 bool cpus)
 {
 	int ncpu = libbpf_num_possible_cpus();
 	__u64 sums[LERTICK_STAT_COUNT] = {0};
@@ -302,7 +357,10 @@ static int emit_snapshot(FILE *out, struct scx_lertick *skel, const char *phase,
 		}
 		err = bpf_map_get_next_key(bpf_map__fd(skel->maps.task_snapshots), &key, &next);
 	}
-	fprintf(out, "]}\n");
+	fputc(']', out);
+	if (cpus && emit_cpus(out, skel))
+		return -1;
+	fprintf(out, "}\n");
 	return fflush(out) || ferror(out) ? -1 : 0;
 }
 
@@ -332,11 +390,50 @@ static void usage(FILE *out, const char *argv0)
 		"  --min-slice-us N        Prediction slice lower bound (default 500)\n"
 		"  --max-slice-us N        Prediction slice upper bound (default 5000)\n"
 		"  --partial               Schedule only explicit SCHED_EXT tasks\n"
+		"  --cpuperf auto|util|max CPU frequency requests to schedutil (default auto:\n"
+		"                          util when a policy uses schedutil or with --lerwatt;\n"
+		"                          max keeps the kernel default, every CPU at 1024)\n"
+		"  --lerwatt               Attach the optional Lerwatt plug-in: pin contract\n"
+		"                          maps under " LW_CONTRACT_PIN_DIR ", publish demand\n"
 		"  --fault-stall --stall-tgid PID --partial --dangerous-vm-test\n"
 		"                          QEMU-only opted-task watchdog injection\n"
 		"  --expect-watchdog       Succeed only for observed stall watchdog fallback\n"
 		"Duration is finite (1..3600 seconds, default 30). FILE '-' means stdout.\n"
 		"This GPL-2.0-only scheduler comes with no warranty. See LICENSES/.\n", argv0);
+}
+
+static void lerwatt_detach(struct scx_lertick *skel, bool pinned, void *mem, size_t len)
+{
+	if (mem && mem != MAP_FAILED)
+		munmap(mem, len);
+	if (!pinned)
+		return;
+	bpf_map__unpin(skel->maps.lw_contract, NULL);
+	bpf_map__unpin(skel->maps.lt_demand, NULL);
+	rmdir(LW_CONTRACT_PIN_DIR);
+}
+
+static void emit_topology(FILE *out, const struct ltlw_topology *t)
+{
+	fprintf(out, ",\"lerwatt_topology\":{\"source\":"); json_string(out, t->source);
+	fprintf(out, ",\"root\":"); json_string(out, t->root[0] ? t->root : "/");
+	fprintf(out, ",\"policies\":%d,\"clusters\":[", t->npolicies);
+	for (int c = 0; c < t->nclusters; c++) {
+		bool first = true;
+
+		fprintf(out, "%s[", c ? "," : "");
+		for (int cpu = 0; cpu < t->ncpus; cpu++) {
+			if (t->cpu_cluster[cpu] != c)
+				continue;
+			fprintf(out, "%s%d", first ? "" : ",", cpu);
+			first = false;
+		}
+		fputc(']', out);
+	}
+	fprintf(out, "],\"capacity_override\":[");
+	for (int cpu = 0; cpu < t->ncpus; cpu++)
+		fprintf(out, "%s%u", cpu ? "," : "", t->cpu_capacity[cpu]);
+	fprintf(out, "]}");
 }
 
 int main(int argc, char **argv)
@@ -356,8 +453,20 @@ int main(int argc, char **argv)
 	u64 stall_kind = 0, unreg_kind = 0;
 	int opt, status = 0, final_kind;
 	char ops[128] = "unavailable";
+	/* CPU frequency requests and the optional Lerwatt plug-in. */
+	const char *cpuperf_arg = "auto", *cpuperf_reason = "explicit";
+	unsigned cpuperf = LERTICK_CPUPERF_MAX;
+	bool lerwatt = false, pinned = false, cpu_report;
+	static struct ltlw_topology topo;
+	struct ltlw_demand_state demand = { 0 };
+	struct lt_demand_rec *demand_mem = MAP_FAILED;
+	struct lertick_cpu_state *cpu_buf = NULL;
+	size_t demand_len = 0;
+	__u64 next_publish;
+	int ncpus;
 	enum { OPT_CHECK = 1000, OPT_SAMPLE, OPT_TRACK, OPT_FIXED, OPT_MIN, OPT_MAX,
-	       OPT_PARTIAL, OPT_FAULT, OPT_STALL, OPT_DANGER, OPT_EXPECT, OPT_PROFILE, OPT_ALL };
+	       OPT_PARTIAL, OPT_FAULT, OPT_STALL, OPT_DANGER, OPT_EXPECT, OPT_PROFILE, OPT_ALL,
+	       OPT_CPUPERF, OPT_LERWATT };
 	static const struct option opts[] = {
 		{ "mode", required_argument, NULL, 'm' }, { "duration", required_argument, NULL, 'd' },
 		{ "stats-json", required_argument, NULL, 'o' }, { "verbose", no_argument, NULL, 'v' },
@@ -369,6 +478,7 @@ int main(int argc, char **argv)
 		{ "max-slice-us", required_argument, NULL, OPT_MAX }, { "partial", no_argument, NULL, OPT_PARTIAL },
 		{ "fault-stall", no_argument, NULL, OPT_FAULT }, { "stall-tgid", required_argument, NULL, OPT_STALL },
 		{ "dangerous-vm-test", no_argument, NULL, OPT_DANGER }, { "expect-watchdog", no_argument, NULL, OPT_EXPECT },
+		{ "cpuperf", required_argument, NULL, OPT_CPUPERF }, { "lerwatt", no_argument, NULL, OPT_LERWATT },
 		{ NULL, 0, NULL, 0 },
 	};
 	while ((opt = getopt_long(argc, argv, "m:d:o:vh", opts, NULL)) != -1) {
@@ -398,6 +508,14 @@ int main(int argc, char **argv)
 		case OPT_EXPECT: expect_watchdog = true; break;
 		case OPT_PROFILE: profile = true; break;
 		case OPT_ALL: track_all = true; break;
+		case OPT_CPUPERF:
+			cpuperf_arg = optarg;
+			if (strcmp(optarg, "auto") && strcmp(optarg, "util") && strcmp(optarg, "max")) {
+				usage(stderr, argv[0]);
+				return 2;
+			}
+			break;
+		case OPT_LERWATT: lerwatt = true; break;
 		default: usage(stderr, argv[0]); return 2;
 		}
 	}
@@ -421,6 +539,36 @@ int main(int argc, char **argv)
 		if (out != stdout) fclose(out);
 		return status;
 	}
+	ncpus = libbpf_num_possible_cpus();
+	if (ncpus <= 0) {
+		fprintf(stderr, "BLOCKER: cannot count possible CPUs.\n");
+		return 1;
+	}
+	/* auto: request frequencies only where schedutil reads them, or for Lerwatt. */
+	if (!strcmp(cpuperf_arg, "util")) {
+		cpuperf = LERTICK_CPUPERF_UTIL;
+	} else if (!strcmp(cpuperf_arg, "max")) {
+		cpuperf = LERTICK_CPUPERF_MAX;
+	} else if (lerwatt) {
+		cpuperf = LERTICK_CPUPERF_UTIL;
+		cpuperf_reason = "lerwatt";
+	} else if (ltlw_schedutil_in_use("")) {
+		cpuperf = LERTICK_CPUPERF_UTIL;
+		cpuperf_reason = "schedutil";
+	} else {
+		cpuperf_reason = "no-schedutil";
+	}
+	cpu_report = cpuperf == LERTICK_CPUPERF_UTIL || lerwatt;
+	if (lerwatt && ltlw_discover(&topo, ncpus, "", NULL)) {
+		fprintf(stderr, "Lerwatt plug-in: cannot discover CPU clusters.\n");
+		return 1;
+	}
+	if (lerwatt && topo.npolicies > LW_CONTRACT_MAX_CLUSTERS)
+		fprintf(stderr, "Lerwatt plug-in: %d cpufreq policies; CPUs past the first %d have no contract.\n",
+			topo.npolicies, LW_CONTRACT_MAX_CLUSTERS);
+	if (ncpus > (int)LERTICK_MAX_CPUS && cpu_report)
+		fprintf(stderr, "Warning: CPUs %u and above keep the kernel's performance target.\n",
+			LERTICK_MAX_CPUS);
 	sigemptyset(&sa.sa_mask);
 	sigaction(SIGINT, &sa, NULL); sigaction(SIGTERM, &sa, NULL); sigaction(SIGHUP, &sa, NULL);
 	skel = SCX_OPS_OPEN(lertick_ops, scx_lertick);
@@ -438,6 +586,15 @@ int main(int argc, char **argv)
 	skel->rodata->stall_tgid = stall_tgid;
 	skel->rodata->profile_model = profile;
 	skel->rodata->track_all = track_all;
+	skel->rodata->cpuperf_mode = cpuperf;
+	skel->rodata->lerwatt_enabled = lerwatt;
+	skel->rodata->nr_cpus = ncpus < (int)LERTICK_MAX_CPUS ? (unsigned)ncpus : LERTICK_MAX_CPUS;
+	if (lerwatt) {
+		for (unsigned i = 0; i < LERTICK_MAX_CPUS; i++) {
+			skel->rodata->cpu_cluster[i] = topo.cpu_cluster[i];
+			skel->rodata->cpu_cap_override[i] = topo.cpu_capacity[i];
+		}
+	}
 	if (partial) {
 		__u64 flag = SCX_OPS_SWITCH_PARTIAL;
 		if (!flag) { fprintf(stderr, "BLOCKER: kernel lacks partial switch flag.\n"); scx_lertick__destroy(skel); return 1; }
@@ -455,6 +612,42 @@ int main(int argc, char **argv)
 	}
 	SCX_OPS_LOAD(skel, lertick_ops, scx_lertick, uei);
 	fprintf(out, "{\"event\":\"loaded\",\"verifier_accepted\":true}\n"); fflush(out);
+	if (lerwatt) {
+		const char *const pins[] = { LW_CONTRACT_PIN_LW, LW_CONTRACT_PIN_LT };
+		long page = sysconf(_SC_PAGESIZE);
+		char err[512] = "out of memory";
+		bool ok;
+
+		/* Pin before attach so that a failure leaves the default scheduler in place. */
+		cpu_buf = calloc((size_t)ncpus, sizeof(*cpu_buf));
+		demand_len = (sizeof(struct lt_demand_rec) * LW_CONTRACT_MAX_CLUSTERS +
+			      (size_t)page - 1) / (size_t)page * (size_t)page;
+		ok = cpu_buf && !ltlw_pin_prepare(LW_CONTRACT_PIN_DIR, pins, 2, err, sizeof(err));
+		if (ok) {
+			pinned = true;
+			if (bpf_map__pin(skel->maps.lw_contract, LW_CONTRACT_PIN_LW) ||
+			    bpf_map__pin(skel->maps.lt_demand, LW_CONTRACT_PIN_LT)) {
+				snprintf(err, sizeof(err), "cannot pin contract maps: %s", strerror(errno));
+				ok = false;
+			}
+		}
+		if (ok) {
+			demand_mem = mmap(NULL, demand_len, PROT_READ | PROT_WRITE, MAP_SHARED,
+					  bpf_map__fd(skel->maps.lt_demand), 0);
+			if (demand_mem == MAP_FAILED) {
+				snprintf(err, sizeof(err), "cannot map lt_demand: %s", strerror(errno));
+				ok = false;
+			}
+		}
+		if (!ok) {
+			fprintf(stderr, "Lerwatt plug-in: %s\n", err);
+			lerwatt_detach(skel, pinned, demand_mem, demand_len);
+			free(cpu_buf);
+			scx_lertick__destroy(skel);
+			if (out != stdout) fclose(out);
+			return 1;
+		}
+	}
 	link = SCX_OPS_ATTACH(skel, lertick_ops, scx_lertick);
 	if (!wait_state("enabled") || !read_text(OPS_PATH, ops, sizeof(ops)) || strcmp(ops, "scx_lertick")) {
 		fprintf(stderr, "Registration did not produce enabled scx_lertick (ops=%s).\n", ops);
@@ -462,15 +655,28 @@ int main(int argc, char **argv)
 	} else {
 		fprintf(out, "{\"event\":\"registered\",\"ops\":"); json_string(out, ops);
 		fprintf(out, ",\"partial\":%s,\"mode\":", partial ? "true" : "false"); json_string(out, mode_name);
-		fprintf(out, ",\"fixed_slice_ns\":%llu,\"min_slice_ns\":%llu,\"max_slice_ns\":%llu,\"timeout_ms\":%llu,\"profile_model\":%s,\"track_all\":%s}\n",
+		fprintf(out, ",\"fixed_slice_ns\":%llu,\"min_slice_ns\":%llu,\"max_slice_ns\":%llu,\"timeout_ms\":%llu,\"profile_model\":%s,\"track_all\":%s",
 			U64((__u64)fixed_us * 1000), U64((__u64)min_us * 1000), U64((__u64)max_us * 1000),
 			U64(skel->struct_ops.lertick_ops->timeout_ms), profile ? "true" : "false",
-			track_all ? "true" : "false"); fflush(out);
+			track_all ? "true" : "false");
+		fprintf(out, ",\"cpuperf\":\"%s\",\"cpuperf_reason\":\"%s\",\"lerwatt\":%s",
+			cpuperf == LERTICK_CPUPERF_UTIL ? "util" : "max", cpuperf_reason,
+			lerwatt ? "true" : "false");
+		if (lerwatt)
+			emit_topology(out, &topo);
+		fprintf(out, "}\n"); fflush(out);
 	}
-	start = now_ns(); next_sample = start;
+	start = now_ns(); next_sample = start; next_publish = start;
 	while (!status && !exit_req && !UEI_EXITED(skel, uei) && now_ns() - start < (__u64)duration * 1000000000) {
+		if (lerwatt && now_ns() >= next_publish) {
+			if (publish_demand(skel, demand_mem, &topo, cpuperf == LERTICK_CPUPERF_UTIL,
+					   &demand, cpu_buf)) {
+				fprintf(stderr, "Failed to publish Lerwatt demand.\n"); status = 1; break;
+			}
+			next_publish = now_ns() + LTLW_PUBLISH_PERIOD_NS;
+		}
 		if (now_ns() >= next_sample) {
-			if (emit_snapshot(out, skel, "periodic", mode_name)) {
+			if (emit_snapshot(out, skel, "periodic", mode_name, cpu_report)) {
 				fprintf(stderr, "Failed to read/write scheduler telemetry.\n"); status = 1; break;
 			}
 			next_sample = now_ns() + (__u64)sample_ms * 1000000;
@@ -494,7 +700,10 @@ int main(int argc, char **argv)
 		if (!watchdog_observed) status = 1;
 	}
 	if (expect_watchdog && !watchdog_observed) status = 1;
-	if (emit_snapshot(out, skel, "final", mode_name)) status = 1;
+	if (emit_snapshot(out, skel, "final", mode_name, cpu_report)) status = 1;
+	/* Lerwatt sees the demand go stale and falls back to running alone. */
+	lerwatt_detach(skel, pinned, demand_mem, demand_len);
+	free(cpu_buf);
 	exit_code = UEI_REPORT(skel, uei);
 	fprintf(out, "{\"event\":\"exit\",\"unexpected_fallback\":%s,\"watchdog_observed\":%s,\"exit_kind\":%d,\"exit_code\":%lld,\"reason\":",
 		fallback && !watchdog_observed ? "true" : "false", watchdog_observed ? "true" : "false",

@@ -38,6 +38,12 @@ Phase 2C optimization is deferred. The next research priority is understanding h
 | `ewma` | Historical burst EWMA; no linear training | Bounded EWMA after warm-up |
 | `online` | Linear training and inference inside eBPF | Bounded model prediction after warm-up |
 
+### CPU frequency and the Lerwatt plug-in
+
+When every task runs on sched_ext, Linux's schedutil governor reads the scheduler's `scx_bpf_cpuperf_set()` target instead of CFS utilization, and Linux starts each target at the maximum. A scheduler that never sets one keeps every CPU at its top frequency. `--cpuperf auto` (the default) therefore sends utilization-based targets whenever a cpufreq policy uses schedutil, and leaves the kernel default where nothing reads it, such as a VM without cpufreq, so behavior there is unchanged. `--cpuperf util` and `--cpuperf max` force either choice; `max` is the previous behavior.
+
+`--lerwatt` attaches the optional [Lerwatt](https://github.com/Denny-Lin/lerwatt) power manager. Lertick pins two small shared maps, publishes per-cluster demand every 100 ms, and applies Lerwatt's energy price, frequency floor and ceiling to its targets. Without the flag, Lertick never touches those maps; without Lerwatt running, the maps go unused. See [the contract](vendor/lerwatt/contract.h).
+
 Model tracking defaults to tasks with a `lertick` name prefix. `--tracked-tgid PID` selects a process and `--track-all` enables learning for all tasks. Tracking controls model eligibility; it does not restrict which tasks sched_ext schedules. Partial switching is a separate `--partial` option.
 
 ## Architecture
