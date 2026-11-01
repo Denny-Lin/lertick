@@ -27,6 +27,7 @@ typedef uint64_t __u64;
  */
 struct lertick_model {
 	__s32 weight_q16[LERTICK_FEATURES];
+	__s32 carry_q16[LERTICK_FEATURES];	/* fractional weight updates, carry mode only */
 	__u64 updates;
 };
 
@@ -68,8 +69,10 @@ LERTICK_INLINE void lertick_model_init(struct lertick_model *model)
 #ifdef __clang__
 #pragma clang loop unroll(disable)
 #endif
-	for (i = 0; i < LERTICK_FEATURES; i++)
+	for (i = 0; i < LERTICK_FEATURES; i++) {
 		model->weight_q16[i] = 0;
+		model->carry_q16[i] = 0;
+	}
 	model->weight_q16[0] = LERTICK_Q / 4;
 	model->updates = 0;
 }
@@ -129,6 +132,47 @@ LERTICK_INLINE __s32 lertick_model_train(struct lertick_model *model,
 		update = lertick_trunc_shift(update, 32);
 		model->weight_q16[i] = lertick_clip_weight(
 			(__s64)lertick_clip_weight(model->weight_q16[i]) + update);
+	}
+	if (model->updates != ~(__u64)0)
+		model->updates++;
+	return (__s32)error;
+}
+
+/* Keep 16 fractional bits of each update instead of discarding every update
+ * smaller than one Q16 weight unit. The public prediction/weight format stays
+ * Q16. With clipped inputs, |gradient| <= 2^42, |sum| < 2^27 and each stored
+ * carry is strictly inside (-Q,Q). Signed divisions remain constant shifts.
+ */
+LERTICK_INLINE __s32 lertick_model_train_carry(struct lertick_model *model,
+			 const __s32 features[LERTICK_FEATURES], __s32 target_q16)
+{
+	__s64 error = (__s64)lertick_clip_q16(target_q16) -
+		     lertick_model_raw_q16(model, features);
+	int i;
+
+	if (error > LERTICK_Q)
+		error = LERTICK_Q;
+	if (error < -LERTICK_Q)
+		error = -LERTICK_Q;
+#ifdef __clang__
+#pragma clang loop unroll(disable)
+#endif
+	for (i = 0; i < LERTICK_FEATURES; i++) {
+		__s64 carry = model->carry_q16[i];
+		__s64 gradient, sum, delta, next;
+
+		if (carry >= LERTICK_Q)
+			carry = LERTICK_Q - 1;
+		if (carry <= -LERTICK_Q)
+			carry = 1 - LERTICK_Q;
+		gradient = (__s64)LERTICK_ALPHA_Q16 * error * lertick_clip_q16(features[i]);
+		sum = carry + lertick_trunc_shift(gradient, 16);
+		delta = lertick_trunc_shift(sum, 16);
+		next = (__s64)lertick_clip_weight(model->weight_q16[i]) + delta;
+		model->weight_q16[i] = lertick_clip_weight(next);
+		/* Discard outward residual at the weight rail, avoiding wind-up. */
+		model->carry_q16[i] = model->weight_q16[i] == next ?
+			(__s32)(sum - delta * LERTICK_Q) : 0;
 	}
 	if (model->updates != ~(__u64)0)
 		model->updates++;

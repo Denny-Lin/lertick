@@ -62,10 +62,13 @@ class Phase2Validation(Validation):
         self.save()
 
     def start_lifecycle(self, name, scenario, duration=2, workers=8, iterations=32, index=0):
-        return self.launch([self.lifecycle_binary, "--scenario", scenario,
-                            "--duration", str(duration), "--workers", str(workers),
-                            "--iterations", str(iterations), "--index", str(index),
-                            "--cpus", self.cpu_text], name)
+        command = [self.lifecycle_binary, "--scenario", scenario,
+                   "--duration", str(duration), "--workers", str(workers),
+                   "--iterations", str(iterations), "--index", str(index),
+                   "--cpus", self.cpu_text]
+        if scenario in ("cpu", "yield", "affinity", "lateoptin", "burst"):
+            command.append("--parent-report")
+        return self.launch(command, name)
 
     def check_counters(self, final, context):
         stats = final["stats"]
@@ -236,6 +239,9 @@ class Phase2Validation(Validation):
                    if event.get("event") == "worker"]
         expected = workers if scenario == "threads" else iterations if scenario in ("forkexec", "churn") else 1
         require(len(oracles) == expected, f"{name}: missing workload completions")
+        if scenario in ("cpu", "yield", "affinity", "lateoptin", "burst"):
+            require(all(event["reporter_pid"] != event["pid"] for event in oracles),
+                    f"{name}: result reporting ran in the measured process")
         tasks = {task["pid"]: task for task in final["tasks"]}
         result = {"mode": mode, "scenario": scenario, "passed": True,
                   "workers_completed": len(oracles), "retained_tasks": len(final["tasks"]),
@@ -467,6 +473,8 @@ class Phase2Validation(Validation):
             tasks = {task["pid"]: task for task in final["tasks"]}
             measurements = [next(event for event in rows(self.output / f"{name}-cpu{index}.log")
                                   if event.get("event") == "worker") for index in range(8)]
+            require(all(event["reporter_pid"] != event["pid"] for event in measurements),
+                    f"{name}: result reporting ran in the measured process")
             service = [event["cpu_ns"] for event in measurements]
             jain = sum(service) ** 2 / (len(service) * sum(value ** 2 for value in service))
             gap = max(event["max_run_gap_ns"] for event in measurements)
@@ -544,6 +552,7 @@ def main():
     parser.add_argument("--fairness-seconds", type=int, default=9)
     parser.add_argument("--recovery-repetitions", type=int, default=3)
     parser.add_argument("--model-init", choices=("bias", "ewma"), default="bias")
+    parser.add_argument("--model-update", choices=("trunc", "carry"), default="trunc")
     args = parser.parse_args()
     if not 9 <= args.fairness_seconds <= 60 or not 3 <= args.recovery_repetitions <= 10:
         parser.error("fairness-seconds must be 9..60; recovery-repetitions must be 3..10")

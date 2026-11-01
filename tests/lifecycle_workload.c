@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/prctl.h>
+#include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -34,6 +35,7 @@ struct options {
 	unsigned workers;
 	unsigned iterations;
 	unsigned index;
+	int parent_report;
 	double duration;
 };
 
@@ -211,13 +213,14 @@ static void emit(const struct measurement *value)
 		",\"units\":%" PRIu64 ",\"checksum\":%" PRIu64
 		",\"loops\":%" PRIu64 ",\"yields\":%" PRIu64
 		",\"sleeps\":%" PRIu64 ",\"setup_sleep_ns\":%u,\"migrations\":%" PRIu64
-		",\"affinity_changes\":%" PRIu64 ",\"affinity_violations\":%" PRIu64 "}\n",
+		",\"affinity_changes\":%" PRIu64 ",\"affinity_violations\":%" PRIu64
+		",\"reporter_pid\":%ld}\n",
 		value->role, value->pid, value->tid, value->index, value->cpu_ns,
 		value->schedstat_ns, value->schedstat_wait_ns, value->wall_ns,
 		value->max_run_gap_ns, value->units, value->checksum, value->loops,
 		value->yields, value->sleeps, !strcmp(value->role, "lateoptin") ? 0U : 1000000U,
 		value->migrations, value->affinity_changes,
-		value->affinity_violations);
+		value->affinity_violations, (long)getpid());
 
 	if (size < 0 || (size_t)size >= sizeof(line) || write(STDOUT_FILENO, line, size) != size)
 		fail("write worker record");
@@ -231,6 +234,45 @@ static void *thread_worker(void *opaque)
 	argument->result = run_worker(argument->options, role, argument->index,
 				      argument->barrier);
 	return NULL;
+}
+
+/* A regular-file write can block after the runnable CPU interval finishes.
+ * Keep reporting in an unmeasured parent so that it cannot complete the
+ * worker's long wake-to-exit episode and masquerade as a false sleep label.
+ * The shared page is populated before the interval; the child never emits.
+ * The fork/exec stress protocol deliberately retains its original topology.
+ */
+static void measured_child(struct options *options)
+{
+	struct measurement *shared = mmap(NULL, sizeof(*shared), PROT_READ | PROT_WRITE,
+					 MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	pid_t child;
+	int status;
+
+	if (shared == MAP_FAILED)
+		fail("mmap result");
+	memset(shared, 0, sizeof(*shared));
+	child = fork();
+	if (child < 0)
+		fail("fork measured child");
+	if (!child) {
+		shared->index = options->index;
+		*shared = run_worker(options, options->scenario, options->index, NULL);
+		/* No stdio or regular-file write in the measured task. */
+		syscall(SYS_exit_group, 0);
+		__builtin_unreachable();
+	}
+	if (waitpid(child, &status, 0) != child)
+		fail("waitpid measured child");
+	if (!WIFEXITED(status) || WEXITSTATUS(status)) {
+		fprintf(stderr, "measured child failed: pid=%ld status=%d\n", (long)child, status);
+		exit(EXIT_FAILURE);
+	}
+	/* Pointers into the child's address space are not an IPC format. */
+	shared->role = options->scenario;
+	emit(shared);
+	if (munmap(shared, sizeof(*shared)))
+		fail("munmap result");
 }
 
 static void threaded(struct options *options)
@@ -370,6 +412,7 @@ int main(int argc, char **argv)
 		{"iterations", required_argument, NULL, 'i'},
 		{"index", required_argument, NULL, 'n'},
 		{"cpus", required_argument, NULL, 'c'},
+		{"parent-report", no_argument, NULL, 'r'},
 		{"help", no_argument, NULL, 'h'},
 		{NULL, 0, NULL, 0},
 	};
@@ -395,9 +438,11 @@ int main(int argc, char **argv)
 		case 'i': options.iterations = integer(optarg, 1, 8192); break;
 		case 'n': options.index = integer(optarg, 0, 8192); break;
 		case 'c': options.cpu_text = optarg; break;
+		case 'r': options.parent_report = 1; break;
 		case 'h':
 			printf("Usage: %s --scenario cpu|yield|burst|affinity|lateoptin|threads|forkexec|churn\n"
 			       "  [--duration SEC] [--workers N] [--iterations N] [--cpus 0,1,2,3]\n"
+			       "  [--parent-report] Report direct workers from an unmeasured parent\n"
 			       "Linux-only; JSONL CPU-clock/schedstat and lifecycle measurements.\n", argv[0]);
 			return 0;
 		default: return EXIT_FAILURE;
@@ -413,9 +458,13 @@ int main(int argc, char **argv)
 	} else if (!strcmp(options.scenario, "cpu") || !strcmp(options.scenario, "yield") ||
 		   !strcmp(options.scenario, "burst") || !strcmp(options.scenario, "affinity") ||
 		   !strcmp(options.scenario, "lateoptin")) {
-		struct measurement result = run_worker(&options, options.scenario, options.index, NULL);
+		if (options.parent_report) {
+			measured_child(&options);
+		} else {
+			struct measurement result = run_worker(&options, options.scenario, options.index, NULL);
 
-		emit(&result);
+			emit(&result);
+		}
 	} else {
 		fprintf(stderr, "unknown scenario: %s\n", options.scenario);
 		return EXIT_FAILURE;

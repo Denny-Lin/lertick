@@ -21,9 +21,13 @@ STATE = Path("/sys/kernel/sched_ext/state")
 OPS = Path("/sys/kernel/sched_ext/root/ops")
 BPF_STATS = Path("/proc/sys/kernel/bpf_stats_enabled")
 WORKLOADS = ("cpu", "shortburst", "wakeheavy", "mixed", "multicore", "affinity", "kernelcompile", "memory")
-LERTICK_POLICIES = {name: (name, "bias") for name in ("fixed", "shadow", "online", "ewma")}
-LERTICK_POLICIES.update({"shadow-ewma-prior": ("shadow", "ewma"),
-                         "online-ewma-prior": ("online", "ewma")})
+LERTICK_POLICIES = {name: (name, "bias", "trunc") for name in ("fixed", "shadow", "online", "ewma")}
+LERTICK_POLICIES.update({"shadow-ewma-prior": ("shadow", "ewma", "trunc"),
+                         "online-ewma-prior": ("online", "ewma", "trunc"),
+                         "shadow-carry": ("shadow", "bias", "carry"),
+                         "shadow-ewma-carry": ("shadow", "ewma", "carry"),
+                         "online-carry": ("online", "bias", "carry"),
+                         "online-ewma-carry": ("online", "ewma", "carry")})
 
 
 def save(path, value):
@@ -233,8 +237,9 @@ class Benchmark:
         if policy == "default":
             return None
         if policy in LERTICK_POLICIES:
-            mode, model_init = LERTICK_POLICIES[policy]
-            command = [ROOT / "build/scx_lertick", "--mode", mode, "--model-init", model_init, "--duration", "3600",
+            mode, model_init, model_update = LERTICK_POLICIES[policy]
+            command = [ROOT / "build/scx_lertick", "--mode", mode, "--model-init", model_init,
+                       "--model-update", model_update, "--duration", "3600",
                        "--sample-ms", "1000", "--stats-json", directory / "scheduler.jsonl"]
             if self.args.profile:
                 command += ["--profile"]
@@ -374,6 +379,7 @@ class Benchmark:
         return {"measured_counter_delta": delta, "counter_window_note":
                 "last 1-second snapshot before measured window through final unload snapshot; approximate boundary",
                 "prediction": prediction, "model_init": registered.get("model_init", "bias"),
+                "model_update": registered.get("model_update", "trunc"),
                 "internal_profile": timing if self.args.profile else None,
                 "final_stats": final["stats"]}
 
@@ -446,6 +452,8 @@ class Benchmark:
             result["lertick"] = self.lertick_metrics(directory, result)
             if policy in LERTICK_POLICIES and result["lertick"]["model_init"] != LERTICK_POLICIES[policy][1]:
                 raise RuntimeError("loader initialization does not match the benchmark policy label")
+            if policy in LERTICK_POLICIES and result["lertick"]["model_update"] != LERTICK_POLICIES[policy][2]:
+                raise RuntimeError("loader update precision does not match the benchmark policy label")
             bpf = []
             for identifier in sorted(scheduler_ids):
                 first, last = before_programs.get(identifier), after_programs.get(identifier)
@@ -527,7 +535,7 @@ class Benchmark:
                                        "note": "positive is higher; throughput and latency have opposite desirability"})
         correlations = []
         for workload in self.workloads:
-            for policy in ("shadow", "online", "ewma", "shadow-ewma-prior", "online-ewma-prior"):
+            for policy in LERTICK_POLICIES:
                 trials = [trial for trial in self.results if trial["workload"] == workload and
                           trial["policy"] == policy and trial.get("burst_completion_ns") and
                           trial.get("lertick") and trial["lertick"]["prediction"]["policy_prediction_mae_ns"] is not None]

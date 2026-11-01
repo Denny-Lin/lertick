@@ -64,6 +64,64 @@ static void assert_models_equal(const struct lertick_model *a,
 	assert(a->updates == b->updates);
 	for (i = 0; i < LERTICK_FEATURES; i++)
 		assert(a->weight_q16[i] == b->weight_q16[i]);
+	for (i = 0; i < LERTICK_FEATURES; i++)
+		assert(a->carry_q16[i] == b->carry_q16[i]);
+}
+
+static __s32 reference_train_carry(struct lertick_model *model, const __s32 *x, __s32 target)
+{
+	__int128 error = clamp128(clamp128(target, 0, LERTICK_Q) -
+				 reference_raw(model, x), -LERTICK_Q, LERTICK_Q);
+	for (int i = 0; i < LERTICK_FEATURES; i++) {
+		__int128 fractional = (__int128)LERTICK_ALPHA_Q16 * error *
+			clamp128(x[i], 0, LERTICK_Q) / LERTICK_Q;
+		__int128 sum = clamp128(model->carry_q16[i], 1 - LERTICK_Q, LERTICK_Q - 1) + fractional;
+		__int128 delta = sum / LERTICK_Q;
+		__int128 next = clamp128(model->weight_q16[i], -LERTICK_WEIGHT_LIMIT, LERTICK_WEIGHT_LIMIT) + delta;
+
+		model->weight_q16[i] = (__s32)clamp128(next, -LERTICK_WEIGHT_LIMIT, LERTICK_WEIGHT_LIMIT);
+		model->carry_q16[i] = model->weight_q16[i] == next ? (__s32)(sum - delta * LERTICK_Q) : 0;
+	}
+	if (model->updates != UINT64_MAX)
+		model->updates++;
+	return (__s32)error;
+}
+
+static void test_fractional_update_carry(void)
+{
+	for (int trial = 0; trial < 100000; trial++) {
+		struct lertick_model actual = { 0 }, expected;
+		__s32 x[LERTICK_FEATURES], target = (__s32)random_u64();
+
+		for (int i = 0; i < LERTICK_FEATURES; i++) {
+			actual.weight_q16[i] = (__s32)random_u64();
+			actual.carry_q16[i] = (__s32)random_u64();
+			x[i] = (__s32)random_u64();
+		}
+		actual.updates = trial % 2 ? UINT64_MAX : (uint64_t)trial;
+		expected = actual;
+		assert(lertick_model_train_carry(&actual, x, target) == reference_train_carry(&expected, x, target));
+		assert_models_equal(&actual, &expected);
+		for (int i = 0; i < LERTICK_FEATURES; i++) {
+			assert(actual.carry_q16[i] > -LERTICK_Q && actual.carry_q16[i] < LERTICK_Q);
+			assert(actual.weight_q16[i] >= -LERTICK_WEIGHT_LIMIT && actual.weight_q16[i] <= LERTICK_WEIGHT_LIMIT);
+		}
+	}
+	for (int sign = -1; sign <= 1; sign += 2) {
+		struct lertick_model old, precise;
+		__s32 x[LERTICK_FEATURES] = { LERTICK_Q, 0, 0, 0, 0 };
+
+		lertick_model_init(&old);
+		old.weight_q16[0] = 30 * sign;
+		precise = old;
+		precise.carry_q16[1] = LERTICK_Q - 1;
+		for (int i = 0; i < 1000; i++) {
+			lertick_model_train(&old, x, 0);
+			lertick_model_train_carry(&precise, x, 0);
+		}
+		assert(old.weight_q16[0] == 30 * sign && precise.weight_q16[0] == 0);
+		assert(precise.weight_q16[1] == 0 && precise.carry_q16[1] == LERTICK_Q - 1);
+	}
 }
 
 static void test_boundary_oracle(void)
@@ -240,6 +298,8 @@ int main(void)
 	test_learning_and_saturation();
 	test_negative_rounding_and_zero_updates();
 	test_holdout_and_causal_snapshot();
+	test_fractional_update_carry();
+	printf("{\"test\":\"fractional_carry\",\"oracle_trials\":100000,\"model_bytes\":%zu}\n", sizeof(struct lertick_model));
 	puts("{\"test\":\"model\",\"status\":\"passed\",\"oracle_trials\":200121}");
 	return 0;
 }
