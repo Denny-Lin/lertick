@@ -123,6 +123,17 @@ static int read_policies(const char *root, struct policy *p, int max)
 static void assign_clusters(struct ltlw_topology *t, const struct policy *p, int n)
 {
 	for (int k = 0; k < n && k < LW_CONTRACT_MAX_CLUSTERS; k++) {
+		__u64 hash = lw_contract_topology_seed();
+		__u32 count = 0;
+
+		/* Identity includes the full policy, not just this guest's CPUs. */
+		for (int cpu = 0; cpu < (int)LERTICK_MAX_CPUS; cpu++) {
+			if (p[k].mask[cpu]) {
+				hash = lw_contract_topology_add_cpu(hash, (__u32)cpu);
+				count++;
+			}
+		}
+		t->cluster_topology_id[k] = lw_contract_topology_finish(hash, count);
 		for (int cpu = 0; cpu < t->ncpus; cpu++) {
 			if (p[k].mask[cpu] && t->cpu_cluster[cpu] == LERTICK_NO_CLUSTER) {
 				t->cpu_cluster[cpu] = (unsigned char)k;
@@ -199,6 +210,10 @@ int ltlw_discover(struct ltlw_topology *t, int ncpus, const char *hw_root,
 	for (int cpu = 0; cpu < t->ncpus; cpu++)
 		t->cpu_cluster[cpu] = 0;
 	t->cluster_ncpus[0] = t->ncpus;
+	__u64 hash = lw_contract_topology_seed();
+	for (int cpu = 0; cpu < t->ncpus; cpu++)
+		hash = lw_contract_topology_add_cpu(hash, (__u32)cpu);
+	t->cluster_topology_id[0] = lw_contract_topology_finish(hash, (__u32)t->ncpus);
 	return 0;
 }
 
@@ -296,6 +311,8 @@ void ltlw_demand_compute(const struct ltlw_topology *t, const struct lertick_cpu
 		out[c].cpuperf_max = perf_max;
 		out[c].cpuperf_mean = (__u32)(perf_sum / (__u64)members);
 		out[c].updated_ns = now_ns;
+		out[c].topology_id = t->cluster_topology_id[c];
+		out[c].session_id = t->session_id;
 		if (dt && run >= st->run_ns[c] && lat >= st->latcrit_ns[c]) {
 			__u64 drun = run - st->run_ns[c], dlat = lat - st->latcrit_ns[c];
 
@@ -333,6 +350,8 @@ void ltlw_publish(struct lt_demand_rec *slot, const struct lt_demand_rec *val)
 	slot->p99_wake_ns = val->p99_wake_ns;
 	slot->updated_ns = val->updated_ns;
 	slot->reserved = 0;
+	slot->topology_id = val->topology_id;
+	slot->session_id = val->session_id;
 	__atomic_thread_fence(__ATOMIC_RELEASE);
 	__atomic_store_n(&slot->seq, seq + 2, __ATOMIC_RELEASE);
 }

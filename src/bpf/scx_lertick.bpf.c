@@ -46,6 +46,8 @@ const volatile bool model_update_carry;
 const volatile u32 cpuperf_mode = LERTICK_CPUPERF_MAX;
 /* Optional Lerwatt plug-in: read lw_contract, keep demand counters. */
 const volatile bool lerwatt_enabled;
+const volatile u64 lerwatt_session_id;
+const volatile u64 cluster_topology_id[LW_CONTRACT_MAX_CLUSTERS];
 const volatile u32 nr_cpus = 1;
 /* Lerwatt cluster of each CPU; LERTICK_NO_CLUSTER for none. */
 const volatile u8 cpu_cluster[LERTICK_MAX_CPUS];
@@ -199,15 +201,15 @@ struct lertick_contract {
 
 /*
  * Copy the Lerwatt record of this CPU's cluster. The seqcount check uses
- * compiler barriers only: every field is an aligned 32- or 64-bit value that is
- * valid on its own, so a rare copy that mixes two control periods is still a
- * valid record. Out-of-range values are clamped; stale records are ignored.
+ * compiler barriers around aligned fields. Identity is fixed for one Lertick
+ * attachment; incompatible, out-of-range and stale records are ignored.
  */
 static __always_inline bool contract_get(s32 cpu, u64 now, struct lertick_contract *out)
 {
 	struct lw_contract_rec *rec;
-	u32 idx = cpu, cluster, seq, version, price, floor, ceiling;
-	u64 until;
+	struct lw_contract_rec copy = {0};
+	u32 idx = cpu, cluster, seq;
+	u64 expected_topology_id;
 
 	out->price_milli = 0;
 	out->floor_cap = 0;
@@ -217,25 +219,32 @@ static __always_inline bool contract_get(s32 cpu, u64 now, struct lertick_contra
 	cluster = cpu_cluster[idx];
 	if (cluster >= LW_CONTRACT_MAX_CLUSTERS)
 		return false;
+	/* Load with the explicit bound before map_lookup_elem() spills the key
+	 * and the verifier may discard the scalar range attached to it.
+	 */
+	expected_topology_id = cluster_topology_id[cluster];
 	rec = bpf_map_lookup_elem(&lw_contract, &cluster);
 	if (!rec)
 		return false;
 	seq = READ_ONCE(rec->seq);
 	barrier();
-	version = READ_ONCE(rec->version);
-	price = READ_ONCE(rec->energy_price_milli);
-	floor = READ_ONCE(rec->floor_cap);
-	ceiling = READ_ONCE(rec->ceiling_cap);
-	until = READ_ONCE(rec->valid_until_ns);
+	copy.version = READ_ONCE(rec->version);
+	copy.energy_price_milli = READ_ONCE(rec->energy_price_milli);
+	copy.floor_cap = READ_ONCE(rec->floor_cap);
+	copy.ceiling_cap = READ_ONCE(rec->ceiling_cap);
+	copy.valid_until_ns = READ_ONCE(rec->valid_until_ns);
+	copy.topology_id = READ_ONCE(rec->topology_id);
+	copy.session_id = READ_ONCE(rec->session_id);
 	barrier();
 	if (!seq || (seq & 1) || READ_ONCE(rec->seq) != seq ||
-	    version != LW_CONTRACT_VERSION || now > until) {
+	    !lw_contract_constraint_valid(&copy, expected_topology_id,
+					  lerwatt_session_id, now)) {
 		stat_add(LERTICK_STAT_CONTRACT_STALE, 1);
 		return false;
 	}
-	out->price_milli = price > LW_MILLI_ONE ? LW_MILLI_ONE : price;
-	out->floor_cap = floor > LW_CAP_ONE ? LW_CAP_ONE : floor;
-	out->ceiling_cap = ceiling > LW_CAP_ONE ? LW_CAP_ONE : ceiling;
+	out->price_milli = copy.energy_price_milli;
+	out->floor_cap = copy.floor_cap;
+	out->ceiling_cap = copy.ceiling_cap;
 	stat_add(LERTICK_STAT_CONTRACT_APPLIED, 1);
 	return true;
 }

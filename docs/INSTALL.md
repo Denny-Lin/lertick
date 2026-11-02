@@ -138,7 +138,7 @@ lertick trial --mode shadow --duration 30 \
 
 The default bounds are 0.5–5 ms after eight valid labels, with a 2 ms fallback. They bound newly assigned budgets, not exact execution time or the remaining budget of an already running task. Lower prediction error has not established a general throughput or latency advantage; consult the [recorded comparisons](PHASE2_RESULTS.md) and [long-window confirmation](../results/model-confirmation/README.md).
 
-The helper forwards `--mode`, `--duration`, `--sample-ms` and `--stats-json`; tracking and CPU-performance defaults are fixed for this simple path. For targeted tracking, partial switching, full research snapshots, model experiments or optional Lerwatt coordination, use the advanced loader instructions in [deployment and reproduction](DEPLOYMENT.md). Model tracking and the set of scheduled tasks are distinct: selecting a TGID for learning alone does not isolate scheduling to that process.
+The helper forwards `--mode`, `--duration`, `--sample-ms` and `--stats-json`; tracking and CPU-performance defaults are fixed for this simple path. Optional persistent Lerwatt coordination uses `lertick integration on`; follow the [shared integration guide](INTEGRATION.md) to configure both projects. For targeted tracking, partial switching, full research snapshots or model experiments, use the advanced loader instructions in [deployment and reproduction](DEPLOYMENT.md). Model tracking and the set of scheduled tasks are distinct: selecting a TGID for learning alone does not isolate scheduling to that process.
 
 ## Telemetry and permissions
 

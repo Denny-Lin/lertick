@@ -3,6 +3,8 @@
 For installation and foreground trials on your own Linux hardware, use the
 [native installation guide](INSTALL.md). QEMU is not an installation dependency.
 This document preserves the VM setup and experimental reproduction procedure.
+For optional native daily coordination with Lerwatt, use the maintained
+[shared integration guide](INTEGRATION.md), included identically in both repositories.
 
 Phase 1 was approved on 2026-10-09. Lertick now has a C/eBPF implementation,
 libbpf loader, real CPU workload, model tests, and a Linux validation runner.
@@ -191,8 +193,10 @@ selection:
 
 The default prediction bounds are 0.5–5 ms. `--fixed-slice-us`,
 `--min-slice-us`, and `--max-slice-us` configure them; the loader requires
-`min <= fixed <= max`. Duration is an integer number of seconds, from 1 through
-3600, and defaults to 30. `--sample-ms 250` records frequent JSONL snapshots;
+`min <= fixed <= max`. Duration is an integer number of seconds, from 0 through
+3600; 0 means continuous operation and is the current raw-loader default.
+The historical experiments below choose finite durations explicitly.
+`--sample-ms 250` records frequent JSONL snapshots;
 `--verbose` enables verifier/libbpf diagnostics. The model's runtime acceptance
 and learning outcomes were checked separately for `shadow` and `online` on the
 recorded kernel; repeat those checks on another kernel.
@@ -381,6 +385,12 @@ overlay from the read-only base.
 
 ## CPU frequency targets and the Lerwatt plug-in
 
+Native service setup is now available through `lertick integration on` and
+Lerwatt's `./deploy.sh install --lertick`. Models and release versions remain
+independent; compatible model-only updates do not change the contract ABI.
+See [setup, ownership and ABI compatibility](INTEGRATION.md) before using the
+raw-loader research commands below.
+
 `--cpuperf auto|util|max` controls `scx_bpf_cpuperf_set()`. Linux v7.3 sets every
 CPU's sched_ext target to 1024 when a scheduler attaches, and schedutil uses that
 target instead of CFS utilization while sched_ext runs every task, so `max` (the
@@ -400,7 +410,11 @@ running `lerwatt-sim` (its marker under `/run/lerwatt-sim` or
 `$LERWATT_SIM_ROOT`), maps CPU N to simulated CPU N and uses the simulated
 capacities; run the guest with `-smp 8` to cover all RK3588 clusters. Lerwatt
 and the simulator attach and re-attach by themselves as Lertick runs start and
-end.
+end. Current ABI 2 additionally validates the full policy CPU-set hash and a
+fresh attachment session; expired or incompatible records disable the handoff.
+The shared guide defines the 100 ms publication, 500 ms demand-age and 300 ms
+limit-lifetime rules. Historical experiment artifacts retain their original
+protocol and are not current-ABI validation evidence.
 
 Inside the guest, with Lerwatt built in `../lerwatt`:
 
@@ -409,22 +423,26 @@ sudo build/scx_lertick --check
 sudo build/scx_lertick --mode fixed --cpuperf util --duration 20 --sample-ms 1000 \
   --stats-json results/local/cpuperf.jsonl
 sudo ../lerwatt/build/lerwatt-sim --load procstat --cooling passive --duration 120 &
-sudo ../lerwatt/build/lerwattd --period-ms 100 --duration 100 --telemetry results/local/lerwatt.jsonl &
+sudo ../lerwatt/build/lerwattd --sysroot /run/lerwatt-sim --period-ms 100 --duration 100 \
+  --telemetry results/local/lerwatt.jsonl &
 sudo build/scx_lertick --mode online --track-all --lerwatt --duration 60 \
   --stats-json results/local/lerwatt-plugin.jsonl
 ```
 
 Check that the first run's final snapshot shows nonzero `cpuperf_sets` and
 `cpuperf_idle_sets`, that the plug-in run's registered event lists the simulated
-clusters, that `contract_applied` grows while `lerwattd` runs, and that both
-Lerwatt programs log `attached` and then `lost` after Lertick exits.
+clusters, and that `contract_applied` grows while `lerwattd` runs. For current
+ABI tests, additionally inspect fresh connection state and the transition back
+to independent operation after the peer exits. Historical logs used
+`attached`/`lost`; saved records do not establish the new identity checks.
 
 ## Known boundaries
 
 The scheduler retains its minimal Phase 1 architecture, with Phase 2 correctness
 and benchmark validation. It learns per-task CPU-burst estimates and changes
-bounded slice budgets; CPU placement, NUMA tuning, advanced ML,
-and production service installation remain outside the completed work. Memory allocation,
+bounded slice budgets; learned CPU placement, NUMA tuning and advanced ML
+remain outside the completed work. Native service management is implemented;
+production stability and long physical-hardware runs remain unestablished. Memory allocation,
 reclaim, DAMON/DAMOS, NUMA memory placement, and joint CPU/memory management are
 outside the project scope; archived material is background research only.
 Root privileges are required in the guest. The official

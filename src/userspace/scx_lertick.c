@@ -18,6 +18,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
+#include <sys/random.h>
 #include <sys/utsname.h>
 #include <time.h>
 #include <unistd.h>
@@ -289,8 +290,40 @@ static int publish_demand(struct scx_lertick *skel, struct lt_demand_rec *mem,
 	return 0;
 }
 
+/* Only public, versioned advice crosses this boundary. Model weights and
+ * scheduling/training state remain private to this process and BPF program. */
+static const char *power_link_state(struct scx_lertick *skel,
+				    const struct ltlw_topology *topo, int *matched)
+{
+	*matched = 0;
+	if (!topo || !topo->session_id)
+		return "off";
+	for (__u32 cluster = 0; cluster < (__u32)topo->nclusters; cluster++) {
+		struct lw_contract_rec record, confirm;
+		int fd = bpf_map__fd(skel->maps.lw_contract);
+
+		if (!bpf_map_lookup_elem(fd, &cluster, &record) &&
+		    !bpf_map_lookup_elem(fd, &cluster, &confirm) && record.seq &&
+		    !(record.seq & 1) && record.seq == confirm.seq &&
+		    lw_contract_constraint_valid(&record, topo->cluster_topology_id[cluster],
+					 topo->session_id, now_ns()))
+			(*matched)++;
+	}
+	return *matched == topo->nclusters && topo->nclusters ? "connected" : "waiting";
+}
+
+static int new_power_session(__u64 *session_id)
+{
+	ssize_t length;
+
+	do {
+		length = getrandom(session_id, sizeof(*session_id), 0);
+	} while (length < 0 && errno == EINTR);
+	return length == (ssize_t)sizeof(*session_id) && *session_id ? 0 : -1;
+}
+
 static int emit_snapshot(FILE *out, struct scx_lertick *skel, const char *phase, const char *mode_name,
-			 bool cpus, bool summary_only)
+			 bool cpus, bool summary_only, const struct ltlw_topology *topo)
 {
 	int ncpu = libbpf_num_possible_cpus();
 	__u64 sums[LERTICK_STAT_COUNT] = {0};
@@ -376,6 +409,11 @@ finish_tasks:
 		return -1;
 	if (summary_only)
 		fprintf(out, ",\"summary_only\":true");
+	int matched;
+	const char *power_link = power_link_state(skel, topo, &matched);
+
+	fprintf(out, ",\"lerwatt_link\":\"%s\",\"lerwatt_matched_policies\":%d,\"contract_version\":%d",
+		power_link, matched, LW_CONTRACT_VERSION);
 	fprintf(out, "}\n");
 	return fflush(out) || ferror(out) ? -1 : 0;
 }
@@ -482,6 +520,7 @@ int main(int argc, char **argv)
 	bool verify = false, maintenance = false;
 	bool summary_only = false, full_stats = false, sample_explicit = false;
 	bool notify = false, ready_sent = false;
+	int previous_power_matches = -1;
 	bool track_all = false;
 	bool fallback, restored, watchdog_observed = false, stall_kind_known;
 	__u64 start, next_sample, exit_code;
@@ -683,6 +722,11 @@ int main(int argc, char **argv)
 		status = 1;
 		goto cleanup;
 	}
+	if (lerwatt && new_power_session(&topo.session_id)) {
+		fprintf(stderr, "Lerwatt plug-in: cannot obtain a fresh attachment identity.\n");
+		status = 1;
+		goto cleanup;
+	}
 	if (lerwatt && topo.npolicies > LW_CONTRACT_MAX_CLUSTERS)
 		fprintf(stderr, "Lerwatt plug-in: %d cpufreq policies; CPUs past the first %d have no contract.\n",
 			topo.npolicies, LW_CONTRACT_MAX_CLUSTERS);
@@ -732,6 +776,9 @@ int main(int argc, char **argv)
 	skel->rodata->lerwatt_enabled = lerwatt;
 	skel->rodata->nr_cpus = ncpus < (int)LERTICK_MAX_CPUS ? (unsigned)ncpus : LERTICK_MAX_CPUS;
 	if (lerwatt) {
+		skel->rodata->lerwatt_session_id = topo.session_id;
+		for (unsigned i = 0; i < LW_CONTRACT_MAX_CLUSTERS; i++)
+			skel->rodata->cluster_topology_id[i] = topo.cluster_topology_id[i];
 		for (unsigned i = 0; i < LERTICK_MAX_CPUS; i++) {
 			skel->rodata->cpu_cluster[i] = topo.cpu_cluster[i];
 			skel->rodata->cpu_cap_override[i] = topo.cpu_capacity[i];
@@ -848,6 +895,8 @@ int main(int argc, char **argv)
 		fprintf(out, ",\"cpuperf\":\"%s\",\"cpuperf_reason\":\"%s\",\"lerwatt\":%s",
 			cpuperf == LERTICK_CPUPERF_UTIL ? "util" : "max", cpuperf_reason,
 			lerwatt ? "true" : "false");
+		fprintf(out, ",\"lerwatt_session_id\":%llu,\"contract_version\":%d",
+			U64(topo.session_id), LW_CONTRACT_VERSION);
 		fprintf(out, ",\"model_init\":\"%s\"", model_init_ewma ? "ewma" : "bias");
 		fprintf(out, ",\"model_update\":\"%s\"", model_update_carry ? "carry" : "trunc");
 		fprintf(out, ",\"duration_seconds\":%u,\"sample_ms\":%u,\"summary_only\":%s,\"version\":",
@@ -872,7 +921,8 @@ int main(int argc, char **argv)
 			next_publish = now_ns() + LTLW_PUBLISH_PERIOD_NS;
 		}
 		if (now_ns() >= next_sample) {
-			if (emit_snapshot(out, skel, "periodic", mode_name, cpu_report, summary_only)) {
+			if (emit_snapshot(out, skel, "periodic", mode_name, cpu_report, summary_only,
+					  lerwatt ? &topo : NULL)) {
 				fprintf(stderr, "Failed to read/write scheduler telemetry.\n"); status = 1; break;
 			}
 			next_sample = now_ns() + (__u64)sample_ms * 1000000;
@@ -890,14 +940,33 @@ int main(int argc, char **argv)
 				status = 1;
 				break;
 			}
-			error = lt_runtime_notify(getenv("NOTIFY_SOCKET"),
-				"READY=1\nSTATUS=Lertick scheduler registered; initial health check passed");
+			int matched;
+			const char *power_link = power_link_state(skel, lerwatt ? &topo : NULL, &matched);
+			char message[160];
+
+			snprintf(message, sizeof(message), "READY=1\nSTATUS=Lertick scheduler registered; Lerwatt: %s", power_link);
+			error = lt_runtime_notify(getenv("NOTIFY_SOCKET"), message);
 			if (error) {
 				fprintf(stderr, "Cannot notify service readiness: %s; detaching.\n", strerror(-error));
 				status = 1;
 				break;
 			}
 			ready_sent = true;
+			previous_power_matches = matched;
+		}
+		if (ready_sent) {
+			int matched;
+			const char *power_link = power_link_state(skel, lerwatt ? &topo : NULL, &matched);
+
+			if (matched != previous_power_matches) {
+				char message[160];
+
+				snprintf(message, sizeof(message), "STATUS=Lertick scheduler registered; Lerwatt: %s", power_link);
+				if (lt_runtime_notify(getenv("NOTIFY_SOCKET"), message)) {
+					fprintf(stderr, "Cannot refresh power link status; scheduling continues.\n");
+				}
+				previous_power_matches = matched;
+			}
 		}
 		__u64 wake = now_ns() + 50000000ULL;
 		__u64 deadline = duration ? start + (__u64)duration * 1000000000ULL : wake;
@@ -929,7 +998,8 @@ int main(int argc, char **argv)
 		if (!watchdog_observed) status = 1;
 	}
 	if (expect_watchdog && !watchdog_observed) status = 1;
-	if (emit_snapshot(out, skel, "final", mode_name, cpu_report, summary_only)) status = 1;
+	if (emit_snapshot(out, skel, "final", mode_name, cpu_report, summary_only,
+			  lerwatt ? &topo : NULL)) status = 1;
 	/* Lerwatt sees the demand go stale and falls back to running alone. */
 	exit_code = UEI_REPORT(skel, uei);
 	fprintf(out, "{\"event\":\"exit\",\"unexpected_fallback\":%s,\"watchdog_observed\":%s,\"watchdog_expected\":%s,\"watchdog_triggered\":%s,\"exit_kind\":%d,\"exit_code\":%lld,\"reason\":",

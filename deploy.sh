@@ -20,6 +20,7 @@ Usage: ./deploy.sh COMMAND [OPTIONS]
   restart     Restart this service; never stop another scheduler.
   enable      Start now and enable this service at boot.
   disable     Stop now and disable this service at boot.
+  integration [on|off|status]  Persist optional Lerwatt coordination (default off).
   update      Build/verify a candidate before stopping/replacing this service.
   rollback    Restore the previous complete release, preserving service intent.
   uninstall   Disable/stop this service and remove its installed files.
@@ -63,7 +64,7 @@ destdir=${DESTDIR:-}; command=${1:-help}
 if [ "$#" -gt 0 ]; then shift; fi
 case $command in
     help|--help|-h) usage; exit 0 ;;
-    check|verify|plan|run|trial|install|uninstall|status|version|report|start|stop|restart|enable|disable|update|rollback) ;;
+    check|verify|plan|run|trial|install|uninstall|status|version|report|start|stop|restart|enable|disable|integration|update|rollback) ;;
     *) usage >&2; fail "unknown command: $command" ;;
 esac
 validate_path()
@@ -104,6 +105,10 @@ validate_options()
 }
 case $command in
     plan|run|trial) validate_options "$@" ;;
+    integration)
+        [ "$#" -le 1 ] || fail 'integration accepts on, off or status'
+        case ${1:-status} in on|off|status) ;; *) fail 'integration accepts on, off or status' ;; esac
+        ;;
     report) for arg in "$@"; do case $arg in --include-logs|--help) ;; *) fail "unsupported report option: $arg" ;; esac; done ;;
     *) [ "$#" -eq 0 ] || fail "$command does not accept options" ;;
 esac
@@ -185,7 +190,7 @@ if [ "$command" = update ] && [ "$source_tree" = no ]; then
     exit $?
 fi
 case $command in
-    install|update|uninstall|rollback|start|stop|restart|enable|disable)
+    install|update|uninstall|rollback|start|stop|restart|enable|disable|integration)
         case $command in
             install|update)
                 if [ "$source_tree" = yes ] && [ "$(id -u)" -eq 0 ]; then
@@ -221,9 +226,10 @@ case $command in
                 fi
                 ;;
         esac
-        become_root
+        become_root "$@"
         [ -x "$manager" ] && [ ! -L "$manager" ] || fail 'service manager unavailable; install/update first'
         if [ "$source_tree" = no ]; then trusted_root_path "$manager"; fi
+        if [ "$command" = integration ]; then exec "$manager" "$prefix" integration "${1:-status}"; fi
         exec "$manager" "$prefix" "$command" "$tool_dir"
         ;;
 esac

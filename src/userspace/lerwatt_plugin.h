@@ -15,7 +15,7 @@
 #define LTLW_SIM_MARKER ".lerwatt-sim"
 #define LTLW_SIM_DEFAULT_ROOT "/run/lerwatt-sim"
 #define LTLW_SIM_ROOT_ENV "LERWATT_SIM_ROOT"
-#define LTLW_PUBLISH_PERIOD_NS 100000000ULL
+#define LTLW_PUBLISH_PERIOD_NS LW_CONTRACT_PUBLISH_NS
 
 struct ltlw_topology {
 	int ncpus;					/* CPUs Lertick schedules */
@@ -24,6 +24,8 @@ struct ltlw_topology {
 	unsigned char cpu_cluster[LERTICK_MAX_CPUS];	/* LERTICK_NO_CLUSTER: none */
 	unsigned short cpu_capacity[LERTICK_MAX_CPUS];	/* 0: the kernel's value */
 	int cluster_ncpus[LW_CONTRACT_MAX_CLUSTERS];
+	__u64 cluster_topology_id[LW_CONTRACT_MAX_CLUSTERS]; /* full related CPU sets */
+	__u64 session_id;				/* random nonzero loader attachment */
 	char source[8];					/* "hw", "sim" or "single" */
 	char root[256];					/* sysfs root used; "" is / */
 };

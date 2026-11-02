@@ -12,6 +12,8 @@ fi
 prefix=${prefix%/}
 unit_dir=/etc/systemd/system
 lock_dir=/run/lertick-deploy
+config_dir=/etc/lertick
+config=$config_dir/integration.conf
 unit=$unit_dir/lertick.service
 store=$prefix/lib/lertick
 releases=$store/releases
@@ -127,6 +129,59 @@ $report_hash"
     fi
     [ "$actual" = "$(cat "$release/manifest.sha256")" ]
 }
+integration_read()
+{
+    integration_value=off
+    trusted_path "$config_dir"
+    [ -e "$config_dir" ] || return 0
+    [ "$(stat -c '%u %a' "$config_dir")" = '0 700' ] || fail 'integration directory must be root-owned mode 0700'
+    trusted_path "$config"
+    [ -e "$config" ] || return 0
+    [ -f "$config" ] && [ ! -L "$config" ] || fail 'integration configuration must be a regular file'
+    [ "$(stat -c '%u %a %h' "$config")" = '0 600 1' ] || fail 'integration configuration must be root-owned mode 0600 with one link'
+    integration_seen=no
+    while IFS= read -r config_line || [ -n "$config_line" ]; do
+        case $config_line in
+            lerwatt=on|lerwatt=off)
+                [ "$integration_seen" = no ] || fail 'duplicate integration setting'
+                integration_value=${config_line#lerwatt=}; integration_seen=yes ;;
+            *) fail 'invalid integration configuration; expected lerwatt=on or lerwatt=off' ;;
+        esac
+    done < "$config"
+    [ "$integration_seen" = yes ] || fail 'empty integration configuration'
+}
+integration_write()
+{
+    case $1 in on|off) ;; *) fail 'invalid integration value' ;; esac
+    trusted_path "$config_dir"; trusted_path "$config"
+    mkdir -p "$config_dir"; chmod 700 "$config_dir"
+    integration_tmp=$(mktemp "$config_dir/.integration.XXXXXX")
+    if ! printf 'lerwatt=%s\n' "$1" > "$integration_tmp" || ! chmod 600 "$integration_tmp" || ! mv -f "$integration_tmp" "$config"; then
+        rm -f "$integration_tmp"; return 1
+    fi
+}
+verify_integration()
+{
+    if [ "$2" = on ]; then
+        "$1" --verify --mode online --track-all --cpuperf auto --summary-only --lerwatt >/dev/null
+    else
+        "$1" --verify --mode online --track-all --cpuperf auto --summary-only >/dev/null
+    fi
+}
+# PID 1 starts this protected installed helper. Do not acquire the transaction
+# lock here: start/update holds it while waiting for our READY notification.
+if [ "$command" = service-run ]; then
+    [ "$(id -u)" -eq 0 ] && [ -z "$destdir" ] || fail 'service execution requires root'
+    [ "$0" = "$prefix/libexec/lertick/service_manager.sh" ] || fail 'service execution requires the installed helper'
+    trusted_path "$0"; assert_unit_owner; require_service
+    integration_read
+    current=$(read_marker current || :)
+    [ -n "$current" ] && validate_release "$current" || fail 'installed release validation failed; no scheduler attached'
+    if [ "$integration_value" = on ]; then
+        exec "$release/scx_lertick" --mode online --duration 0 --track-all --cpuperf auto --summary-only --sample-ms 60000 --notify --lerwatt
+    fi
+    exec "$release/scx_lertick" --mode online --duration 0 --track-all --cpuperf auto --summary-only --sample-ms 60000 --notify
+fi
 # Called only under the loader's separate controller/maintenance lock.
 if [ "$command" = promote-locked ]; then
     [ "$(id -u)" -eq 0 ] && [ -z "$destdir" ] || fail 'promotion requires root'
@@ -159,7 +214,13 @@ if [ "$command" = uninstall-locked ]; then
     exit 0
 fi
 if [ "$command" = status ]; then
-    if have_systemd; then systemctl show --property=ActiveState,SubState,UnitFileState,Result lertick.service 2>/dev/null || :; fi
+    if have_systemd; then systemctl show --property=ActiveState,SubState,UnitFileState,Result,StatusText lertick.service 2>/dev/null || :; fi
+    if [ "$(id -u)" -ne 0 ] && [ -d "$config_dir" ] && [ ! -r "$config" ]; then
+        printf 'Lerwatt integration: protected configuration; run lertick integration status\n'
+    else
+        integration_read
+        printf 'Lerwatt integration configured: %s\n' "$integration_value"
+    fi
     for marker in current previous; do value=$(read_marker "$marker" || :); [ -z "$value" ] || printf '%s: %s\n' "$marker" "$value"; done
     exit 0
 fi
@@ -194,6 +255,7 @@ assert_unit_owner
 case $command in
     start|restart|enable)
         require_service; check_start_safe
+        integration_read
         # An explicit user retry may clear systemd's start-rate limit; automatic
         # update/recovery paths intentionally never reset or retry in a loop.
         # A newly installed unit may not be loaded yet. This reset is best-effort;
@@ -217,9 +279,40 @@ case $command in
     uninstall-locked)
         # This case must be dispatched before taking this transaction lock again.
         fail 'internal uninstall dispatch failed' ;;
+    integration)
+        require_service
+        case ${bundle:-status} in on|off|status) ;; *) fail 'integration accepts on, off or status' ;; esac
+        integration_read
+        if [ "${bundle:-status}" = status ]; then printf 'Lerwatt integration configured: %s\n' "$integration_value"; exit 0; fi
+        old_integration=$integration_value
+        if [ "$bundle" = "$old_integration" ]; then printf 'Lerwatt integration already %s; service state kept.\n' "$bundle"; exit 0; fi
+        current=$(read_marker current || :)
+        [ -n "$current" ] && validate_release "$current" || fail 'installed release validation failed; service kept'
+        verify_integration "$release/scx_lertick" "$bundle" || fail 'integration verification failed; setting and service kept'
+        check_start_safe
+        integration_active=no
+        if service_active; then integration_active=yes; systemctl stop lertick.service || fail 'could not stop this service; setting kept'; check_default; fi
+        if ! integration_write "$bundle"; then
+            if [ "$integration_active" = yes ]; then systemctl start lertick.service || :; fi
+            fail 'could not save integration setting'
+        fi
+        if [ "$integration_active" = yes ]; then
+            if ! systemctl start lertick.service || ! check_running; then
+                systemctl stop lertick.service || fail 'integration startup failed and service could not stop; inspect service'
+                check_default
+                integration_write "$old_integration" || fail 'integration startup failed and previous setting could not be restored'
+                if ! systemctl start lertick.service || ! check_running; then
+                    fail 'integration startup failed; previous setting restored but service remains failed; automatic retries disabled'
+                fi
+                fail 'integration startup failed; previous setting and running service restored once'
+            fi
+        fi
+        printf 'Lerwatt integration configured: %s; previous active/enabled intent kept.\n' "$bundle"
+        exit 0 ;;
     install|update|rollback) ;;
     *) fail "unknown service command: $command" ;;
 esac
+integration_read
 old_revision=$(read_marker current || :)
 old_previous=$(read_marker previous || :)
 was_active=no; was_enabled=no
@@ -268,7 +361,7 @@ fi
 candidate_loader=$releases/$candidate/scx_lertick
 transaction_manager=$releases/$candidate/service_manager.sh
 # Verifier-only path never attaches, pins, takes the controller lock or stops old service.
-"$candidate_loader" --verify --mode online --track-all --cpuperf auto --summary-only >/dev/null || fail 'candidate verification failed; current service and release kept'
+verify_integration "$candidate_loader" "$integration_value" || fail 'candidate verification failed; current service and release kept'
 if [ "$candidate" = "$old_revision" ]; then printf 'Already at release %s; no restart.\n' "$candidate"; exit 0; fi
 # Pin maintenance to the known-good immutable loader before stopping anything.
 # The live sbin path will be overwritten and must never become our recovery tool.
@@ -300,6 +393,7 @@ rollback_once()
     printf 'Previous bundle restored; enabled state kept (%s).\n' "$was_enabled" >&2
 }
 if ! promote "$candidate"; then rollback_once || printf 'Rollback unavailable/failed; Linux default scheduling remains the intended fallback.\n' >&2; exit 1; fi
+if [ ! -e "$config" ]; then integration_write "$integration_value" || fail 'could not create integration configuration'; fi
 if have_systemd; then
     if ! systemctl daemon-reload; then rollback_once || :; exit 1; fi
     if [ "$was_active" = yes ]; then

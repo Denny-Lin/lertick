@@ -86,6 +86,7 @@ static void test_discover(void)
 {
 	char hw[300], empty[300], sim[300], nomark[300];
 	struct ltlw_topology t;
+	__u64 hw_ids[LW_CONTRACT_MAX_CLUSTERS];
 
 	snprintf(hw, sizeof(hw), "%s/hw", base);
 	snprintf(empty, sizeof(empty), "%s/empty", base);
@@ -102,6 +103,10 @@ static void test_discover(void)
 	assert(t.cpu_cluster[4] == 1 && t.cpu_cluster[5] == 1);
 	assert(t.cpu_cluster[6] == 2 && t.cpu_cluster[7] == 2);
 	assert(t.cluster_ncpus[0] == 4 && t.cluster_ncpus[1] == 2 && t.cluster_ncpus[2] == 2);
+	assert(t.cluster_topology_id[0] && t.cluster_topology_id[1] && t.cluster_topology_id[2]);
+	assert(t.cluster_topology_id[0] != t.cluster_topology_id[1]);
+	assert(t.cluster_topology_id[1] != t.cluster_topology_id[2]);
+	memcpy(hw_ids, t.cluster_topology_id, sizeof(hw_ids));
 	/* Real hardware: the kernel's capacities stand. */
 	assert(t.cpu_capacity[0] == 0 && t.cpu_capacity[7] == 0);
 	assert(!ltlw_schedutil_in_use(hw));
@@ -110,6 +115,8 @@ static void test_discover(void)
 	assert(!ltlw_discover(&t, 4, empty, sim));
 	assert(!strcmp(t.source, "sim") && t.nclusters == 3);
 	assert(t.cluster_ncpus[0] == 4 && t.cluster_ncpus[1] == 0 && t.cluster_ncpus[2] == 0);
+	/* Absent guest CPUs do not turn a physical policy into a different ID. */
+	assert(!memcmp(hw_ids, t.cluster_topology_id, sizeof(hw_ids)));
 	assert(t.cpu_capacity[0] == 397 && t.cpu_capacity[3] == 397);
 	assert(ltlw_schedutil_in_use(sim));
 
@@ -117,6 +124,7 @@ static void test_discover(void)
 	assert(!ltlw_discover(&t, 4, empty, nomark));
 	assert(!strcmp(t.source, "single") && t.nclusters == 1 && t.cluster_ncpus[0] == 4);
 	assert(t.cpu_cluster[3] == 0 && t.cpu_cluster[4] == LERTICK_NO_CLUSTER);
+	assert(t.cluster_topology_id[0] == hw_ids[0]);
 }
 
 static void test_quantile(void)
@@ -144,6 +152,7 @@ static void test_demand(void)
 
 	snprintf(hw, sizeof(hw), "%s/hw", base);
 	assert(!ltlw_discover(&t, 8, hw, NULL));
+	t.session_id = 0x7ad1809342ULL;
 	memset(cpus, 0, sizeof(cpus));
 	/* Cluster 0: two busy CPUs with targets 300 and 700, two never used. */
 	cpus[0] = (struct lertick_cpu_state){ .run_mark_ns = now - 1000, .util = 600,
@@ -161,6 +170,8 @@ static void test_demand(void)
 	assert(out[0].cpuperf_max == 700 && out[0].cpuperf_mean == 250);
 	assert(out[0].pred_util == 200);
 	assert(out[0].version == LW_CONTRACT_VERSION && out[0].updated_ns == now);
+	assert(out[0].session_id == t.session_id);
+	assert(out[0].topology_id == t.cluster_topology_id[0]);
 	assert(out[0].lat_crit_milli == 0 && out[0].p99_wake_ns == 0);
 	/* An idle CPU's utilization decays; an unset target is the kernel's 1024. */
 	assert(out[1].pred_util == 0 && out[1].cpuperf_max == 1024);
@@ -190,7 +201,7 @@ static bool read_like_lerwatt(const struct lt_demand_rec *slot, struct lt_demand
 {
 	__u32 s1 = __atomic_load_n(&slot->seq, __ATOMIC_ACQUIRE), s2;
 
-	if (s1 & 1)
+	if (!s1 || (s1 & 1))
 		return false;
 	*copy = *slot;
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
@@ -201,7 +212,8 @@ static bool read_like_lerwatt(const struct lt_demand_rec *slot, struct lt_demand
 static void test_publish(void)
 {
 	struct lt_demand_rec slot = { 0 }, copy, val = { .pred_util = 123, .cpuperf_max = 456,
-		.cpuperf_mean = 321, .lat_crit_milli = 250, .p99_wake_ns = 8192, .updated_ns = 77 };
+		.cpuperf_mean = 321, .lat_crit_milli = 250, .p99_wake_ns = 8192, .updated_ns = 77,
+		.topology_id = 0xa781b921, .session_id = 0x3aef412331ULL };
 
 	assert(!read_like_lerwatt(&slot, &copy));	/* never written: version 0 */
 	ltlw_publish(&slot, &val);
@@ -209,10 +221,60 @@ static void test_publish(void)
 	assert(read_like_lerwatt(&slot, &copy));
 	assert(copy.pred_util == 123 && copy.cpuperf_max == 456 && copy.cpuperf_mean == 321);
 	assert(copy.lat_crit_milli == 250 && copy.p99_wake_ns == 8192 && copy.updated_ns == 77);
+	assert(copy.topology_id == val.topology_id && copy.session_id == val.session_id);
 	slot.seq = 5;	/* a writer died mid-update */
 	assert(!read_like_lerwatt(&slot, &copy));
 	ltlw_publish(&slot, &val);
 	assert(slot.seq == 8 && read_like_lerwatt(&slot, &copy));
+}
+
+static void test_contract_identity(void)
+{
+	const __u64 now = 10000000000ULL, session = 23;
+	__u64 hash = lw_contract_topology_seed(), other;
+	struct lw_contract_rec r;
+
+	for (__u32 cpu = 0; cpu < 4; cpu++)
+		hash = lw_contract_topology_add_cpu(hash, cpu);
+	hash = lw_contract_topology_finish(hash, 4);
+	assert(hash == 0x8d5e629bcc626c8bULL); /* frozen cross-repository test vector */
+	assert(!lw_contract_topology_finish(lw_contract_topology_seed(), 0));
+	other = lw_contract_topology_add_cpu(lw_contract_topology_seed(), 4);
+	other = lw_contract_topology_finish(other, 1);
+	assert(hash != other);
+	r = (struct lw_contract_rec){ .version = LW_CONTRACT_VERSION,
+		.ceiling_cap = 800, .floor_cap = 200, .energy_price_milli = 500,
+		.valid_until_ns = now + LW_CONTRACT_TTL_NS,
+		.topology_id = hash, .session_id = session };
+	assert(lw_contract_constraint_valid(&r, hash, session, now));
+	/* Same policy after a Lertick restart must reject the old session. */
+	assert(!lw_contract_constraint_valid(&r, hash, session + 1, now));
+	assert(!lw_contract_constraint_valid(&r, other, session, now));
+	assert(!lw_contract_constraint_valid(&r, 0, session, now));
+	assert(!lw_contract_constraint_valid(&r, hash, 0, now));
+	r.version = LW_CONTRACT_VERSION - 1;
+	assert(!lw_contract_constraint_valid(&r, hash, session, now));
+	r.version = LW_CONTRACT_VERSION;
+	r.valid_until_ns = now - 1;
+	assert(!lw_contract_constraint_valid(&r, hash, session, now));
+	r.valid_until_ns = now + LW_CONTRACT_TTL_NS + 1;
+	assert(!lw_contract_constraint_valid(&r, hash, session, now));
+	r.valid_until_ns = ~(__u64)0;
+	assert(!lw_contract_constraint_valid(&r, hash, session, now));
+	r.valid_until_ns = now;
+	assert(lw_contract_constraint_valid(&r, hash, session, now));
+	r.floor_cap = 801;
+	assert(!lw_contract_constraint_valid(&r, hash, session, now));
+	r.ceiling_cap = 0; /* explicit no-cap value still supports a floor */
+	assert(lw_contract_constraint_valid(&r, hash, session, now));
+	r.floor_cap = LW_CAP_ONE + 1;
+	assert(!lw_contract_constraint_valid(&r, hash, session, now));
+	r.floor_cap = 0;
+	r.ceiling_cap = LW_CAP_ONE + 1;
+	assert(!lw_contract_constraint_valid(&r, hash, session, now));
+	r.ceiling_cap = LW_CAP_ONE;
+	r.energy_price_milli = LW_MILLI_ONE + 1;
+	assert(!lw_contract_constraint_valid(&r, hash, session, now));
 }
 
 static void test_pin_prepare(void)
@@ -247,6 +309,7 @@ int main(void)
 	test_quantile();
 	test_demand();
 	test_publish();
+	test_contract_identity();
 	test_pin_prepare();
 	printf("{\"test\":\"lerwatt_plugin\",\"status\":\"passed\"}\n");
 	return 0;

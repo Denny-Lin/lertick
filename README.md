@@ -112,6 +112,10 @@ The helper learns from all eligible tasks by default. The raw loader's historica
 
 Models restart with each attachment. Continuous learning adapts within a run; updating the code does not by itself establish better throughput or latency. [Measured improvement workflow →](docs/DAILY_USE.md#improve-performance-with-evidence)
 
+## Works with Lerwatt
+
+Let [Lerwatt](https://github.com/Denny-Lin/lerwatt) manage CPU power constraints while Lertick handles scheduling. Their optional local link shares fresh demand and limits; models, updates and recovery stay separate. Compatible model improvements need no joint retraining or peer update. Either project can run alone. **[Connect them in a few steps →](docs/INTEGRATION.md)**
+
 ## What has been tested
 
 | Validation | Evidence |
@@ -134,7 +138,7 @@ Ubuntu release numbers alone do not determine support. Stock Ubuntu 22.04/24.04 
 | Install on a compatible kernel | [Native installation](docs/INSTALL.md) |
 | Run daily, update, roll back or collect a report | [Daily use](docs/DAILY_USE.md) |
 | Inspect the model, dispatch and CPU-frequency integration | [Implementation and modes](docs/OVERVIEW.md) · [Correctness](docs/PHASE2_CORRECTNESS.md) |
-| Connect the optional Lerwatt power manager | [Lerwatt integration](docs/DEPLOYMENT.md#cpu-frequency-targets-and-the-lerwatt-plug-in) |
+| Connect the optional Lerwatt power manager | [Shared integration guide](docs/INTEGRATION.md) |
 | Reproduce the VM results | [VM reproduction](docs/DEPLOYMENT.md) · [Benchmarks](benchmarks/README.md) |
 | Contribute or report a problem | [Contributing](CONTRIBUTING.md) · [Report a bug](https://github.com/Denny-Lin/lertick/issues/new?template=bug_report.yml) · [Security](SECURITY.md) |
 

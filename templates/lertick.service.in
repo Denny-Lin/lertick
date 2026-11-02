@@ -7,7 +7,7 @@ After=local-fs.target
 [Service]
 Type=notify
 NotifyAccess=main
-ExecStart=@PREFIX@/sbin/scx_lertick --mode online --duration 0 --track-all --cpuperf auto --summary-only --sample-ms 60000 --notify
+ExecStart=@PREFIX@/libexec/lertick/service_manager.sh @PREFIX@ service-run
 Restart=no
 KillMode=control-group
 TimeoutStartSec=30

@@ -24,12 +24,27 @@ Run these commands as your normal user; privileged management asks for sudo. Ins
 | `lertick enable` | Enable boot startup and start now. |
 | `lertick disable` | Disable boot startup and stop now. |
 | `lertick status` | Inspect the service and running sched_ext scheduler. |
+| `lertick integration on\|off\|status` | Configure or inspect optional Lerwatt coordination, preserving service intent. |
 | `lertick version` | Show the installed version. |
 | `lertick update` | Build and verify a candidate, then perform a controlled bundle update. |
 | `lertick rollback` | Restore the retained previous bundle, preserving service intent. |
 | `lertick report` | Produce a local diagnostic report without uploading it. |
 
 `start` and `restart` are explicit requests to run the service. A stopped service is not automatically restarted by `update` merely because an update succeeded. Other active sched_ext schedulers and foreground scheduler processes must be handled through their own owner; Lertick does not stop them for you.
+
+## Optional Lerwatt coordination
+
+After installing both projects, enable their local link using the [shared integration guide](INTEGRATION.md). Lertick's part is:
+
+```sh
+lertick integration on
+lertick enable
+lertick status
+```
+
+Integration is off by default. `integration on` verifies the installed loader's optional BPF path before saving its private setting; if this managed service is already active, it performs a controlled restart while preserving active/enabled intent. `lertick integration off` removes the handoff while keeping the scheduler's own policy. A plain update preserves the mode. Configuration alone does not prove a connected peer; inspect current worker status/logs.
+
+Either project can start, fail or update independently. They do not restart their peer or share model weights. Model-only updates that retain the contract ABI do not require updating or retraining the other project. Mixed incompatible ABIs/topologies disable the link and leave independent operation. The contract is advisory; kernel/firmware protections and each project's own recovery remain separate.
 
 ## Service readiness and fallback
 

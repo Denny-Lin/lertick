@@ -36,7 +36,10 @@ if name=='sudo':
     log('sudo'); child=dict(env,STUB_UID='0');os.execvpe(args[0],args,child)
 if name=='stat':
     target=args[-1]
-    print('1000 755' if target==env.get('STUB_BAD_OWNER') else '0 777' if target==env.get('STUB_BAD_MODE') else '0 755');sys.exit(0)
+    owner='1000' if target==env.get('STUB_BAD_OWNER') else '0'
+    mode=oct(Path(target).stat().st_mode&0o777)[2:] if target.startswith(env['STUB_CONFIG']) else '755'
+    if target==env.get('STUB_BAD_MODE'):mode='777'
+    print(owner+' '+mode+(' '+str(Path(target).stat().st_nlink) if '%u %a %h' in args else ''));sys.exit(0)
 if name=='cp':
     log('copy',locked=env.get('STUB_MAINTENANCE')=='1');shutil=__import__('shutil');shutil.copyfile(args[0],args[1]);sys.exit(0)
 if name=='native_build.sh':log('build');sys.exit(0)
@@ -101,7 +104,7 @@ with tempfile.TemporaryDirectory(prefix='lertick-deploy-fixtures-') as directory
     executable(tree/'deploy.sh', (project/'deploy.sh').read_text())
     executable(tree/'build/scx_lertick', mux)
     executable(tree/'scripts/native_build.sh', mux)
-    manager=(project/'scripts/service_manager.sh').read_text().replace('unit_dir=/etc/systemd/system',f'unit_dir={work}/etc/systemd/system').replace('lock_dir=/run/lertick-deploy',f'lock_dir={work}/run/lertick-deploy').replace('[ -d /run/systemd/system ]',f'[ -d {work}/no-systemd ]')
+    manager=(project/'scripts/service_manager.sh').read_text().replace('unit_dir=/etc/systemd/system',f'unit_dir={work}/etc/systemd/system').replace('lock_dir=/run/lertick-deploy',f'lock_dir={work}/run/lertick-deploy').replace('config_dir=/etc/lertick',f'config_dir={work}/etc/lertick').replace('[ -d /run/systemd/system ]',f'[ -d {work}/no-systemd ]')
     executable(tree/'scripts/service_manager.sh',manager)
     executable(tree/'scripts/collect_report.py','#!/usr/bin/env python3\nprint("{}")\n')
     (tree/'templates').mkdir()
@@ -110,6 +113,7 @@ with tempfile.TemporaryDirectory(prefix='lertick-deploy-fixtures-') as directory
     log = work/'calls.jsonl'; log.touch()
     env = dict(os.environ, PATH=str(tools)+os.pathsep+os.environ['PATH'], STUB_LOG=str(log),
                STUB_STATE_FILE=str(state), STUB_UID='1000',
+               STUB_CONFIG=str(work/'etc/lertick'),
                STUB_CHILD_STARTED=str(work/'child-started'), STUB_CHILD_DONE=str(work/'child-done'))
     for variable in ['PREFIX','DESTDIR','CLANG','BPFTOOL','CC','PKG_CONFIG','PKG_CONFIG_PATH','LERTICK_DEPS_DIR','LERTICK_LIBBPF_PREFIX']:
         env.pop(variable, None)
@@ -135,6 +139,7 @@ with tempfile.TemporaryDirectory(prefix='lertick-deploy-fixtures-') as directory
     for args in [('run','--fault-stall'),('run','--partial'),('run','--cpuperf','max'),('run','--duration','-1'),
                  ('run','--duration','3601'),('run','--sample-ms','99'),('check','--mode','online'),('plan','--mode','invalid')]:
         invoke(*args,ok=False)
+    for args in [('integration','invalid'),('integration','on','extra'),('service-run',)]:invoke(*args,ok=False)
     clear();state.write_text('enabled');invoke('check',ok=False);invoke('run',ok=False)
     assert not any(x['tool'] in ['loader','sudo','build'] for x in calls()), 'active scheduler was not rejected early'
     clear();invoke('verify');assert state.read_text()=='enabled' and not any(x['tool']=='attach' for x in calls())
