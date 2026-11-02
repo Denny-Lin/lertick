@@ -112,6 +112,9 @@ def main():
     simroot = work / "simulated-board"
     owned_units, owned_processes, streams = [], [], []
     lwunit = ltunit = None
+    foreign_pin = PINS / "lw_contract"
+    foreign_owned = False
+    pin_dir_created = False
     result = {"environment": {"kernel": platform.release(), "architecture": platform.machine(),
                               "os_release": Path("/etc/os-release").read_text(),
                               "systemd": call("systemd", "--version").stdout.splitlines()[0]},
@@ -143,7 +146,7 @@ def main():
     def start_lertick(mode="online"):
         assert STATE.read_text().strip() == "disabled", "refusing another scheduler"
         path = work / f"lertick-{len(owned_units)}.jsonl"
-        unit = start_unit("lertick", [loader, "--mode", mode, "--track-all", "--lerwatt",
+        unit = start_unit("lertick", [loader, "--mode", mode, "--track-all", "--lerwatt-auto",
                                       "--cpuperf", "util", "--duration", "0", "--notify",
                                       "--sample-ms", "100", "--summary-only", "--stats-json", path])
         row = wait_for(lambda: next((r for r in records(path) if r.get("event") == "registered"), None),
@@ -271,6 +274,36 @@ def main():
         wait_for(lambda: STATE.read_text().strip() == "disabled" and not any(PINS.glob("*")),
                  "final scheduling state or pins were not restored")
         result["checks"]["final_control_restore_scheduler_fallback_pin_cleanup"] = True
+
+        # Own one deliberately conflicting pin. Auto discovery must preserve it
+        # and still attach independently, with advice consumption disabled.
+        pin_dir_created = not PINS.exists()
+        PINS.mkdir(mode=0o700, exist_ok=True)
+        call("bpftool", "map", "create", foreign_pin, "type", "array", "key", "4",
+             "value", "8", "entries", "1", "name", "ltlw_autotest")
+        foreign_owned = True
+        foreign_before = call("bpftool", "-j", "map", "show", "pinned", foreign_pin).stdout
+        path = work / "conflicting-pin.jsonl"
+        unit = start_unit("lertick-auto-conflict", [loader, "--mode", "online", "--track-all",
+                          "--lerwatt-auto", "--duration", "0", "--notify",
+                          "--sample-ms", "100", "--summary-only", "--stats-json", path])
+        row = wait_for(lambda: next((r for r in records(path) if r.get("event") == "registered"), None),
+                       "auto-conflict registration missing")
+        assert row["lerwatt"] is False
+        wait_for(lambda: link(unit, "off"), "failed auto transport did not report independent operation")
+        wait_for(lambda: any(r.get("phase") == "periodic" for r in records(path)),
+                 "independent scheduler did not emit a runtime snapshot")
+        assert call("bpftool", "-j", "map", "show", "pinned", foreign_pin).stdout == foreign_before
+        assert applied(path) == 0
+        stop_unit(unit)
+        wait_for(lambda: STATE.read_text().strip() == "disabled", "auto-conflict scheduler did not detach")
+        foreign_pin.unlink()
+        foreign_owned = False
+        if pin_dir_created and PINS.exists():
+            PINS.rmdir()
+            pin_dir_created = False
+        result["checks"]["foreign_pin_preserved_auto_falls_back_without_advice"] = True
+        print("integration: conflicting pin preserved; auto mode scheduled independently", flush=True)
         result["result"] = "passed"
         (work / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         print(json.dumps(result), flush=True)
@@ -294,6 +327,10 @@ def main():
                         process.wait(timeout=5)
                 except (OSError, subprocess.SubprocessError) as error:
                     cleanup_errors.append(str(error))
+        if foreign_owned:
+            foreign_pin.unlink(missing_ok=True)
+        if pin_dir_created and PINS.exists():
+            PINS.rmdir()
         for stream in streams:
             stream.close()
         if args.keep_results or result.get("result") != "passed" or cleanup_errors:

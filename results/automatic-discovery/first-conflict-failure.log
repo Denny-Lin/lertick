@@ -1,0 +1,65 @@
+clang-18 -Ivendor -Isrc -Isrc/shared -Ibuild -I/home/ubuntu/lertick-pr/build/deps/install/include  -DLERTICK_VERSION=\"source\" -O2 -g -target bpf -mcpu=v3 -Wall -Wno-compare-distinct-pointer-types -D__TARGET_ARCH_arm64 -Ivendor/bpf-compat -I/usr/include/aarch64-linux-gnu -c src/bpf/scx_lertick.bpf.c -o build/scx_lertick.bpf.o
+In file included from src/bpf/scx_lertick.bpf.c:23:
+In file included from vendor/scx/common.bpf.h:21:
+build/vmlinux.h:69147:2: warning: declaration does not declare anything [-Wmissing-declarations]
+ 69147 |         struct aes_enckey;
+       |         ^
+build/vmlinux.h:85401:3: warning: declaration does not declare anything [-Wmissing-declarations]
+ 85401 |                 struct ns_tree;
+       |                 ^
+build/vmlinux.h:108771:2: warning: declaration does not declare anything [-Wmissing-declarations]
+ 108771 |         struct __filename_head;
+        |         ^
+build/vmlinux.h:152894:2: warning: declaration does not declare anything [-Wmissing-declarations]
+ 152894 |         union pipe_index;
+        |         ^
+build/vmlinux.h:171167:4: warning: declaration does not declare anything [-Wmissing-declarations]
+ 171167 |                         struct freelist_counters;
+        |                         ^
+5 warnings generated.
+bpftool gen skeleton build/scx_lertick.bpf.o name scx_lertick > build/scx_lertick.bpf.skel.h.tmp
+mv build/scx_lertick.bpf.skel.h.tmp build/scx_lertick.bpf.skel.h
+cc -Ivendor -Isrc -Isrc/shared -Ibuild -I/home/ubuntu/lertick-pr/build/deps/install/include  -DLERTICK_VERSION=\"source\" -Isrc/userspace -O2 -g -std=gnu11 -Wall -Wextra src/userspace/scx_lertick.c src/userspace/lerwatt_plugin.c src/userspace/runtime.c -o build/scx_lertick -L/home/ubuntu/lertick-pr/build/deps/install/lib -lbpf -lelf -lzstd -pthread -lz  -lelf -lz
+In file included from vendor/scx/common.h:74,
+                 from src/userspace/scx_lertick.c:28:
+vendor/scx/compat.h: In function ‘__COMPAT_read_enum’:
+vendor/scx/compat.h:44:31: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__u32’ {aka ‘unsigned int’} [-Wsign-compare]
+   44 |                 for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
+      |                               ^
+vendor/scx/compat.h:55:31: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__u32’ {aka ‘unsigned int’} [-Wsign-compare]
+   55 |                 for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
+      |                               ^
+vendor/scx/compat.h: In function ‘__COMPAT_struct_has_field’:
+vendor/scx/compat.h:99:23: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__u32’ {aka ‘unsigned int’} [-Wsign-compare]
+   99 |         for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
+      |                       ^
+build/test_lerwatt_plugin
+{"test":"lerwatt_plugin","status":"passed"}
+python3 tests/check_integration_abi.py
+Integration ABI 2 golden check passed (56 values).
+systemd: installed helper enabled an unlimited validated worker; absent peer reports waiting
+systemd: active off/on preserved scheduling and boot intent, and replaced shared maps
+systemd: stop/update/rollback preserved enabled-but-stopped intent and private integration setting
+systemd: uninstall disabled/detached/removed the validation service; configuration retained
+{"result": "passed", "checks": {"install_does_not_start_or_enable": true, "enabled_unlimited_ready_with_optional_peer_absent": true, "active_integration_toggle_restarts_only_owned_service": true, "stop_update_rollback_preserve_configuration_and_intent": true, "uninstall_disables_detaches_removes_and_retains_config": true}, "environment": {"os_release": "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.5 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n", "architecture": "aarch64", "kernel": "7.0.0-38-generic", "systemd": "systemd 255 (255.4-1ubuntu8.18)", "elapsed_seconds": 4.76}, "scope": "real sched_ext attachment and PID 1 lifecycle in an opted-in VM; no physical power controls or long hardware run"}
+integration: Lerwatt-first startup connected; BPF consumed contracts
+integration: online-to-EWMA scheduler change reconnected while Lerwatt stayed running
+integration: frozen demand expired and resumed without stale control
+integration: temporal-to-adaptive predictor change preserved Lertick PID and session
+integration: reverse startup order connected
+Traceback (most recent call last):
+  File "/home/ubuntu/lertick-auto-discovery/tests/test_power_integration.py", line 292, in main
+    assert row["lerwatt"] is False
+           ^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/lertick-auto-discovery/tests/test_power_integration.py", line 343, in <module>
+    main()
+  File "/home/ubuntu/lertick-auto-discovery/tests/test_power_integration.py", line 331, in main
+    PINS.rmdir()
+  File "/usr/lib/python3.12/pathlib.py", line 1353, in rmdir
+    os.rmdir(self)
+FileNotFoundError: [Errno 2] No such file or directory: '/sys/fs/bpf/lertick'

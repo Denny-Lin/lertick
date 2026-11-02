@@ -1,0 +1,23 @@
+{
+  "baseline": "5ce8a3c",
+  "recorded_utc": "2026-11-02T17:32:05.387521+00:00",
+  "evidence_sha256": {
+    "README.md": "9854d90b0c12c5b377a2f1000cb9be54e06dbe6d4b1787eba8f1fe364a602584",
+    "control-summary.json": "9e74762e49ce9b221e9eb8abbf5c0e071c6987e778471322dd2e7bb214ea23a5",
+    "final-live-pair.log": "8f5620e709a63a1f19e1d05dd872c03df0d01a2459c788dc8dd79e60ff0f5569",
+    "finite-jobs.jsonl": "3c7858b7ed51b69280e1f8c17520de4ab49770ac6c095c3e6607d83c9c818d68",
+    "first-conflict-failure.log": "4c10ef76306ed10a7a5a5adb6b81544d0393c9a7ff3076b6798135276dfa4952",
+    "first-service-fixture-failure.log": "7dbf8da6d7f711e7a857a175952aa6db5a5bfb77553d1a26a71887a919551bae",
+    "initial-live-pair.log": "349de732553cf7ba0e5a646cc4a67d8e89d2b2d767867f48262bd60b3117f43f",
+    "linux-build-and-tests.log": "e68934912ec73ea884be85a809ffcd8847722a073eea263f276ddebbd9720c6f",
+    "old-argv-fixture-failure.log": "5b322409080f5178a0927b39a6b8bdb8a5a52f3889fad3b963c4e280e0795d22",
+    "portable-foreground-fixtures.log": "77be90f6d97ebc8c186d51b7a5a2676de4b3a74f87533c6a5b56a7f2e84b0312",
+    "portable-lerwatt-fixtures.log": "565b6cb0d04952400ec611f7841d379cba9312824c77f59df96655019453c259",
+    "portable-service-fixtures.log": "32cd2b425beeb3a6b31bce24481160da326f08074870792fc495126f20552e87",
+    "raw-archive.json": "d9a669aa9e8672ae89b34300ebd5f2a2d2f359be00eb8a9d64230704427d9b4e",
+    "result.json": "be36cefbd3fe7f1f9aecb89d0476aea9102a4b4385989f3ee045404e2da1782b",
+    "source-identity.json": "aa7562d5a7b1a28a2124b9000d378f7daecd5b367b268ee758a7a08c8693e5e9",
+    "status-fixture-failure.log": "40a51e64775d76029e3fa691ff6b70ebf72b430d5e20df640ad4b5b3aa533d33"
+  },
+  "no_energy_or_model_accuracy_improvement_claim": true
+}

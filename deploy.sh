@@ -20,7 +20,7 @@ Usage: ./deploy.sh COMMAND [OPTIONS]
   restart     Restart this service; never stop another scheduler.
   enable      Start now and enable this service at boot.
   disable     Stop now and disable this service at boot.
-  integration [on|off|status]  Persist optional Lerwatt coordination (default off).
+  integration [auto|on|off|status]  Persist optional Lerwatt coordination (default auto).
   update      Build/verify a candidate before stopping/replacing this service.
   rollback    Restore the previous complete release, preserving service intent.
   uninstall   Disable/stop this service and remove its installed files.
@@ -106,8 +106,8 @@ validate_options()
 case $command in
     plan|run|trial) validate_options "$@" ;;
     integration)
-        [ "$#" -le 1 ] || fail 'integration accepts on, off or status'
-        case ${1:-status} in on|off|status) ;; *) fail 'integration accepts on, off or status' ;; esac
+        [ "$#" -le 1 ] || fail 'integration accepts auto, on, off or status'
+        case ${1:-status} in auto|on|off|status) ;; *) fail 'integration accepts auto, on, off or status' ;; esac
         ;;
     report) for arg in "$@"; do case $arg in --include-logs|--help) ;; *) fail "unsupported report option: $arg" ;; esac; done ;;
     *) [ "$#" -eq 0 ] || fail "$command does not accept options" ;;
@@ -115,7 +115,7 @@ esac
 if [ "$command" = plan ]; then
     printf 'Run plan (not executed; requires a compatible idle sched_ext kernel):\n'
     if [ "$duration" -eq 0 ]; then set -- --summary-only --sample-ms 60000 "$@"; fi
-    for word in sudo "$loader" --mode online --duration 0 --track-all --cpuperf auto "$@"; do
+    for word in sudo "$loader" --mode online --duration 0 --track-all --cpuperf auto --lerwatt-auto "$@"; do
         escaped=$(printf '%s' "$word" | sed "s/'/'\\\\''/g"); printf " '%s'" "$escaped"
     done
     printf '\nNo scheduler was loaded or attached.\n'; exit 0
@@ -274,9 +274,9 @@ if [ "$duration" -eq 0 ]; then
 else printf 'Lertick: starting finite foreground scheduler; Ctrl-C detaches it.\n' >&2; fi
 [ -z "$pending_signal" ] || finish_run "$pending_status"
 if [ "$stats_requested" = yes ]; then
-    "$loader" --mode online --duration "$base_duration" --track-all --cpuperf auto "$@" &
+    "$loader" --mode online --duration "$base_duration" --track-all --cpuperf auto --lerwatt-auto "$@" &
 else
-    "$loader" --mode online --duration "$base_duration" --track-all --cpuperf auto "$@" >/dev/null &
+    "$loader" --mode online --duration "$base_duration" --track-all --cpuperf auto --lerwatt-auto "$@" >/dev/null &
 fi
 child=$!
 [ -z "$pending_signal" ] || stop_run "$pending_status"

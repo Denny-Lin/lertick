@@ -131,7 +131,7 @@ $report_hash"
 }
 integration_read()
 {
-    integration_value=off
+    integration_value=auto
     trusted_path "$config_dir"
     [ -e "$config_dir" ] || return 0
     [ "$(stat -c '%u %a' "$config_dir")" = '0 700' ] || fail 'integration directory must be root-owned mode 0700'
@@ -142,17 +142,17 @@ integration_read()
     integration_seen=no
     while IFS= read -r config_line || [ -n "$config_line" ]; do
         case $config_line in
-            lerwatt=on|lerwatt=off)
+            lerwatt=auto|lerwatt=on|lerwatt=off)
                 [ "$integration_seen" = no ] || fail 'duplicate integration setting'
                 integration_value=${config_line#lerwatt=}; integration_seen=yes ;;
-            *) fail 'invalid integration configuration; expected lerwatt=on or lerwatt=off' ;;
+            *) fail 'invalid integration configuration; expected lerwatt=auto, lerwatt=on or lerwatt=off' ;;
         esac
     done < "$config"
     [ "$integration_seen" = yes ] || fail 'empty integration configuration'
 }
 integration_write()
 {
-    case $1 in on|off) ;; *) fail 'invalid integration value' ;; esac
+    case $1 in auto|on|off) ;; *) fail 'invalid integration value' ;; esac
     trusted_path "$config_dir"; trusted_path "$config"
     mkdir -p "$config_dir"; chmod 700 "$config_dir"
     integration_tmp=$(mktemp "$config_dir/.integration.XXXXXX")
@@ -164,6 +164,8 @@ verify_integration()
 {
     if [ "$2" = on ]; then
         "$1" --verify --mode online --track-all --cpuperf auto --summary-only --lerwatt >/dev/null
+    elif [ "$2" = auto ]; then
+        "$1" --verify --mode online --track-all --cpuperf auto --summary-only --lerwatt-auto >/dev/null
     else
         "$1" --verify --mode online --track-all --cpuperf auto --summary-only >/dev/null
     fi
@@ -179,6 +181,8 @@ if [ "$command" = service-run ]; then
     [ -n "$current" ] && validate_release "$current" || fail 'installed release validation failed; no scheduler attached'
     if [ "$integration_value" = on ]; then
         exec "$release/scx_lertick" --mode online --duration 0 --track-all --cpuperf auto --summary-only --sample-ms 60000 --notify --lerwatt
+    elif [ "$integration_value" = auto ]; then
+        exec "$release/scx_lertick" --mode online --duration 0 --track-all --cpuperf auto --summary-only --sample-ms 60000 --notify --lerwatt-auto
     fi
     exec "$release/scx_lertick" --mode online --duration 0 --track-all --cpuperf auto --summary-only --sample-ms 60000 --notify
 fi
@@ -281,7 +285,7 @@ case $command in
         fail 'internal uninstall dispatch failed' ;;
     integration)
         require_service
-        case ${bundle:-status} in on|off|status) ;; *) fail 'integration accepts on, off or status' ;; esac
+        case ${bundle:-status} in auto|on|off|status) ;; *) fail 'integration accepts auto, on, off or status' ;; esac
         integration_read
         if [ "${bundle:-status}" = status ]; then printf 'Lerwatt integration configured: %s\n' "$integration_value"; exit 0; fi
         old_integration=$integration_value

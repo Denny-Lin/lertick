@@ -134,7 +134,7 @@ with tempfile.TemporaryDirectory(prefix='lertick-deploy-fixtures-') as directory
     quoted="telemetry a'b.jsonl"
     result=invoke('plan','--stats-json',quoted)
     command_line=result.stdout.splitlines()[1]
-    assert shlex.split(command_line)==['sudo',str(tree/'build/scx_lertick'),'--mode','online','--duration','0','--track-all','--cpuperf','auto','--summary-only','--sample-ms','60000','--stats-json',quoted]
+    assert shlex.split(command_line)==['sudo',str(tree/'build/scx_lertick'),'--mode','online','--duration','0','--track-all','--cpuperf','auto','--lerwatt-auto','--summary-only','--sample-ms','60000','--stats-json',quoted]
     assert calls()==[], 'plan invoked build, sudo or loader'
     for args in [('run','--fault-stall'),('run','--partial'),('run','--cpuperf','max'),('run','--duration','-1'),
                  ('run','--duration','3601'),('run','--sample-ms','99'),('check','--mode','online'),('plan','--mode','invalid')]:
@@ -149,8 +149,8 @@ with tempfile.TemporaryDirectory(prefix='lertick-deploy-fixtures-') as directory
     clear();result=invoke('run')
     assert '"event"' not in result.stdout
     attached=[x for x in calls() if x['tool']=='loader' and '--track-all' in x['args']]
-    assert attached and attached[-1]['args']==['--mode','online','--duration','0','--track-all','--cpuperf','auto','--summary-only','--sample-ms','60000']
-    clear();invoke('trial');assert [x for x in calls() if x['tool']=='loader' and '--track-all' in x['args']][-1]['args']==['--mode','online','--duration','30','--track-all','--cpuperf','auto']
+    assert attached and attached[-1]['args']==['--mode','online','--duration','0','--track-all','--cpuperf','auto','--lerwatt-auto','--summary-only','--sample-ms','60000']
+    clear();invoke('trial');assert [x for x in calls() if x['tool']=='loader' and '--track-all' in x['args']][-1]['args']==['--mode','online','--duration','30','--track-all','--cpuperf','auto','--lerwatt-auto']
     result=invoke('run','--stats-json','-');assert '"event":"registered"' in result.stdout
     invoke('run',extra={'STUB_LEAVE_ENABLED':'1'},ok=False);state.write_text('disabled')
     for file in [work/'child-started',work/'child-done']:file.unlink(missing_ok=True)

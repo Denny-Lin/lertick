@@ -148,16 +148,15 @@ def main():
         assert property_value("ActiveState") == "inactive"
         assert call("systemctl", "is-enabled", unit, check=False).stdout.strip() == "disabled"
         require_default()
-        assert config.read_text() == "lerwatt=off\n"
+        assert config.read_text() == "lerwatt=auto\n"
         result["install_does_not_start_or_enable"] = True
 
-        call(installed_helper, "integration", "on", env=environment)
-        assert config.read_text() == "lerwatt=on\n" and property_value("ActiveState") == "inactive"
+        assert property_value("ActiveState") == "inactive"
         require_default()
         call(installed_helper, "enable", env=environment)
         first_pid = wait_for(ready, "enabled integration service did not become ready/waiting")
         command = command_line(first_pid)
-        assert command[command.index(b"--duration") + 1] == b"0" and b"--lerwatt" in command
+        assert command[command.index(b"--duration") + 1] == b"0" and b"--lerwatt-auto" in command
         assert "/lib/lertick/releases/" in os.readlink(f"/proc/{first_pid}/exe")
         assert STATE.read_text().strip() == "enabled"
         assert call("systemctl", "is-enabled", unit).stdout.strip() == "enabled"

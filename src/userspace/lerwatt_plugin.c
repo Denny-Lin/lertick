@@ -356,8 +356,8 @@ void ltlw_publish(struct lt_demand_rec *slot, const struct lt_demand_rec *val)
 	__atomic_store_n(&slot->seq, seq + 2, __ATOMIC_RELEASE);
 }
 
-int ltlw_pin_prepare(const char *dir, const char *const *pins, int npins,
-		     char *err, size_t errlen)
+static int pin_prepare(const char *dir, const char *const *pins, int npins,
+		       char *err, size_t errlen, bool remove_stale)
 {
 	char parent[PATH_MAX];
 	struct statfs fs;
@@ -406,7 +406,7 @@ int ltlw_pin_prepare(const char *dir, const char *const *pins, int npins,
 		close(fd);
 		return -1;
 	}
-	if (fchmod(fd, 0700)) {
+	if (remove_stale && fchmod(fd, 0700)) {
 		snprintf(err, errlen, "cannot protect BPF pin directory %s: %s", dir, strerror(errno));
 		close(fd);
 		return -1;
@@ -422,6 +422,10 @@ int ltlw_pin_prepare(const char *dir, const char *const *pins, int npins,
 			snprintf(err, errlen, "refusing unexpected stale pin %s", pins[i]);
 			close(fd);
 			return -1;
+		} else if (!remove_stale) {
+			snprintf(err, errlen, "automatic discovery keeps existing pin %s unchanged", pins[i]);
+			close(fd);
+			return -1;
 		} else if (!unlinkat(fd, name, 0) || errno == ENOENT) {
 			continue;
 		}
@@ -434,4 +438,16 @@ int ltlw_pin_prepare(const char *dir, const char *const *pins, int npins,
 	}
 	close(fd);
 	return 0;
+}
+
+int ltlw_pin_prepare(const char *dir, const char *const *pins, int npins,
+		     char *err, size_t errlen)
+{
+	return pin_prepare(dir, pins, npins, err, errlen, true);
+}
+
+int ltlw_pin_prepare_auto(const char *dir, const char *const *pins, int npins,
+			  char *err, size_t errlen)
+{
+	return pin_prepare(dir, pins, npins, err, errlen, false);
 }

@@ -385,8 +385,8 @@ overlay from the read-only base.
 
 ## CPU frequency targets and the Lerwatt plug-in
 
-Native service setup is now available through `lertick integration on` and
-Lerwatt's `./deploy.sh install --lertick`. Models and release versions remain
+New managed services and foreground helper runs discover optional Lerwatt advice
+automatically; ordinary installations need no peer-specific flag. Models and release versions remain
 independent; compatible model-only updates do not change the contract ABI.
 See [setup, ownership and ABI compatibility](INTEGRATION.md) before using the
 raw-loader research commands below.
@@ -402,7 +402,7 @@ lowers idle CPUs' targets. `auto` selects `util` when any policy's
 a VM without cpufreq, `auto` keeps the previous behavior. The registered event
 records `cpuperf` and `cpuperf_reason`; snapshots then add a `cpus` array.
 
-`--lerwatt` pins `lw_contract` and `lt_demand` under `/sys/fs/bpf/lertick/`
+`--lerwatt-auto` enables best-effort discovery and keeps ordinary scheduling if publication is unavailable. It does not force `cpuperf util` merely because no peer is present. The advanced strict `--lerwatt` mode pins `lw_contract` and `lt_demand` under `/sys/fs/bpf/lertick/`
 before attaching, publishes demand every 100 ms, and unpins them at exit; a
 pin failure aborts before the default scheduler is replaced. Clusters are the
 cpufreq policies sorted by first CPU. Without real policies, Lertick uses a
