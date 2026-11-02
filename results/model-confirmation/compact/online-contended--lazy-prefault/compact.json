@@ -1,0 +1,12 @@
+{
+  "source_name": "online-contended/lazy-prefault",
+  "complete_trials": 40,
+  "performance_claim": false,
+  "all_planned_trials_retained": true,
+  "limits": "Full raw logs retained separately; per-job percentile recomputation needs those logs.",
+  "raw_archive": {
+    "name": "online-contended.tgz",
+    "bytes": 83530056,
+    "sha256": "9ae7064f92d3e3ff6bcfe63ed152429c0704ebaec12fa4f56d9aabec61aba5bf"
+  }
+}

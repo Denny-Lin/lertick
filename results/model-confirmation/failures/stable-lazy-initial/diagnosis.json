@@ -11,5 +11,5 @@
   "causal_attribution": "Unproven. Temporal proximity to display wake is only an observation; do not claim a host or scheduler root cause.",
   "recovery": "Linux default restored; sched_ext disabled; original lazy preemption preserved.",
   "diagnostic": "Five unchanged-model/timeout 35-second mixed-shadow runs with an extra read-only context-switch observer passed; marked diagnostic/smoke, excluded from performance confirmation. Observer curtask matched prev_pid at all177684switches.",
-  "followup": "One complete fresh 40-trial repeat is in progress with unchanged binaries, flags, watchdog and seeds. A successful retry does not erase or resolve this failure."
+  "followup": "Single complete unchanged 40-trial retry passed. The original 16-pass/one-failed session remains incomplete; its remaining 23 planned trials were not run. Retry success does not resolve or erase the original reliability failure."
 }

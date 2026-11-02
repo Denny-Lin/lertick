@@ -1,0 +1,33 @@
+{
+  "diagnostic_only": true,
+  "model_parameters_and_timeout_unchanged": true,
+  "completed": true,
+  "trace_source_sha256": "f0452d8172412dd52018e42c19d97efce2834dc3c0f2f9c5f95c7c8af57eb94e",
+  "started_unix": 1793589614.3679569,
+  "benchmark_command": [
+    "python3",
+    "benchmarks/run_phase2.py",
+    "--smoke",
+    "--output",
+    "/var/tmp/lertick-lazy-stall-diagnostic-0b23633/trials",
+    "--repetitions",
+    "5",
+    "--duration",
+    "30",
+    "--warmup",
+    "5",
+    "--cpus",
+    "0,1,2,3",
+    "--prefault-samples",
+    "--burst-seed",
+    "2026110211",
+    "--policies",
+    "shadow",
+    "--workloads",
+    "mixed"
+  ],
+  "benchmark_exit": 0,
+  "finished_unix": 1793589793.991077,
+  "trace_exit": 0,
+  "final_state": "disabled"
+}

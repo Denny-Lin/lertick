@@ -1,0 +1,827 @@
+{
+  "mode": "shadow",
+  "baseline_policy": "shadow",
+  "candidate_policy": "shadow-ewma-carry",
+  "source": "/Users/hungyu_lin/Desktop/Github/lertick/results/local/model-confirmation-0b23633/compact/heldout-full-a--full-prefault",
+  "environment": {
+    "architecture": "aarch64",
+    "arguments": {
+      "bpf_runtime": "False",
+      "burst_seed": "2026110211",
+      "cpus": "0,1,2,3",
+      "duration": "30.0",
+      "extra_scheduler": "[]",
+      "kernel_build": "None",
+      "kernel_source": "None",
+      "memory_mib": "3600",
+      "output": "/var/tmp/lertick-model-confirmation-0b23633/heldout-full-a/full-prefault",
+      "perf": "perf",
+      "policies": "shadow,shadow-ewma-carry",
+      "prefault_samples": "True",
+      "profile": "False",
+      "reference": "None",
+      "repetitions": "5",
+      "resume": "False",
+      "seed": "2026110201",
+      "smoke": "False",
+      "warmup": "5.0",
+      "without_wake_observer": "False",
+      "workloads": "stepburst,alternatingburst"
+    },
+    "benchmark_sources": {
+      "benchmarks/burst_profiles.h": "67b455786d1b385050c238a96d9724b0e678d3ba2ce0488449fb26f3e2b3a5ff",
+      "benchmarks/phase2_workload.c": "d2911d032789c9dd401e4520a3d18b081627d177cca204654977927613e218b2",
+      "benchmarks/run_phase2.py": "cb138294c09c5276cffaa870c444d800ee45cd75e86fb637e42799ddf51e8522",
+      "benchmarks/wake_latency.bt": "7daca1d262f0176995d72ef2798f16ff29fae53cfe69423f0af58199927d826e"
+    },
+    "compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+    "environment": {
+      "cmdline": "BOOT_IMAGE=/vmlinuz-7.0.0-38-generic root=UUID=86f7cf19-9959-4dba-91b1-0052c9d45c21 ro console=tty1 console=ttyAMA0",
+      "cpuinfo": "processor\t: 0\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 1\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 2\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 3\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 4\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 5\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 6\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 7\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0",
+      "meminfo": "MemTotal:        3985168 kB\nMemFree:         1418564 kB\nMemAvailable:    3509852 kB\nBuffers:           46128 kB\nCached:          2144416 kB\nSwapCached:            0 kB\nActive:           966608 kB\nInactive:        1274364 kB\nActive(anon):      60412 kB\nInactive(anon):        0 kB\nActive(file):     906196 kB\nInactive(file):  1274364 kB\nUnevictable:       26236 kB\nMlocked:           26236 kB\nSwapTotal:             0 kB\nSwapFree:              0 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              1300 kB\nWriteback:             0 kB\nAnonPages:         76848 kB\nMapped:            59340 kB\nShmem:              2532 kB\nKReclaimable:      84732 kB\nSlab:             168420 kB\nSReclaimable:      84732 kB\nSUnreclaim:        83688 kB\nKernelStack:        2964 kB\nShadowCallStack:     772 kB\nPageTables:         3564 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:     1992584 kB\nCommitted_AS:     275324 kB\nVmallocTotal:   135288315904 kB\nVmallocUsed:       12848 kB\nVmallocChunk:          0 kB\nPercpu:             5408 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:     81920 kB\nFilePmdMapped:         0 kB\nCmaTotal:          32768 kB\nCmaFree:          184756 kB\nBalloon:               0 kB\nGPUActive:             0 kB\nGPUReclaim:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB",
+      "os_release": "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.5 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo"
+    },
+    "kernel": "7.0.0-38-generic",
+    "preemption_mode": "(full) lazy",
+    "programs": {
+      "/home/ubuntu/lertick-burst-init/build/phase2_workload": "1251c6d02e1181cdc6cc8d1f44240f0226ac8c03df5fd344e33534e1721b2f7e",
+      "/home/ubuntu/lertick-burst-init/build/scx_lertick": "5d93679101efafc62266bbe9b8b284ee71e07e8cdbe1e777b128ec9f328037f4"
+    },
+    "smoke_only": false,
+    "source_git_commit": "0b2363387615dd19f60235847b90f0d1d8639556",
+    "swap": "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority"
+  },
+  "complete_trials": 20,
+  "groups": [
+    {
+      "workload": "alternatingburst",
+      "n": 5,
+      "baseline": {
+        "global_model_mae_ns": {
+          "n": 5,
+          "median": 368314.06390006456,
+          "minimum": 363700.7478705704,
+          "maximum": 373065.5882104531,
+          "iqr": 2830.529745411186,
+          "bootstrap_median_ci95": [
+            363700.7478705704,
+            373065.5882104531
+          ]
+        },
+        "same_episode_ewma_mae_ns": {
+          "n": 5,
+          "median": 957796.4290401969,
+          "minimum": 955434.5424532989,
+          "maximum": 960376.9329260722,
+          "iqr": 3021.390633070492,
+          "bootstrap_median_ci95": [
+            955434.5424532989,
+            960376.9329260722
+          ]
+        },
+        "model_over_ewma": {
+          "n": 5,
+          "median": 0.3843958687632601,
+          "minimum": 0.378706251057539,
+          "maximum": 0.3904669253976531,
+          "iqr": 0.0030562096620479484,
+          "bootstrap_median_ci95": [
+            0.378706251057539,
+            0.3904669253976531
+          ]
+        },
+        "prediction_samples": {
+          "n": 5,
+          "median": 40266,
+          "minimum": 40227,
+          "maximum": 40287,
+          "iqr": 13.0,
+          "bootstrap_median_ci95": [
+            40227.0,
+            40287.0
+          ]
+        },
+        "throughput_units_per_s": {
+          "n": 5,
+          "median": 2610248987.5,
+          "minimum": 2493693904.4333334,
+          "maximum": 2616445488.3,
+          "iqr": 8723966.93333292,
+          "bootstrap_median_ci95": [
+            2493693904.4333334,
+            2616445488.3
+          ]
+        },
+        "wake_p99_ns": {
+          "n": 5,
+          "median": 1865763.49,
+          "minimum": 1859308.0,
+          "maximum": 1872476.42,
+          "iqr": 7108.930000000168,
+          "bootstrap_median_ci95": [
+            1859308.0,
+            1872476.42
+          ]
+        },
+        "completion_p99_ns": {
+          "n": 5,
+          "median": 3700318.41,
+          "minimum": 3689255.42,
+          "maximum": 3705405.1500000004,
+          "iqr": 3030.8899999996647,
+          "bootstrap_median_ci95": [
+            3689255.42,
+            3705405.1500000004
+          ]
+        }
+      },
+      "candidate": {
+        "global_model_mae_ns": {
+          "n": 5,
+          "median": 429092.55955067324,
+          "minimum": 423215.26359707944,
+          "maximum": 444375.23069272464,
+          "iqr": 5853.667177296185,
+          "bootstrap_median_ci95": [
+            423215.26359707944,
+            444375.23069272464
+          ]
+        },
+        "same_episode_ewma_mae_ns": {
+          "n": 5,
+          "median": 957746.0945520371,
+          "minimum": 954921.8291312348,
+          "maximum": 960777.5719456564,
+          "iqr": 3043.0412969676545,
+          "bootstrap_median_ci95": [
+            954921.8291312348,
+            960777.5719456564
+          ]
+        },
+        "model_over_ewma": {
+          "n": 5,
+          "median": 0.44802329342973835,
+          "minimum": 0.44060615909126355,
+          "maximum": 0.46535246879528,
+          "iqr": 0.004561193311334533,
+          "bootstrap_median_ci95": [
+            0.44060615909126355,
+            0.46535246879528
+          ]
+        },
+        "prediction_samples": {
+          "n": 5,
+          "median": 40278,
+          "minimum": 40218,
+          "maximum": 40336,
+          "iqr": 61.0,
+          "bootstrap_median_ci95": [
+            40218.0,
+            40336.0
+          ]
+        },
+        "throughput_units_per_s": {
+          "n": 5,
+          "median": 2596438264.766667,
+          "minimum": 2569911378.5666666,
+          "maximum": 2611604141.733333,
+          "iqr": 32409356.89999962,
+          "bootstrap_median_ci95": [
+            2569911378.5666666,
+            2611604141.733333
+          ]
+        },
+        "wake_p99_ns": {
+          "n": 5,
+          "median": 1861512.51,
+          "minimum": 1849954.0899999996,
+          "maximum": 1868198.1699999997,
+          "iqr": 10331.260000000242,
+          "bootstrap_median_ci95": [
+            1849954.0899999996,
+            1868198.1699999997
+          ]
+        },
+        "completion_p99_ns": {
+          "n": 5,
+          "median": 3695276.84,
+          "minimum": 3674962.03,
+          "maximum": 3703420.02,
+          "iqr": 16070.580000000075,
+          "bootstrap_median_ci95": [
+            3674962.03,
+            3703420.02
+          ]
+        }
+      },
+      "paired_percent_change": {
+        "global_model_mae_ns": {
+          "n": 5,
+          "median": 17.81707374836998,
+          "minimum": 14.215122681402992,
+          "maximum": 20.848814250366267,
+          "iqr": 3.2321320155137983,
+          "bootstrap_median_ci95": [
+            14.215122681402992,
+            20.848814250366267
+          ]
+        },
+        "same_episode_ewma_mae_ns": {
+          "n": 5,
+          "median": 0.12085951000000428,
+          "minimum": -0.27393810532490015,
+          "maximum": 0.285361706170173,
+          "iqr": 0.38982874495702147,
+          "bootstrap_median_ci95": [
+            -0.27393810532490015,
+            0.285361706170173
+          ]
+        },
+        "model_over_ewma": {
+          "n": 5,
+          "median": 17.674852498247382,
+          "minimum": 13.890123880737605,
+          "maximum": 21.060736238525777,
+          "iqr": 3.8021307980391033,
+          "bootstrap_median_ci95": [
+            13.890123880737605,
+            21.060736238525777
+          ]
+        },
+        "throughput_units_per_s": {
+          "n": 5,
+          "median": -0.17872416982724904,
+          "minimum": -1.7785239532572272,
+          "maximum": 3.187262887078135,
+          "iqr": 0.9157905463860749,
+          "bootstrap_median_ci95": [
+            -1.7785239532572272,
+            3.187262887078135
+          ]
+        },
+        "wake_p99_ns": {
+          "n": 5,
+          "median": -0.22848084783894107,
+          "minimum": -0.8473421248049173,
+          "maximum": 0.39231477517442936,
+          "iqr": 0.09940087204164394,
+          "bootstrap_median_ci95": [
+            -0.8473421248049173,
+            0.39231477517442936
+          ]
+        },
+        "completion_p99_ns": {
+          "n": 5,
+          "median": -0.2733388007516657,
+          "minimum": -0.38743292000097407,
+          "maximum": 0.1427097472229244,
+          "iqr": 0.4384690066935648,
+          "bootstrap_median_ci95": [
+            -0.38743292000097407,
+            0.1427097472229244
+          ]
+        }
+      }
+    },
+    {
+      "workload": "stepburst",
+      "n": 5,
+      "baseline": {
+        "global_model_mae_ns": {
+          "n": 5,
+          "median": 60245.315269920524,
+          "minimum": 60020.06497695853,
+          "maximum": 60431.90356374949,
+          "iqr": 258.3712474973581,
+          "bootstrap_median_ci95": [
+            60020.06497695853,
+            60431.90356374949
+          ]
+        },
+        "same_episode_ewma_mae_ns": {
+          "n": 5,
+          "median": 8975.962254643733,
+          "minimum": 8596.891250142971,
+          "maximum": 9402.068232764537,
+          "iqr": 796.6544232862198,
+          "bootstrap_median_ci95": [
+            8596.891250142971,
+            9402.068232764537
+          ]
+        },
+        "model_over_ewma": {
+          "n": 5,
+          "median": 6.711850335461524,
+          "minimum": 6.38767866959649,
+          "maximum": 7.018889849718145,
+          "iqr": 0.5591467713915348,
+          "bootstrap_median_ci95": [
+            6.38767866959649,
+            7.018889849718145
+          ]
+        },
+        "prediction_samples": {
+          "n": 5,
+          "median": 43661,
+          "minimum": 43400,
+          "maximum": 43718,
+          "iqr": 145.0,
+          "bootstrap_median_ci95": [
+            43400.0,
+            43718.0
+          ]
+        },
+        "throughput_units_per_s": {
+          "n": 5,
+          "median": 2610961567.8333335,
+          "minimum": 2584593685.3333335,
+          "maximum": 2616899205.3,
+          "iqr": 1623948.799999714,
+          "bootstrap_median_ci95": [
+            2584593685.3333335,
+            2616899205.3
+          ]
+        },
+        "wake_p99_ns": {
+          "n": 5,
+          "median": 2251476.03,
+          "minimum": 2173097.4400000013,
+          "maximum": 2271152.7199999997,
+          "iqr": 10434.319999999367,
+          "bootstrap_median_ci95": [
+            2173097.4400000013,
+            2271152.7199999997
+          ]
+        },
+        "completion_p99_ns": {
+          "n": 5,
+          "median": 4955926.2299999995,
+          "minimum": 4952776.88,
+          "maximum": 4962274.8,
+          "iqr": 2823.2199999997392,
+          "bootstrap_median_ci95": [
+            4952776.88,
+            4962274.8
+          ]
+        }
+      },
+      "candidate": {
+        "global_model_mae_ns": {
+          "n": 5,
+          "median": 10949.597496554892,
+          "minimum": 10702.04820987089,
+          "maximum": 12052.817619429488,
+          "iqr": 1139.6121734888602,
+          "bootstrap_median_ci95": [
+            10702.04820987089,
+            12052.817619429488
+          ]
+        },
+        "same_episode_ewma_mae_ns": {
+          "n": 5,
+          "median": 9171.390813045475,
+          "minimum": 8927.982213167292,
+          "maximum": 10264.548333142398,
+          "iqr": 1197.7482357650842,
+          "bootstrap_median_ci95": [
+            8927.982213167292,
+            10264.548333142398
+          ]
+        },
+        "model_over_ewma": {
+          "n": 5,
+          "median": 1.1938862621555806,
+          "minimum": 1.1717292730082505,
+          "maximum": 1.2012401955936074,
+          "iqr": 0.024490484876765084,
+          "bootstrap_median_ci95": [
+            1.1717292730082505,
+            1.2012401955936074
+          ]
+        },
+        "prediction_samples": {
+          "n": 5,
+          "median": 43645,
+          "minimum": 43540,
+          "maximum": 43684,
+          "iqr": 30.0,
+          "bootstrap_median_ci95": [
+            43540.0,
+            43684.0
+          ]
+        },
+        "throughput_units_per_s": {
+          "n": 5,
+          "median": 2597863580.4333334,
+          "minimum": 2574992585.0,
+          "maximum": 2609388314.9666667,
+          "iqr": 19547327.69999981,
+          "bootstrap_median_ci95": [
+            2574992585.0,
+            2609388314.9666667
+          ]
+        },
+        "wake_p99_ns": {
+          "n": 5,
+          "median": 2086116.2399999977,
+          "minimum": 2016383.3200000003,
+          "maximum": 2244479.0,
+          "iqr": 124165.99999999907,
+          "bootstrap_median_ci95": [
+            2016383.3200000003,
+            2244479.0
+          ]
+        },
+        "completion_p99_ns": {
+          "n": 5,
+          "median": 4957256.72,
+          "minimum": 4948153.000000001,
+          "maximum": 4961561.400000001,
+          "iqr": 8517.240000000224,
+          "bootstrap_median_ci95": [
+            4948153.000000001,
+            4961561.400000001
+          ]
+        }
+      },
+      "paired_percent_change": {
+        "global_model_mae_ns": {
+          "n": 5,
+          "median": -81.82498100060265,
+          "minimum": -82.2907312549218,
+          "maximum": -79.9186861526116,
+          "iqr": 1.9732863912792027,
+          "bootstrap_median_ci95": [
+            -82.2907312549218,
+            -79.9186861526116
+          ]
+        },
+        "same_episode_ewma_mae_ns": {
+          "n": 5,
+          "median": 3.9898369845708492,
+          "minimum": -5.042358849780948,
+          "maximum": 17.885440118585283,
+          "iqr": 7.063951825962489,
+          "bootstrap_median_ci95": [
+            -5.042358849780948,
+            17.885440118585283
+          ]
+        },
+        "model_over_ewma": {
+          "n": 5,
+          "median": -82.21226334789115,
+          "minimum": -83.22904607513202,
+          "maximum": -81.35034892340799,
+          "iqr": 1.2681565997530413,
+          "bootstrap_median_ci95": [
+            -83.22904607513202,
+            -81.35034892340799
+          ]
+        },
+        "throughput_units_per_s": {
+          "n": 5,
+          "median": -0.11226905259531517,
+          "minimum": -1.3317689455961679,
+          "maximum": 0.5134228708868926,
+          "iqr": 1.0099400357291621,
+          "bootstrap_median_ci95": [
+            -1.3317689455961679,
+            0.5134228708868926
+          ]
+        },
+        "wake_p99_ns": {
+          "n": 5,
+          "median": -5.020365768780244,
+          "minimum": -11.217625206639536,
+          "maximum": -0.006908030255925457,
+          "iqr": 4.37774974956302,
+          "bootstrap_median_ci95": [
+            -11.217625206639536,
+            -0.006908030255925457
+          ]
+        },
+        "completion_p99_ns": {
+          "n": 5,
+          "median": 0.06433741117957137,
+          "minimum": -0.2118076975503147,
+          "maximum": 0.15152469375927513,
+          "iqr": 0.25103480565932257,
+          "bootstrap_median_ci95": [
+            -0.2118076975503147,
+            0.15152469375927513
+          ]
+        }
+      }
+    }
+  ],
+  "paired_trials": [
+    {
+      "workload": "alternatingburst",
+      "repetition": 0,
+      "baseline": {
+        "global_model_mae_ns": 373065.5882104531,
+        "same_episode_ewma_mae_ns": 955434.5424532989,
+        "model_over_ewma": 0.3904669253976531,
+        "prediction_samples": 40256,
+        "throughput_units_per_s": 2616445488.3,
+        "wake_p99_ns": 1866552.84,
+        "completion_p99_ns": 3705405.1500000004
+      },
+      "candidate": {
+        "global_model_mae_ns": 428083.18511346146,
+        "same_episode_ewma_mae_ns": 957486.5719747753,
+        "model_over_ewma": 0.44709053645583574,
+        "prediction_samples": 40278,
+        "throughput_units_per_s": 2569911378.5666666,
+        "wake_p99_ns": 1861512.51,
+        "completion_p99_ns": 3695276.84
+      },
+      "paired_percent_change": {
+        "global_model_mae_ns": 14.747432795107308,
+        "same_episode_ewma_mae_ns": 0.21477447489048895,
+        "model_over_ewma": 14.501512772308933,
+        "throughput_units_per_s": -1.7785239532572272,
+        "wake_p99_ns": -0.2700341448678256,
+        "completion_p99_ns": -0.2733388007516657
+      }
+    },
+    {
+      "workload": "alternatingburst",
+      "repetition": 1,
+      "baseline": {
+        "global_model_mae_ns": 363700.7478705704,
+        "same_episode_ewma_mae_ns": 960376.9329260722,
+        "model_over_ewma": 0.378706251057539,
+        "prediction_samples": 40269,
+        "throughput_units_per_s": 2611784630.7,
+        "wake_p99_ns": 1865763.49,
+        "completion_p99_ns": 3700318.41
+      },
+      "candidate": {
+        "global_model_mae_ns": 429092.55955067324,
+        "same_episode_ewma_mae_ns": 957746.0945520371,
+        "model_over_ewma": 0.44802329342973835,
+        "prediction_samples": 40327,
+        "throughput_units_per_s": 2596438264.766667,
+        "wake_p99_ns": 1849954.0899999996,
+        "completion_p99_ns": 3686844.42
+      },
+      "paired_percent_change": {
+        "global_model_mae_ns": 17.979564810621106,
+        "same_episode_ewma_mae_ns": -0.27393810532490015,
+        "model_over_ewma": 18.303643570348036,
+        "throughput_units_per_s": -0.5875816004484169,
+        "wake_p99_ns": -0.8473421248049173,
+        "completion_p99_ns": -0.3641305559972108
+      }
+    },
+    {
+      "workload": "alternatingburst",
+      "repetition": 2,
+      "baseline": {
+        "global_model_mae_ns": 367711.70114428975,
+        "same_episode_ewma_mae_ns": 956596.3919626678,
+        "model_over_ewma": 0.3843958687632601,
+        "prediction_samples": 40287,
+        "throughput_units_per_s": 2603060663.766667,
+        "wake_p99_ns": 1859443.91,
+        "completion_p99_ns": 3689255.42
+      },
+      "candidate": {
+        "global_model_mae_ns": 444375.23069272464,
+        "same_episode_ewma_mae_ns": 954921.8291312348,
+        "model_over_ewma": 0.46535246879528,
+        "prediction_samples": 40218,
+        "throughput_units_per_s": 2611604141.733333,
+        "wake_p99_ns": 1856271.0799999998,
+        "completion_p99_ns": 3674962.03
+      },
+      "paired_percent_change": {
+        "global_model_mae_ns": 20.848814250366267,
+        "same_episode_ewma_mae_ns": -0.1750542700665325,
+        "model_over_ewma": 21.060736238525777,
+        "throughput_units_per_s": 0.32820894593765804,
+        "wake_p99_ns": -0.17063327282618168,
+        "completion_p99_ns": -0.38743292000097407
+      }
+    },
+    {
+      "workload": "alternatingburst",
+      "repetition": 3,
+      "baseline": {
+        "global_model_mae_ns": 370542.23088970094,
+        "same_episode_ewma_mae_ns": 957796.4290401969,
+        "model_over_ewma": 0.38686950551801436,
+        "prediction_samples": 40227,
+        "throughput_units_per_s": 2610248987.5,
+        "wake_p99_ns": 1872476.42,
+        "completion_p99_ns": 3700669.0
+      },
+      "candidate": {
+        "global_model_mae_ns": 423215.26359707944,
+        "same_episode_ewma_mae_ns": 960529.613271743,
+        "model_over_ewma": 0.44060615909126355,
+        "prediction_samples": 40266,
+        "throughput_units_per_s": 2605583841.6666665,
+        "wake_p99_ns": 1868198.1699999997,
+        "completion_p99_ns": 3703420.02
+      },
+      "paired_percent_change": {
+        "global_model_mae_ns": 14.215122681402992,
+        "same_episode_ewma_mae_ns": 0.285361706170173,
+        "model_over_ewma": 13.890123880737605,
+        "throughput_units_per_s": -0.17872416982724904,
+        "wake_p99_ns": -0.22848084783894107,
+        "completion_p99_ns": 0.07433845069635403
+      }
+    },
+    {
+      "workload": "alternatingburst",
+      "repetition": 4,
+      "baseline": {
+        "global_model_mae_ns": 368314.06390006456,
+        "same_episode_ewma_mae_ns": 959617.7825957383,
+        "model_over_ewma": 0.3838132958559664,
+        "prediction_samples": 40266,
+        "throughput_units_per_s": 2493693904.4333334,
+        "wake_p99_ns": 1859308.0,
+        "completion_p99_ns": 3697638.1100000003
+      },
+      "candidate": {
+        "global_model_mae_ns": 433936.85229075764,
+        "same_episode_ewma_mae_ns": 960777.5719456564,
+        "model_over_ewma": 0.4516517297671703,
+        "prediction_samples": 40336,
+        "throughput_units_per_s": 2573174484.766667,
+        "wake_p99_ns": 1866602.34,
+        "completion_p99_ns": 3702915.0
+      },
+      "paired_percent_change": {
+        "global_model_mae_ns": 17.81707374836998,
+        "same_episode_ewma_mae_ns": 0.12085951000000428,
+        "model_over_ewma": 17.674852498247382,
+        "throughput_units_per_s": 3.187262887078135,
+        "wake_p99_ns": 0.39231477517442936,
+        "completion_p99_ns": 0.1427097472229244
+      }
+    },
+    {
+      "workload": "stepburst",
+      "repetition": 0,
+      "baseline": {
+        "global_model_mae_ns": 60245.315269920524,
+        "same_episode_ewma_mae_ns": 8975.962254643733,
+        "model_over_ewma": 6.711850335461524,
+        "prediction_samples": 43661,
+        "throughput_units_per_s": 2616899205.3,
+        "wake_p99_ns": 2251476.03,
+        "completion_p99_ns": 4952776.88
+      },
+      "candidate": {
+        "global_model_mae_ns": 10949.597496554892,
+        "same_episode_ewma_mae_ns": 9171.390813045475,
+        "model_over_ewma": 1.1938862621555806,
+        "prediction_samples": 43540,
+        "throughput_units_per_s": 2588893261.9,
+        "wake_p99_ns": 2086116.2399999977,
+        "completion_p99_ns": 4960281.5600000005
+      },
+      "paired_percent_change": {
+        "global_model_mae_ns": -81.82498100060265,
+        "same_episode_ewma_mae_ns": 2.177243540664797,
+        "model_over_ewma": -82.21226334789115,
+        "throughput_units_per_s": -1.0701957241333493,
+        "wake_p99_ns": -7.344505906198884,
+        "completion_p99_ns": 0.15152469375927513
+      }
+    },
+    {
+      "workload": "stepburst",
+      "repetition": 1,
+      "baseline": {
+        "global_model_mae_ns": 60020.06497695853,
+        "same_episode_ewma_mae_ns": 9396.224838709677,
+        "model_over_ewma": 6.38767866959649,
+        "prediction_samples": 43400,
+        "throughput_units_per_s": 2609748403.8,
+        "wake_p99_ns": 2244634.0599999996,
+        "completion_p99_ns": 4955926.2299999995
+      },
+      "candidate": {
+        "global_model_mae_ns": 12052.817619429488,
+        "same_episode_ewma_mae_ns": 10264.548333142398,
+        "model_over_ewma": 1.1742180199505794,
+        "prediction_samples": 43645,
+        "throughput_units_per_s": 2574992585.0,
+        "wake_p99_ns": 2244479.0,
+        "completion_p99_ns": 4948153.000000001
+      },
+      "paired_percent_change": {
+        "global_model_mae_ns": -79.9186861526116,
+        "same_episode_ewma_mae_ns": 9.241195366627286,
+        "model_over_ewma": -81.61745321442797,
+        "throughput_units_per_s": -1.3317689455961679,
+        "wake_p99_ns": -0.006908030255925457,
+        "completion_p99_ns": -0.1568471692121709
+      }
+    },
+    {
+      "workload": "stepburst",
+      "repetition": 2,
+      "baseline": {
+        "global_model_mae_ns": 60340.63273475924,
+        "same_episode_ewma_mae_ns": 8596.891250142971,
+        "model_over_ewma": 7.018889849718145,
+        "prediction_samples": 43715,
+        "throughput_units_per_s": 2611372352.6,
+        "wake_p99_ns": 2173097.4400000013,
+        "completion_p99_ns": 4954069.4
+      },
+      "candidate": {
+        "global_model_mae_ns": 10738.959052267362,
+        "same_episode_ewma_mae_ns": 8939.893196764511,
+        "model_over_ewma": 1.2012401955936074,
+        "prediction_samples": 43641,
+        "throughput_units_per_s": 2608440589.6,
+        "wake_p99_ns": 2064000.0000000014,
+        "completion_p99_ns": 4957256.72
+      },
+      "paired_percent_change": {
+        "global_model_mae_ns": -82.20277354486343,
+        "same_episode_ewma_mae_ns": 3.9898369845708492,
+        "model_over_ewma": -82.88560981418101,
+        "throughput_units_per_s": -0.11226905259531517,
+        "wake_p99_ns": -5.020365768780244,
+        "completion_p99_ns": 0.06433741117957137
+      }
+    },
+    {
+      "workload": "stepburst",
+      "repetition": 3,
+      "baseline": {
+        "global_model_mae_ns": 60431.90356374949,
+        "same_episode_ewma_mae_ns": 9402.068232764537,
+        "model_over_ewma": 6.4275116993041,
+        "prediction_samples": 43718,
+        "throughput_units_per_s": 2584593685.3333335,
+        "wake_p99_ns": 2255068.379999999,
+        "completion_p99_ns": 4956892.62
+      },
+      "candidate": {
+        "global_model_mae_ns": 10702.04820987089,
+        "same_episode_ewma_mae_ns": 8927.982213167292,
+        "model_over_ewma": 1.1987085048273445,
+        "prediction_samples": 43684,
+        "throughput_units_per_s": 2597863580.4333334,
+        "wake_p99_ns": 2188166.0000000005,
+        "completion_p99_ns": 4961561.400000001
+      },
+      "paired_percent_change": {
+        "global_model_mae_ns": -82.2907312549218,
+        "same_episode_ewma_mae_ns": -5.042358849780948,
+        "model_over_ewma": -81.35034892340799,
+        "throughput_units_per_s": 0.5134228708868926,
+        "wake_p99_ns": -2.9667561566358636,
+        "completion_p99_ns": 0.09418763644715167
+      }
+    },
+    {
+      "workload": "stepburst",
+      "repetition": 4,
+      "baseline": {
+        "global_model_mae_ns": 60082.26148726188,
+        "same_episode_ewma_mae_ns": 8599.570415423457,
+        "model_over_ewma": 6.986658470695635,
+        "prediction_samples": 43570,
+        "throughput_units_per_s": 2610961567.8333335,
+        "wake_p99_ns": 2271152.7199999997,
+        "completion_p99_ns": 4962274.8
+      },
+      "candidate": {
+        "global_model_mae_ns": 11878.571225756223,
+        "same_episode_ewma_mae_ns": 10137.641432529595,
+        "model_over_ewma": 1.1717292730082505,
+        "prediction_samples": 43671,
+        "throughput_units_per_s": 2609388314.9666667,
+        "wake_p99_ns": 2016383.3200000003,
+        "completion_p99_ns": 4951764.32
+      },
+      "paired_percent_change": {
+        "global_model_mae_ns": -80.22948715358423,
+        "same_episode_ewma_mae_ns": 17.885440118585283,
+        "model_over_ewma": -83.22904607513202,
+        "throughput_units_per_s": -0.06025568840418716,
+        "wake_p99_ns": -11.217625206639536,
+        "completion_p99_ns": -0.2118076975503147
+      }
+    }
+  ],
+  "limits": [
+    "One ARM64 VM; no bare-metal/general Linux superiority claim.",
+    "Global errors compare the same verified, clipped CPU episodes within each trial.",
+    "One-second counter snapshots give approximate measurement boundaries.",
+    "Repetition is the unit; within-trial episodes are correlated.",
+    "Five paired trials give coarse exploratory bootstrap intervals.",
+    "Shadow uses fixed slices, separating prediction changes from budget decisions."
+  ]
+}

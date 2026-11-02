@@ -1,0 +1,91 @@
+From /home/ubuntu/lertick-model-confirmation-source.bundle
+ * branch            HEAD       -> FETCH_HEAD
+Switched to a new branch 'confirmation-0b23633'
+Updating 6beaba2..0b23633
+Fast-forward
+ .github/workflows/docs.yml                         |    8 +-
+ CHANGELOG.md                                       |   10 +
+ Makefile                                           |   10 +-
+ README.md                                          |    6 +
+ benchmarks/README.md                               |   35 +
+ benchmarks/burst_profiles.h                        |   45 +
+ benchmarks/compact_confirmation.py                 |  107 +
+ benchmarks/phase2_workload.c                       |   59 +-
+ benchmarks/run_model_confirmation.py               |  199 ++
+ benchmarks/run_phase2.py                           |   24 +-
+ docs/PHASE2_OPTIMIZATION.md                        |   13 +-
+ results/model-confirmation/PROTOCOL.md             |   68 +
+ results/model-confirmation/design.json             |   22 +
+ results/model-precision/README.md                  |  121 +
+ results/model-precision/archives.json              |   14 +
+ results/model-precision/bias-carry.json            | 1584 +++++++++++++
+ results/model-precision/combined.json              | 1584 +++++++++++++
+ results/model-precision/environment.json           |   45 +
+ results/model-precision/ewma-carry.json            | 1584 +++++++++++++
+ results/model-precision/ewma-init.json             | 1584 +++++++++++++
+ .../model-precision/initializer-lazy-pilot.json    | 1584 +++++++++++++
+ results/model-precision/plan.json                  |  402 ++++
+ .../raw/factorial-and-validation.tgz               |  Bin 0 -> 61304364 bytes
+ .../raw/initial-validation-failures.tgz            |  Bin 0 -> 4229704 bytes
+ .../model-precision/raw/initializer-lazy-pilot.tgz |  Bin 0 -> 21623569 bytes
+ results/model-precision/session.json               |   29 +
+ results/model-precision/validation-summary.json    | 2483 ++++++++++++++++++++
+ tests/README.md                                    |    6 +
+ tests/test_burst_profiles.c                        |   35 +
+ tests/test_compact_confirmation.py                 |   73 +
+ tests/test_confirmation.py                         |   74 +
+ 31 files changed, 11790 insertions(+), 18 deletions(-)
+ create mode 100644 benchmarks/burst_profiles.h
+ create mode 100644 benchmarks/compact_confirmation.py
+ create mode 100644 benchmarks/run_model_confirmation.py
+ create mode 100644 results/model-confirmation/PROTOCOL.md
+ create mode 100644 results/model-confirmation/design.json
+ create mode 100644 results/model-precision/README.md
+ create mode 100644 results/model-precision/archives.json
+ create mode 100644 results/model-precision/bias-carry.json
+ create mode 100644 results/model-precision/combined.json
+ create mode 100644 results/model-precision/environment.json
+ create mode 100644 results/model-precision/ewma-carry.json
+ create mode 100644 results/model-precision/ewma-init.json
+ create mode 100644 results/model-precision/initializer-lazy-pilot.json
+ create mode 100644 results/model-precision/plan.json
+ create mode 100644 results/model-precision/raw/factorial-and-validation.tgz
+ create mode 100644 results/model-precision/raw/initial-validation-failures.tgz
+ create mode 100644 results/model-precision/raw/initializer-lazy-pilot.tgz
+ create mode 100644 results/model-precision/session.json
+ create mode 100644 results/model-precision/validation-summary.json
+ create mode 100644 tests/test_burst_profiles.c
+ create mode 100644 tests/test_compact_confirmation.py
+ create mode 100644 tests/test_confirmation.py
+cc -O2 -g -std=gnu11 -Wall -Wextra benchmarks/phase2_workload.c -o build/phase2_workload -pthread -lm
+build/test_model
+build/test_accounting
+build/test_cpuperf
+accounting: 202000 oracle cases and callback-order traces passed
+build/test_lerwatt_plugin
+{"test":"lerwatt_plugin","status":"passed"}
+cc -Ibenchmarks -O2 -std=c11 -Wall -Wextra -Werror tests/test_burst_profiles.c -o build/test_burst_profiles
+{"test":"cpuperf","status":"passed"}
+{"test":"synthetic_holdout","samples":1000,"model_squared_error":563987,"fixed_squared_error":156938088319}
+{"test":"fractional_carry","oracle_trials":100000,"model_bytes":48}
+{"test":"model","status":"passed","oracle_trials":200121}
+build/test_burst_profiles
+burst profiles: phase boundaries, deterministic seeds, groups and u64 bounds passed
+....
+----------------------------------------------------------------------
+Ran 4 tests in 0.000s
+
+OK
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.002s
+
+OK
+PASS r0 rampburst shadow
+PASS r0 rampburst shadow-ewma-carry
+PASS r0 stepburst shadow-ewma-carry
+PASS r0 stepburst shadow
+PASS r0 randomstepburst shadow-ewma-carry
+PASS r0 randomstepburst shadow
+PASS r0 alternatingburst shadow
+PASS r0 alternatingburst shadow-ewma-carry
