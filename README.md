@@ -1,172 +1,122 @@
-# Lertick — A Self-Learning CPU Scheduler for Linux
+<h1 align="center">Lertick</h1>
 
-Lertick is a Linux CPU scheduler that learns task CPU-burst duration online inside eBPF and uses sched_ext to select bounded time slices. It runs independently, with optional CPU-frequency targets and Lerwatt power-manager coordination.
+<p align="center">CPU scheduling that learns inside the Linux kernel.</p>
 
-[![CI](https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml)
-[Deployment](docs/DEPLOYMENT.md) · [Phase 2 results](docs/PHASE2_RESULTS.md) · [Benchmarks](benchmarks/README.md)
+<p align="center">
+  <a href="#get-started-on-linux">Get started →</a> &nbsp;&nbsp;
+  <a href="#how-it-works">Explore Lertick →</a> &nbsp;&nbsp;
+  <a href="docs/INSTALL.md">Installation guide →</a>
+</p>
 
-## Validated behavior
+<p align="center">
+  <img src="docs/assets/lertick-overview.svg" alt="Lertick learns task CPU bursts inside eBPF and selects bounded time-slice budgets on a compatible sched_ext Linux kernel." width="1120" />
+</p>
 
-Compilation, BPF verifier acceptance, sched_ext registration, real task execution, in-kernel updates, adaptive budgets and scheduler recovery have been verified on an ARM64 Linux VM. The historical scheduler benchmark below used four vCPUs; later Lerwatt integration validation used eight.
+<p align="center">
+  <strong>Learns task bursts.</strong> Training and inference run inside eBPF.<br />
+  <strong>Adapts time slices.</strong> Predictions select bounded new CPU budgets.<br />
+  <strong>Runs on your Linux.</strong> A finite foreground trial, with kernel fallback.
+</p>
 
-| Validation | Recorded outcome |
-| --- | --- |
-| Environment | Ubuntu 24.04.5 ARM64, Linux `7.0.0-38-generic`, QEMU 10.2.1/HVF, 4 vCPUs, 4 GiB RAM |
-| Correctness and lifecycle | 19 cases, 156 independent service checks, 4,200-task churn and 8,000 children from concurrent fork parents passed |
-| Recovery | 15 tests covering SIGINT, SIGTERM, SIGKILL, SysRq-S and watchdog fallback passed |
-| Benchmarks | 7 policies × 8 workload categories × 5 randomized repetitions, plus 80 overhead/control trials; all 360 trials passed |
+<p align="center">
+  <a href="https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml"><img src="https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml/badge.svg?branch=main" alt="Lertick checks" /></a>
+  <img src="https://img.shields.io/badge/sched__ext-experimental-6e6e73?style=flat-square" alt="Experimental sched_ext scheduler" />
+</p>
 
-**Learning does not yet establish a scheduling advantage.** All online/fixed throughput confidence intervals included zero change. Online wake p99 increased about **214% in mixed** and **147% in multicore** contention versus fixed slices. Linear prediction MAE exceeded same-episode EWMA in all six categories with eligible labels. These five-trial VM comparisons are exploratory; they do not establish superiority over Linux EEVDF or other sched_ext schedulers.
+<br />
 
-[Full results, uncertainty and overhead](docs/PHASE2_RESULTS.md) · [Raw evidence and analysis commands](results/phase2/README.md)
+## Get started on Linux
 
-## Features and modes
+**A compatible running sched_ext kernel is required.** Loading and unloading Lertick on that kernel needs no reboot. Installing or booting a different kernel may require one; the helper never changes your kernel or boot configuration.
 
-- C/eBPF struct_ops scheduler derived from the pinned [official sched_ext C examples](THIRD_PARTY.md).
-- Weighted virtual-time dispatch charges actual CPU service independently of predictions.
-- CPU bursts accumulate across preemption and slice expiration; verified wake-to-sleep episodes provide labels. Attachment and exit are censored.
-- Per-task five-feature Q16 linear model with bounded LMS updates. Features: bias, previous burst, burst EWMA, sleep interval and queue depth.
-- `--model-init ewma` initializes that model from causal burst history; the default remains `bias`. Use shadow mode to evaluate the prior while keeping fixed slice budgets.
-- `--model-update carry` retains fractional LMS updates that otherwise round to zero; the default remains `trunc`. These experimental options require workload-specific evaluation and do not establish a scheduling advantage.
-
-- Training and inference execute inside eBPF; the C/libbpf loader handles attachment and JSONL telemetry.
-- Default prediction-selected budgets are 0.5–5 ms after eight valid labels, with a 2 ms fallback. Bounds apply to newly assigned budgets, not exact execution time or resumed remaining budgets.
-
-An earlier eight-vCPU, full-preemption shadow comparison of both options reduced model
-MAE by about 52–82% across four custom workloads, mostly catching up with EWMA.
-The earlier lazy-preemption pilot was inconclusive; see
-[that experiment and its limitations](results/model-precision/README.md).
-
-Longer 30-second confirmation adds fresh burst patterns and online controls.
-The candidate regresses on alternating bursts, where the original model already
-beats EWMA. Lower prediction error does not consistently improve throughput;
-shortburst wake p99 worsens by 35.65% against original online mode. One natural
-lazy-mode watchdog fallback remains unresolved, despite a successful complete
-retry. Defaults remain unchanged. The [confirmation report](results/model-confirmation/README.md)
-preserves every outcome, raw-data hash and deadline omission.
-
-| Mode | Learning or prediction | Newly assigned slice (defaults) |
-| --- | --- | --- |
-| `fixed` | Disabled | Fixed 2 ms |
-| `shadow` | Linear training and inference inside eBPF | Fixed 2 ms |
-| `ewma` | Historical burst EWMA; no linear training | Bounded EWMA after warm-up |
-| `online` | Linear training and inference inside eBPF | Bounded model prediction after warm-up |
-
-### CPU frequency and the Lerwatt plug-in
-
-When every task runs on sched_ext, Linux's schedutil governor reads the scheduler's `scx_bpf_cpuperf_set()` target instead of CFS utilization, and Linux starts each target at the maximum. A scheduler that never sets one keeps every CPU at its top frequency. `--cpuperf auto` (the default) therefore sends utilization-based targets whenever a cpufreq policy uses schedutil, and leaves the kernel default where nothing reads it, such as a VM without cpufreq, so behavior there is unchanged. `--cpuperf util` and `--cpuperf max` force either choice; `max` is the previous behavior.
-
-`--lerwatt` attaches the optional [Lerwatt](https://github.com/Denny-Lin/lerwatt) power manager. Lertick pins two small shared maps, publishes per-cluster demand every 100 ms, and applies Lerwatt's energy price, frequency floor and ceiling to its targets. Without the flag, Lertick never touches those maps; without Lerwatt running, the maps go unused. See [the contract](vendor/lerwatt/contract.h).
-
-On the ARM64 VM, `--cpuperf util` and `--lerwatt` passed the verifier, registered and restored the default scheduler. The plug-in applied Lerwatt's limits with all three simulated clusters busy on an eight-vCPU VM; standalone operation also passed. The earlier hot-start run exposed a thermal transient, recorded in the [VM validation](docs/LERWATT_VM_VALIDATION.md). Real cpufreq hardware remains unverified.
-
-Model tracking defaults to tasks with a `lertick` name prefix. `--tracked-tgid PID` selects a process and `--track-all` enables learning for all tasks. Tracking controls model eligibility; it does not restrict which tasks sched_ext schedules. Partial switching is a separate `--partial` option.
-
-## Architecture
-
-```mermaid
-flowchart LR
-    W[Task wake: historical features] --> P[eBPF prediction]
-    M[Per-task Q16 model] --> P
-    P --> B[Warm-up, fallback, bounded budget]
-    B --> D[Weighted virtual-time dispatch]
-    D --> R[Actual CPU execution]
-    R --> S[Stopping: commit CPU service]
-    S --> Q[Verified sleep: completed burst]
-    Q --> T[eBPF online update]
-    T --> M
-    L[C/libbpf loader] -. attach and observe .-> D
-```
-
-Continuing-task decisions include committed and pending CPU service. Only `stopping` commits runtime and fairness charges. Live task/model storage is separate from the bounded LRU telemetry map. Predictions affect slice budgets; dispatch ordering and CPU selection remain based on the existing policy. See [correctness and kernel assumptions](docs/PHASE2_CORRECTNESS.md).
-
-## Build and run
-
-The scheduler requires a compatible Linux kernel with `CONFIG_SCHED_CLASS_EXT=y`, BPF syscall/JIT support and live BTF. Follow the [deployment guide](docs/DEPLOYMENT.md) to prepare the tested Ubuntu QEMU guest and pinned dependencies. Build against the running guest kernel. Containers share their host kernel and cannot replace this deployment validation.
-
-Get the source:
+### 1. Check your running kernel
 
 ```sh
-git clone https://github.com/Denny-Lin/lertick.git
-cd lertick
-```
-
-Inside the prepared Linux guest:
-
-```sh
-scripts/preflight.sh
-scripts/build_libbpf.sh
-export PKG_CONFIG_PATH="$PWD/build/deps/install/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-make clean
-make CLANG=clang-18
-make test-model test-accounting
-sudo build/scx_lertick --check
-mkdir -p results/local
-```
-
-Start a finite scheduler in one guest terminal:
-
-```sh
-sudo build/scx_lertick --mode online --duration 30 --sample-ms 1000 \
-  --stats-json results/local/scheduler.jsonl
-```
-
-While it runs, use another guest terminal to verify registration and exercise learning:
-
-```sh
-cat /sys/kernel/sched_ext/state     # enabled
-cat /sys/kernel/sched_ext/root/ops  # scx_lertick
-build/burst_workload --duration 8 --cpu 0 --burst-us 1000 --sleep-us 2000 \
-  --phase-burst-us 6000 > results/local/workload.jsonl
-```
-
-Scheduler telemetry records labels, model coefficients, predictions and selected slices. Keep it with the workload's independently measured CPU service. See the [terminal example](examples/README.md) and [benchmark protocol](docs/PHASE2_BENCHMARKS.md) for further experiments.
-
-Portable arithmetic and documentation checks also run on macOS:
-
-```sh
-make test-model test-accounting
-python3 tests/check_docs.py
-```
-
-These checks do not establish verifier acceptance or Linux runtime compatibility. GitHub CI runs portable checks and compiles Linux workload fixtures; privileged scheduler validation runs separately in QEMU.
-
-## Safety and recovery
-
-Run privileged experiments in a disposable VM with an independent host control path. The loader defaults to 30 seconds, accepts 1–3600 seconds, and owns an unpinned struct_ops link. Normal expiry, SIGINT/SIGTERM and loader death detach it.
-
-After shutdown, verify default scheduling is restored:
-
-```sh
-cat /sys/kernel/sched_ext/state  # disabled
-```
-
-From an independent guest administrator terminal, an emergency sched_ext abort is:
-
-```sh
-printf S | sudo tee /proc/sysrq-trigger >/dev/null
 cat /sys/kernel/sched_ext/state
 ```
 
-Use uppercase `S`. Deliberate watchdog tests require VM-only guards, partial switching and a selected target; use the [validation instructions](tests/README.md). Finite fairness and recovery tests do not prove universal starvation freedom or production safety.
+Continue when it reports `disabled`. If the file is missing, your running kernel is not ready for this installation path. If another scheduler is enabled, stop it through its own manager first. [Kernel requirements →](docs/INSTALL.md#1-check-the-running-kernel)
 
-## Documentation and scope
+### 2. Build and install
 
-| Guide | Contents |
+On **Ubuntu 24.04**, install the build tools and matching kernel tools, then use your normal account to build:
+
+```sh
+sudo apt-get update
+sudo apt-get install --no-install-recommends \
+  git ca-certificates build-essential clang-18 llvm-18 pkg-config \
+  libelf-dev zlib1g-dev libzstd-dev util-linux linux-tools-common "linux-tools-$(uname -r)"
+git clone https://github.com/Denny-Lin/lertick.git
+cd lertick
+./deploy.sh install
+```
+
+The first build downloads pinned libbpf source and builds it locally. No distribution library is replaced. If `bpftool version` fails or your distribution packages it differently, use the [toolchain guide](docs/INSTALL.md#2-install-build-prerequisites).
+
+### 3. Verify, then try 30 seconds
+
+```sh
+lertick check
+lertick verify
+lertick run --duration 30
+```
+
+`verify` asks the BPF verifier to load the programs **without attaching the scheduler**. Continue only after it succeeds. `run` activates online mode with all-task learning; it is an active scheduling trial. Press **Ctrl-C** to stop early. Normal expiry or loader termination releases its unpinned scheduler link.
+
+```mermaid
+flowchart LR
+    A[Install] --> B{Check + verify}
+    B -->|Pass| C[30-second trial]
+    B -->|Fail| D[Resolve kernel or tool requirement]
+    C --> E[Finish or Ctrl-C]
+    E --> F[Kernel default scheduler]
+    classDef default fill:#f5f5f7,stroke:#d2d2d7,color:#1d1d1f
+    linkStyle default stroke:#86868b,stroke-width:1.5px
+```
+
+`lertick plan` prints a command without loading or attaching anything. `lertick status` reports the current scheduler. After stopping, `lertick uninstall` removes the installed tools. Installation never starts a service or enables scheduling at boot. [Full usage and recovery →](docs/INSTALL.md)
+
+## How it works
+
+```mermaid
+flowchart LR
+    H[Task burst history] --> M[Per-task eBPF model]
+    M --> B[Bounded slice budget]
+    B --> D[Weighted virtual-time dispatch]
+    D --> R[Actual CPU execution]
+    R --> L[Completed burst label]
+    L --> M
+    classDef default fill:#f5f5f7,stroke:#d2d2d7,color:#1d1d1f
+    classDef learned fill:#edf5ff,stroke:#a8c8ee,color:#1d1d1f
+    class M,B learned
+    linkStyle default stroke:#86868b,stroke-width:1.5px
+```
+
+The model learns while tasks run, with no offline dataset, model download or cloud inference. After warm-up, predictions select newly assigned slice budgets within the default **0.5–5 ms** range. Those are assigned budgets, not a guarantee of exact execution time. Fairness accounting continues charging actual CPU service independently of predictions. [Architecture, modes and limits →](docs/OVERVIEW.md)
+
+The helper learns from all eligible tasks by default. The raw loader's historical name-prefix default remains available for reproducible experiments. `shadow` trains while using fixed slices, and **still activates the scheduler**; it is not a passive preview.
+
+## What has been tested
+
+| Validation | Evidence |
 | --- | --- |
-| [Deployment](docs/DEPLOYMENT.md) | QEMU setup, dependencies, build, load and recovery |
-| [Phase 2 correctness](docs/PHASE2_CORRECTNESS.md) | Accounting, lifecycle, concurrency, fairness and proof limits |
-| [Phase 2 results](docs/PHASE2_RESULTS.md) | Performance, prediction accuracy, overhead, regressions and uncertainty |
-| [Benchmarks](benchmarks/README.md) | Workloads, randomized runs and reproducible analysis |
-| [Phase 2 evidence](results/phase2/README.md) | Raw archives, manifests and integrity checks |
-| [Phase 1 report](docs/PHASE1_RESULTS.md) and [original evidence](results/phase1/README.md) | Preserved historical validation under the ScxSprout name |
-| [Rebranding validation](docs/REBRAND_VALIDATION.md) | Naming changes and separate regressions |
-| [Contributing](CONTRIBUTING.md) and [security policy](SECURITY.md) | Contribution and reporting guidance |
+| Runtime environment | **Ubuntu 24.04.5 LTS, ARM64, Linux 7.0.0-38-generic**, in a VM |
+| Kernel integration | BPF verifier acceptance, registration, task execution, in-kernel model updates and bounded adaptive budgets |
+| Historical correctness and recovery | 19 correctness cases, 15 recovery tests, churn and concurrent fork checks |
+| Historical benchmarks | 360 completed scheduler/control trials with retained results and uncertainty |
 
-Active scope is **Linux CPU scheduling**: burst prediction, in-kernel learning, adaptive slices, fairness, responsiveness and low scheduling overhead. Memory pressure is benchmark interference; memory allocation, reclaim, DAMON/DAMOS and NUMA memory placement are outside active development. Earlier research remains in the [background archive](docs/planning/README.md).
+Ubuntu release numbers alone do not determine support. Stock Ubuntu 22.04/24.04 GA kernels are not the tested sched_ext target; HWE/OEM kernels can differ. Other kernels require their own build, verifier and runtime checks. Physical-hardware performance remains unverified. [Exact requirements and deployment evidence →](docs/INSTALL.md)
 
-Cross-kernel compatibility, bare-metal performance, long-term production behavior, allocation-failure injection and PID-wrap reuse remain unvalidated. Results include sampling, censoring and observer-cost limitations. Original Phase 1 evidence is preserved byte-for-byte; detailed historical benchmark tables remain in its report.
+**Learning works in the kernel. A scheduling advantage is not established.** Current comparisons found no reliable throughput gain over fixed slices, and some wake-latency cases regressed. Model variants and their unresolved outcomes remain documented. [Results and limitations →](docs/PHASE2_RESULTS.md) · [Model confirmation →](results/model-confirmation/README.md)
 
-## License
+## Go further
 
-Original documents, the independent model and workloads use [MIT](LICENSE). The scheduler, loader, associated build material and vendored helpers retain their GPL notices. See [third-party provenance and license boundaries](THIRD_PARTY.md).
+| I want to… | Start here |
+| --- | --- |
+| Install, select a mode, log a trial or recover | [Native installation](docs/INSTALL.md) |
+| Inspect the model, dispatch and CPU-frequency integration | [Implementation and modes](docs/OVERVIEW.md) · [Correctness](docs/PHASE2_CORRECTNESS.md) |
+| Connect the optional Lerwatt power manager | [Lerwatt integration](docs/DEPLOYMENT.md#cpu-frequency-targets-and-the-lerwatt-plug-in) |
+| Reproduce the VM results | [VM reproduction](docs/DEPLOYMENT.md) · [Benchmarks](benchmarks/README.md) |
+| Contribute or report a problem | [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/Denny-Lin/lertick/issues) · [Security](SECURITY.md) |
+
+Lertick is **learning + tick**. Scheduler, loader and associated build material retain **GPL-2.0-only** notices; independently authored model, workloads and documents use **MIT**. [License boundaries and provenance →](THIRD_PARTY.md)

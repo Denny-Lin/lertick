@@ -27,7 +27,12 @@
 #include <scx/common.h>
 #include "lertick.h"
 #include "lerwatt_plugin.h"
+#include "runtime.h"
 #include "scx_lertick.bpf.skel.h"
+
+#ifndef LERTICK_VERSION
+#define LERTICK_VERSION "source"
+#endif
 
 #define U64(x) ((unsigned long long)(x))
 #define STATE_PATH "/sys/kernel/sched_ext/state"
@@ -157,9 +162,12 @@ static int kernel_check(FILE *out, bool require_disabled)
 	struct btf *btf = NULL;
 	gzFile cfg;
 	int fd, status = 0;
-	uname(&u);
+	if (uname(&u)) {
+		perror("cannot identify the running kernel");
+		return 1;
+	}
 	if (strcmp(u.sysname, "Linux")) {
-		fprintf(stderr, "BLOCKER: an actual Linux guest kernel is required.\n");
+		fprintf(stderr, "BLOCKER: an actual Linux kernel is required.\n");
 		return 1;
 	}
 	snprintf(path, sizeof(path), "/boot/config-%s", u.release);
@@ -198,7 +206,7 @@ static int kernel_check(FILE *out, bool require_disabled)
 	}
 	fd = bpf_map_create(BPF_MAP_TYPE_ARRAY, "lertick_probe", sizeof(__u32), sizeof(__u64), 1, NULL);
 	if (fd < 0) {
-		fprintf(stderr, "BLOCKER: BPF map creation failed: %s. Run as root in the guest.\n", strerror(errno));
+		fprintf(stderr, "BLOCKER: BPF map creation failed: %s. Run as root on the target Linux machine.\n", strerror(errno));
 		status = 1;
 	} else close(fd);
 	fprintf(out, "{\"event\":\"kernel_check\",\"kernel\":");
@@ -214,7 +222,10 @@ static int kernel_check(FILE *out, bool require_disabled)
 		fd >= 0 ? "true" : "false",
 		btf && btf__find_by_name_kind(btf, "sched_ext_ops", BTF_KIND_STRUCT) >= 0 ? "true" : "false",
 		status ? "false" : "true");
-	fflush(out);
+	if (fflush(out) || ferror(out)) {
+		fprintf(stderr, "Failed to write kernel-check output.\n");
+		status = 1;
+	}
 	btf__free(btf);
 	return status;
 }
@@ -381,6 +392,11 @@ static void usage(FILE *out, const char *argv0)
 {
 	fprintf(out, "Usage: %s [--mode fixed|shadow|online|ewma] [--duration SEC] [--stats-json FILE]\n"
 		"  --check                 Probe kernel config, BTF, BPF permission, sched_ext\n"
+		"  --verify                Verify selected BPF programs without attaching or pinning\n"
+		"  --maintenance -- /absolute/program args\n"
+		"                          Run file maintenance while holding the controller lock\n"
+		"  --version               Print the build version and exit\n"
+		"  --stats-json FILE       Create a new private JSONL file; '-' is stdout\n"
 		"  --verbose               Emit libbpf debug/verifier diagnostics\n"
 		"  --profile               Time in-kernel model operations (observer cost)\n"
 		"  --model-init bias|ewma  Linear-model prior (default bias; ewma uses burst history)\n"
@@ -404,14 +420,16 @@ static void usage(FILE *out, const char *argv0)
 		"This GPL-2.0-only scheduler comes with no warranty. See LICENSES/.\n", argv0);
 }
 
-static void lerwatt_detach(struct scx_lertick *skel, bool pinned, void *mem, size_t len)
+static void lerwatt_detach(struct scx_lertick *skel, unsigned pin_mask, void *mem, size_t len)
 {
 	if (mem && mem != MAP_FAILED)
 		munmap(mem, len);
-	if (!pinned)
+	if (!pin_mask)
 		return;
-	bpf_map__unpin(skel->maps.lw_contract, NULL);
-	bpf_map__unpin(skel->maps.lt_demand, NULL);
+	if (pin_mask & 1)
+		bpf_map__unpin(skel->maps.lw_contract, LW_CONTRACT_PIN_LW);
+	if (pin_mask & 2)
+		bpf_map__unpin(skel->maps.lt_demand, LW_CONTRACT_PIN_LT);
 	rmdir(LW_CONTRACT_PIN_DIR);
 }
 
@@ -440,25 +458,28 @@ static void emit_topology(FILE *out, const struct ltlw_topology *t)
 
 int main(int argc, char **argv)
 {
-	struct scx_lertick *skel;
-	struct bpf_link *link;
+	struct scx_lertick *skel = NULL;
+	struct bpf_link *link = NULL;
 	FILE *out = stdout;
 	struct sigaction sa = { .sa_handler = signal_exit };
+	struct sigaction pipe_action = { .sa_handler = SIG_IGN };
 	struct rlimit memlock = { RLIM_INFINITY, RLIM_INFINITY };
 	const char *stats_path = "-", *mode_name = "online";
 	unsigned duration = 30, sample_ms = 1000, mode = LERTICK_MODE_ONLINE;
 	unsigned fixed_us = 2000, min_us = 500, max_us = 5000, tracked_tgid = 0, stall_tgid = 0;
 	bool check = false, partial = false, fault = false, danger = false, expect_watchdog = false, profile = false;
+	bool verify = false, maintenance = false;
 	bool track_all = false;
 	bool fallback, restored, watchdog_observed = false, stall_kind_known;
 	__u64 start, next_sample, exit_code;
 	u64 stall_kind = 0, unreg_kind = 0;
-	int opt, status = 0, final_kind;
+	int opt, status = 0, final_kind, lock_fd = -1;
 	char ops[128] = "unavailable";
 	/* CPU frequency requests and the optional Lerwatt plug-in. */
 	const char *cpuperf_arg = "auto", *cpuperf_reason = "explicit";
 	unsigned cpuperf = LERTICK_CPUPERF_MAX;
-	bool lerwatt = false, pinned = false, cpu_report;
+	bool lerwatt = false, cpu_report;
+	unsigned pin_mask = 0;
 	bool model_init_ewma = false;
 	bool model_update_carry = false;
 	static struct ltlw_topology topo;
@@ -470,11 +491,15 @@ int main(int argc, char **argv)
 	int ncpus;
 	enum { OPT_CHECK = 1000, OPT_SAMPLE, OPT_TRACK, OPT_FIXED, OPT_MIN, OPT_MAX,
 	       OPT_PARTIAL, OPT_FAULT, OPT_STALL, OPT_DANGER, OPT_EXPECT, OPT_PROFILE, OPT_ALL,
-	       OPT_CPUPERF, OPT_LERWATT, OPT_MODEL_INIT, OPT_MODEL_UPDATE };
+	       OPT_CPUPERF, OPT_LERWATT, OPT_MODEL_INIT, OPT_MODEL_UPDATE,
+	       OPT_VERIFY, OPT_MAINTENANCE, OPT_VERSION };
 	static const struct option opts[] = {
 		{ "mode", required_argument, NULL, 'm' }, { "duration", required_argument, NULL, 'd' },
 		{ "stats-json", required_argument, NULL, 'o' }, { "verbose", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' }, { "check", no_argument, NULL, OPT_CHECK },
+		{ "verify", no_argument, NULL, OPT_VERIFY },
+		{ "maintenance", no_argument, NULL, OPT_MAINTENANCE },
+		{ "version", no_argument, NULL, OPT_VERSION },
 		{ "profile", no_argument, NULL, OPT_PROFILE },
 		{ "track-all", no_argument, NULL, OPT_ALL },
 		{ "sample-ms", required_argument, NULL, OPT_SAMPLE }, { "tracked-tgid", required_argument, NULL, OPT_TRACK },
@@ -502,6 +527,9 @@ int main(int argc, char **argv)
 		case 'v': verbose = true; break;
 		case 'h': usage(stdout, argv[0]); return 0;
 		case OPT_CHECK: check = true; break;
+		case OPT_VERIFY: verify = true; break;
+		case OPT_MAINTENANCE: maintenance = true; break;
+		case OPT_VERSION: printf("scx_lertick %s\n", LERTICK_VERSION); return 0;
 		case OPT_SAMPLE: sample_ms = parse_uint(optarg, 100, 10000); break;
 		case OPT_TRACK: tracked_tgid = parse_uint(optarg, 1, 0x7fffffff); break;
 		case OPT_FIXED: fixed_us = parse_uint(optarg, 100, 20000); break;
@@ -539,8 +567,13 @@ int main(int argc, char **argv)
 		default: usage(stderr, argv[0]); return 2;
 		}
 	}
-	if (optind != argc || min_us > fixed_us || fixed_us > max_us) {
+	if ((!maintenance && optind != argc) || (check + verify + maintenance) > 1 ||
+	    (maintenance && (optind >= argc || optind < 1 || strcmp(argv[optind - 1], "--") ||
+			     argv[optind][0] != '/' || fault || partial || lerwatt)) ||
+	    min_us > fixed_us || fixed_us > max_us) {
 		fprintf(stderr, "Require min_slice <= fixed_slice <= max_slice and no positional arguments.\n");
+		if (maintenance)
+			fprintf(stderr, "Maintenance requires --maintenance -- /absolute/program args.\n");
 		return 2;
 	}
 	if ((fault && (!partial || !danger || !stall_tgid || !virtual_machine())) ||
@@ -549,20 +582,53 @@ int main(int argc, char **argv)
 		return 2;
 	}
 	libbpf_set_print(print_libbpf);
+	sigemptyset(&sa.sa_mask);
+	sigemptyset(&pipe_action.sa_mask);
+	if (sigaction(SIGINT, &sa, NULL) || sigaction(SIGTERM, &sa, NULL) ||
+	    sigaction(SIGHUP, &sa, NULL) || sigaction(SIGPIPE, &pipe_action, NULL)) {
+		perror("cannot install shutdown handlers");
+		return 1;
+	}
 	if (strcmp(stats_path, "-")) {
-		out = fopen(stats_path, "w");
+		out = lt_runtime_stats_open(stats_path);
 		if (!out) { perror(stats_path); return 1; }
+	}
+	if (!check) {
+		lock_fd = lt_runtime_lock(LT_RUNTIME_DIR);
+		if (lock_fd < 0) {
+			fprintf(stderr, "Cannot acquire Lertick controller/maintenance lock: %s.\n",
+				strerror(-lock_fd));
+			status = 1;
+			goto cleanup;
+		}
+	}
+	if (maintenance) {
+		int error = lt_runtime_require_idle(STATE_PATH, true);
+
+		if (error) {
+			fprintf(stderr, "Refusing maintenance: sched_ext must be disabled: %s.\n",
+				strerror(-error));
+			status = 1;
+			goto cleanup;
+		}
+		if (exit_req)
+			goto cleanup;
+		status = lt_runtime_run_locked(lock_fd, argv + optind);
+		if (status < 0) {
+			fprintf(stderr, "Maintenance failed: %s.\n", strerror(-status));
+			status = 1;
+		}
+		goto cleanup;
 	}
 	setrlimit(RLIMIT_MEMLOCK, &memlock);
 	status = kernel_check(out, !check);
-	if (check || status) {
-		if (out != stdout) fclose(out);
-		return status;
-	}
+	if (check || status || exit_req)
+		goto cleanup;
 	ncpus = libbpf_num_possible_cpus();
 	if (ncpus <= 0) {
 		fprintf(stderr, "BLOCKER: cannot count possible CPUs.\n");
-		return 1;
+		status = 1;
+		goto cleanup;
 	}
 	/* auto: request frequencies only where schedutil reads them, or for Lerwatt. */
 	if (!strcmp(cpuperf_arg, "util")) {
@@ -581,7 +647,8 @@ int main(int argc, char **argv)
 	cpu_report = cpuperf == LERTICK_CPUPERF_UTIL || lerwatt;
 	if (lerwatt && ltlw_discover(&topo, ncpus, "", NULL)) {
 		fprintf(stderr, "Lerwatt plug-in: cannot discover CPU clusters.\n");
-		return 1;
+		status = 1;
+		goto cleanup;
 	}
 	if (lerwatt && topo.npolicies > LW_CONTRACT_MAX_CLUSTERS)
 		fprintf(stderr, "Lerwatt plug-in: %d cpufreq policies; CPUs past the first %d have no contract.\n",
@@ -589,9 +656,29 @@ int main(int argc, char **argv)
 	if (ncpus > (int)LERTICK_MAX_CPUS && cpu_report)
 		fprintf(stderr, "Warning: CPUs %u and above keep the kernel's performance target.\n",
 			LERTICK_MAX_CPUS);
-	sigemptyset(&sa.sa_mask);
-	sigaction(SIGINT, &sa, NULL); sigaction(SIGTERM, &sa, NULL); sigaction(SIGHUP, &sa, NULL);
-	skel = SCX_OPS_OPEN(lertick_ops, scx_lertick);
+	/* Match the vendored compatibility macros without their exit()-on-error
+	 * paths: every later failure must release our lock and any owned pins.
+	 */
+	__COMPAT_vmlinux_btf = btf__load_vmlinux_btf();
+	if (!__COMPAT_vmlinux_btf || libbpf_get_error(__COMPAT_vmlinux_btf)) {
+		__COMPAT_vmlinux_btf = NULL;
+		fprintf(stderr, "BLOCKER: cannot load live kernel BTF for compatibility checks.\n");
+		status = 1;
+		goto cleanup;
+	}
+	if (!__COMPAT_struct_has_field("sched_ext_ops", "dump")) {
+		fprintf(stderr, "BLOCKER: sched_ext_ops.dump is unavailable in this kernel.\n");
+		status = 1;
+		goto cleanup;
+	}
+	skel = scx_lertick__open();
+	if (!skel) {
+		fprintf(stderr, "Cannot open the Lertick BPF skeleton: %s.\n", strerror(errno));
+		status = 1;
+		goto cleanup;
+	}
+	skel->struct_ops.lertick_ops->hotplug_seq = scx_hotplug_seq();
+	SCX_ENUM_INIT(skel);
 	if (verbose) {
 		struct bpf_program *prog;
 		bpf_object__for_each_program(prog, skel->obj)
@@ -619,22 +706,38 @@ int main(int argc, char **argv)
 	}
 	if (partial) {
 		__u64 flag = SCX_OPS_SWITCH_PARTIAL;
-		if (!flag) { fprintf(stderr, "BLOCKER: kernel lacks partial switch flag.\n"); scx_lertick__destroy(skel); return 1; }
+		if (!flag) { fprintf(stderr, "BLOCKER: kernel lacks partial switch flag.\n"); status = 1; goto cleanup; }
 		skel->struct_ops.lertick_ops->flags |= flag;
 	}
 	stall_kind_known = __COMPAT_read_enum("scx_exit_kind", "SCX_EXIT_ERROR_STALL", &stall_kind);
 	if (expect_watchdog && !stall_kind_known) {
 		fprintf(stderr, "BLOCKER: cannot identify watchdog exit kind in running kernel BTF.\n");
-		scx_lertick__destroy(skel);
-		return 1;
+		status = 1;
+		goto cleanup;
 	}
 	if (!__COMPAT_read_enum("scx_exit_kind", "SCX_EXIT_UNREG", &unreg_kind)) {
 		fprintf(stderr, "BLOCKER: kernel BTF lacks SCX_EXIT_UNREG; cannot validate shutdown/fallback semantics.\n");
-		scx_lertick__destroy(skel);
-		return 1;
+		status = 1;
+		goto cleanup;
 	}
-	SCX_OPS_LOAD(skel, lertick_ops, scx_lertick, uei);
-	fprintf(out, "{\"event\":\"loaded\",\"verifier_accepted\":true}\n"); fflush(out);
+	UEI_SET_SIZE(skel, lertick_ops, uei);
+	if (scx_lertick__load(skel)) {
+		fprintf(stderr, "Failed to load Lertick BPF programs; the scheduler was not attached.\n");
+		status = 1;
+		goto cleanup;
+	}
+	fprintf(out, "{\"event\":\"loaded\",\"verifier_accepted\":true}\n");
+	if (fflush(out) || ferror(out)) {
+		fprintf(stderr, "Failed to write verifier output; refusing to attach.\n");
+		status = 1;
+		goto cleanup;
+	}
+	if (verify) {
+		fprintf(out, "{\"event\":\"verified\",\"verifier_accepted\":true,\"attached\":false,\"pinned\":false}\n");
+		goto cleanup;
+	}
+	if (exit_req)
+		goto cleanup;
 	if (lerwatt) {
 		const char *const pins[] = { LW_CONTRACT_PIN_LW, LW_CONTRACT_PIN_LT };
 		long page = sysconf(_SC_PAGESIZE);
@@ -642,16 +745,27 @@ int main(int argc, char **argv)
 		bool ok;
 
 		/* Pin before attach so that a failure leaves the default scheduler in place. */
+		if (page <= 0 || lt_runtime_require_idle(STATE_PATH, false)) {
+			fprintf(stderr, "Cannot prepare Lerwatt maps: invalid page size or sched_ext is no longer disabled.\n");
+			status = 1;
+			goto cleanup;
+		}
 		cpu_buf = calloc((size_t)ncpus, sizeof(*cpu_buf));
 		demand_len = (sizeof(struct lt_demand_rec) * LW_CONTRACT_MAX_CLUSTERS +
 			      (size_t)page - 1) / (size_t)page * (size_t)page;
 		ok = cpu_buf && !ltlw_pin_prepare(LW_CONTRACT_PIN_DIR, pins, 2, err, sizeof(err));
 		if (ok) {
-			pinned = true;
-			if (bpf_map__pin(skel->maps.lw_contract, LW_CONTRACT_PIN_LW) ||
-			    bpf_map__pin(skel->maps.lt_demand, LW_CONTRACT_PIN_LT)) {
+			if (bpf_map__pin(skel->maps.lw_contract, LW_CONTRACT_PIN_LW)) {
 				snprintf(err, sizeof(err), "cannot pin contract maps: %s", strerror(errno));
 				ok = false;
+			} else {
+				pin_mask |= 1;
+				if (bpf_map__pin(skel->maps.lt_demand, LW_CONTRACT_PIN_LT)) {
+					snprintf(err, sizeof(err), "cannot pin demand map: %s", strerror(errno));
+					ok = false;
+				} else {
+					pin_mask |= 2;
+				}
 			}
 		}
 		if (ok) {
@@ -664,14 +778,30 @@ int main(int argc, char **argv)
 		}
 		if (!ok) {
 			fprintf(stderr, "Lerwatt plug-in: %s\n", err);
-			lerwatt_detach(skel, pinned, demand_mem, demand_len);
-			free(cpu_buf);
-			scx_lertick__destroy(skel);
-			if (out != stdout) fclose(out);
-			return 1;
+			status = 1;
+			goto cleanup;
 		}
 	}
-	link = SCX_OPS_ATTACH(skel, lertick_ops, scx_lertick);
+	if (exit_req)
+		goto cleanup;
+	if (lt_runtime_require_idle(STATE_PATH, false)) {
+		fprintf(stderr, "Refusing attach: another sched_ext scheduler is active or state is unreadable.\n");
+		status = 1;
+		goto cleanup;
+	}
+	__SCX_OPS_DISABLE_AUTOATTACH(skel, lertick_ops);
+	if (scx_lertick__attach(skel)) {
+		fprintf(stderr, "Failed to attach Lertick BPF programs.\n");
+		status = 1;
+		goto cleanup;
+	}
+	link = bpf_map__attach_struct_ops(skel->maps.lertick_ops);
+	if (!link || libbpf_get_error(link)) {
+		link = NULL;
+		fprintf(stderr, "Failed to attach Lertick struct_ops: %s.\n", strerror(errno));
+		status = 1;
+		goto cleanup;
+	}
 	if (!wait_state("enabled") || !read_text(OPS_PATH, ops, sizeof(ops)) || strcmp(ops, "scx_lertick")) {
 		fprintf(stderr, "Registration did not produce enabled scx_lertick (ops=%s).\n", ops);
 		status = 1;
@@ -689,7 +819,11 @@ int main(int argc, char **argv)
 		fprintf(out, ",\"model_update\":\"%s\"", model_update_carry ? "carry" : "trunc");
 		if (lerwatt)
 			emit_topology(out, &topo);
-		fprintf(out, "}\n"); fflush(out);
+		fprintf(out, "}\n");
+		if (fflush(out) || ferror(out)) {
+			fprintf(stderr, "Failed to write scheduler registration output.\n");
+			status = 1;
+		}
 	}
 	start = now_ns(); next_sample = start; next_publish = start;
 	while (!status && !exit_req && !UEI_EXITED(skel, uei) && now_ns() - start < (__u64)duration * 1000000000) {
@@ -706,7 +840,15 @@ int main(int argc, char **argv)
 			}
 			next_sample = now_ns() + (__u64)sample_ms * 1000000;
 		}
-		pause_ms(50);
+		__u64 wake = now_ns() + 50000000ULL;
+		__u64 deadline = start + (__u64)duration * 1000000000ULL;
+		int sleep_error = lt_runtime_sleep_until(wake < deadline ? wake : deadline, &exit_req);
+
+		if (sleep_error) {
+			fprintf(stderr, "Scheduler sleep failed: %s; detaching.\n", strerror(sleep_error));
+			status = 1;
+			break;
+		}
 	}
 	fallback = UEI_EXITED(skel, uei) != 0;
 	if (fallback) {
@@ -715,6 +857,7 @@ int main(int argc, char **argv)
 	}
 	/* The link is never pinned. Closing it, including process death, unregisters ops. */
 	bpf_link__destroy(link);
+	link = NULL;
 	restored = wait_state("disabled");
 	if (!restored) { fprintf(stderr, "Default scheduler restoration could not be confirmed.\n"); status = 1; }
 	/* Catch every abort racing shutdown, including below-ERROR kinds (SysRq). */
@@ -727,8 +870,6 @@ int main(int argc, char **argv)
 	if (expect_watchdog && !watchdog_observed) status = 1;
 	if (emit_snapshot(out, skel, "final", mode_name, cpu_report)) status = 1;
 	/* Lerwatt sees the demand go stale and falls back to running alone. */
-	lerwatt_detach(skel, pinned, demand_mem, demand_len);
-	free(cpu_buf);
 	exit_code = UEI_REPORT(skel, uei);
 	fprintf(out, "{\"event\":\"exit\",\"unexpected_fallback\":%s,\"watchdog_observed\":%s,\"watchdog_expected\":%s,\"watchdog_triggered\":%s,\"exit_kind\":%d,\"exit_code\":%lld,\"reason\":",
 		fallback && !watchdog_observed ? "true" : "false", watchdog_observed ? "true" : "false",
@@ -738,8 +879,20 @@ int main(int argc, char **argv)
 	json_string(out, skel->data->uei.reason);
 	fprintf(out, ",\"message\":"); json_string(out, skel->data->uei.msg);
 	fprintf(out, ",\"default_restored\":%s,\"signal\":%d,\"status\":%d}\n", restored ? "true" : "false", (int)exit_req, status);
-	fflush(out);
-	scx_lertick__destroy(skel);
+cleanup:
+	if (link)
+		bpf_link__destroy(link);
+	lerwatt_detach(skel, pin_mask, demand_mem, demand_len);
+	free(cpu_buf);
+	if (skel)
+		scx_lertick__destroy(skel);
+	if (__COMPAT_vmlinux_btf) {
+		btf__free(__COMPAT_vmlinux_btf);
+		__COMPAT_vmlinux_btf = NULL;
+	}
+	if (fflush(out) || ferror(out)) status = 1;
 	if (out != stdout && fclose(out)) status = 1;
+	if (lock_fd >= 0)
+		close(lock_fd);
 	return status;
 }

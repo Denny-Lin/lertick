@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""Validate maintained documents and local Markdown links; no network I/O."""
+"""Validate maintained documents and local Markdown/HTML links; no network I/O."""
 
 from pathlib import Path
+from html.parser import HTMLParser
 import re
 import sys
 from urllib.parse import unquote, urlsplit
@@ -20,9 +21,33 @@ REQUIRED = (
     "examples/README.md", ".github/workflows/docs.yml", "docs/PHASE1_RESULTS.md",
     "docs/DECISIONS.md", "docs/NAMING.md", "docs/REBRAND_VALIDATION.md",
     "docs/planning/README.md", "THIRD_PARTY.md", "results/phase1/README.md",
+    "docs/INSTALL.md", "docs/OVERVIEW.md", "docs/assets/lertick-overview.svg",
 )
 LINK = re.compile(r"!?\[[^\]\n]+\]\((<[^>]+>|[^\s)]+)(?:\s+\"[^\"]*\")?\)")
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+
+
+class HtmlLinks(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.targets = []
+
+    def handle_starttag(self, tag, attrs):
+        for name, value in attrs:
+            if name in ("href", "src") and value:
+                self.targets.append((self.getpos()[0], value))
+
+
+def check_target(path, number, target, failures):
+    parts = urlsplit(target)
+    if parts.scheme or parts.netloc or not parts.path:
+        return
+    relative = path.relative_to(ROOT)
+    destination = (path.parent / unquote(parts.path)).resolve()
+    if not destination.is_relative_to(ROOT):
+        failures.append(f"{relative}:{number}: link escapes repository: {target}")
+    elif not destination.exists():
+        failures.append(f"{relative}:{number}: missing local target: {target}")
 
 
 def main():
@@ -44,11 +69,13 @@ def main():
         if not content.endswith("\n"):
             failures.append(f"{relative}: missing final newline")
         fence = None
+        html_lines = []
         for number, line in enumerate(content.splitlines(), start=1):
             if line.rstrip() != line:
                 failures.append(f"{relative}:{number}: trailing whitespace")
             match = FENCE.match(line)
             if match:
+                html_lines.append("")
                 marker = match.group(1)
                 if fence is None:
                     fence = marker
@@ -56,17 +83,16 @@ def main():
                     fence = None
                 continue
             if fence:
+                html_lines.append("")
                 continue
+            html_lines.append(line)
             for match in LINK.finditer(line):
                 target = match.group(1).strip("<>")
-                parts = urlsplit(target)
-                if parts.scheme or parts.netloc or not parts.path:
-                    continue
-                destination = (path.parent / unquote(parts.path)).resolve()
-                if not destination.is_relative_to(ROOT):
-                    failures.append(f"{relative}:{number}: link escapes repository: {target}")
-                elif not destination.exists():
-                    failures.append(f"{relative}:{number}: missing local target: {target}")
+                check_target(path, number, target, failures)
+        html = HtmlLinks()
+        html.feed("\n".join(html_lines))
+        for number, target in html.targets:
+            check_target(path, number, target, failures)
         if fence:
             failures.append(f"{relative}: unclosed code fence")
 

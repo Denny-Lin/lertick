@@ -1,4 +1,8 @@
-# Lertick Linux deployment and reproduction
+# Historical VM deployment and reproduction
+
+For installation and foreground trials on your own Linux hardware, use the
+[native installation guide](INSTALL.md). QEMU is not an installation dependency.
+This document preserves the VM setup and experimental reproduction procedure.
 
 Phase 1 was approved on 2026-10-09. Lertick now has a C/eBPF implementation,
 libbpf loader, real CPU workload, model tests, and a Linux validation runner.
@@ -142,9 +146,10 @@ Run these commands inside the guest:
 
 ```sh
 cd /home/ubuntu/lertick
-scripts/preflight.sh
+scripts/preflight.sh --kernel-only
 scripts/build_libbpf.sh
 export PKG_CONFIG_PATH="$PWD/build/deps/install/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+scripts/preflight.sh
 make clean
 make CLANG=clang-18 BPFTOOL=bpftool
 make test-model

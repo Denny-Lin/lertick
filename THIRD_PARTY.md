@@ -28,7 +28,7 @@ the scheduler, loader, their build scripts, or vendored helpers. Distributed
 scheduler executables and BPF objects require corresponding GPL source and
 notices.
 
-`build/vmlinux.h` is generated locally from the **running Linux guest's**
+`build/vmlinux.h` is generated locally from the **running target Linux kernel's**
 `/sys/kernel/btf/vmlinux`; it is ignored by Git and must not be substituted by a
 host/container header. libbpf, LLVM/Clang, bpftool, Linux, and QEMU are external
 build/runtime dependencies supplied by their distributions and upstream licenses;
@@ -37,6 +37,8 @@ bpftool 7.7 with libbpf 1.7.0; use matching/new enough libbpf development header
 for the skeleton emitted by bpftool. Ubuntu's libbpf 1.3.0 headers lack the
 `bpf_map_skeleton.link` field emitted by this bpftool. An isolated libbpf 1.7.0
 prefix can be selected with `PKG_CONFIG_PATH` without replacing system libbpf.
+The native helper automates that pinned source build as the normal user and
+invalidates kernel-derived outputs when its running-kernel/BTF fingerprint changes.
 
 Phase 1 was originally validated under the ScxSprout name. Historical research
 and raw validation evidence retain that name and the former repository path;

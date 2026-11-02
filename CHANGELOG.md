@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — 2026-11-02
+
+### Native installation and foreground trials
+
+- Add a native Linux helper for check, verifier-only verification, run planning,
+  finite all-task trials, protected-prefix installation/removal and status.
+  Keep raw loader model defaults and historical experiments unchanged.
+- Build pinned libbpf as the normal user, select the local development files,
+  serialize source builds and invalidate generated BPF outputs when running-kernel,
+  BTF, compiler, tool or build-option fingerprints change.
+- Add loader lifetime/maintenance locks, exclusive private telemetry files,
+  non-attaching verification and centralized error cleanup. Stop and detach on
+  telemetry or control-sleep errors; retain the unpinned struct_ops lifecycle.
+- Protect optional Lerwatt pin directories and bound CPU-list parsing.
+- Introduce the minimal product README and native installation guide; preserve
+  detailed implementation and VM reproduction documentation. Add deployment
+  fixtures across Ubuntu and musl without attaching BPF in hosted CI.
+
 ## Unreleased — 2026-11-01
 
 ### Optional burst-model evaluation

@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,6 +50,7 @@ int ltlw_parse_cpulist(const char *text, unsigned char *mask, int max)
 		s = end;
 		if (*s == '-') {
 			s++;
+			errno = 0;
 			hi = strtol(s, &end, 10);
 			if (end == s || errno || hi < lo)
 				return -1;
@@ -56,7 +58,9 @@ int ltlw_parse_cpulist(const char *text, unsigned char *mask, int max)
 		}
 		if (*s && *s != ' ' && *s != ',' && *s != '\t' && *s != '\n')
 			return -1;
-		for (long cpu = lo; cpu <= hi; cpu++) {
+		/* Ignore unsupported IDs without walking an unbounded input range. */
+		long last = hi < max ? hi : (long)max - 1;
+		for (long cpu = lo; cpu <= last; cpu++) {
 			if (cpu < max && !mask[cpu]) {
 				mask[cpu] = 1;
 				count++;
@@ -338,9 +342,27 @@ int ltlw_pin_prepare(const char *dir, const char *const *pins, int npins,
 {
 	char parent[PATH_MAX];
 	struct statfs fs;
+	struct stat st;
 	char *slash;
+	size_t length;
+	int fd;
 
-	snprintf(parent, sizeof(parent), "%s", dir);
+	if (!dir || dir[0] != '/' || !pins || npins < 1 ||
+	    !(length = strlen(dir)) || length >= sizeof(parent) || dir[length - 1] == '/') {
+		snprintf(err, errlen, "invalid private BPF pin directory");
+		return -1;
+	}
+	for (int i = 0; i < npins; i++) {
+		const char *name;
+
+		if (!pins[i] || strncmp(pins[i], dir, length) || pins[i][length] != '/' ||
+		    !(name = pins[i] + length + 1)[0] || strchr(name, '/') ||
+		    !strcmp(name, ".") || !strcmp(name, "..")) {
+			snprintf(err, errlen, "pin must be a direct child of its private BPF directory");
+			return -1;
+		}
+	}
+	memcpy(parent, dir, length + 1);
 	slash = strrchr(parent, '/');
 	if (slash && slash != parent)
 		*slash = 0;
@@ -353,12 +375,44 @@ int ltlw_pin_prepare(const char *dir, const char *const *pins, int npins,
 		snprintf(err, errlen, "cannot create %s: %s", dir, strerror(errno));
 		return -1;
 	}
+	fd = open(dir, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+	if (fd < 0) {
+		snprintf(err, errlen, "cannot securely open %s: %s", dir, strerror(errno));
+		return -1;
+	}
+	if (fstat(fd, &st) || !S_ISDIR(st.st_mode) || st.st_uid != geteuid() ||
+	    (st.st_mode & 0022) || fstatfs(fd, &fs) ||
+	    (unsigned long)fs.f_type != BPF_FS_MAGIC_VALUE) {
+		snprintf(err, errlen, "%s must be an owned, protected directory on bpffs", dir);
+		close(fd);
+		return -1;
+	}
+	if (fchmod(fd, 0700)) {
+		snprintf(err, errlen, "cannot protect BPF pin directory %s: %s", dir, strerror(errno));
+		close(fd);
+		return -1;
+	}
 	for (int i = 0; i < npins; i++) {
-		if (unlink(pins[i]) && errno != ENOENT) {
+		const char *name = pins[i] + length + 1;
+
+		if (fstatat(fd, name, &st, AT_SYMLINK_NOFOLLOW)) {
+			if (errno == ENOENT)
+				continue;
+		} else if (!S_ISREG(st.st_mode) || st.st_uid != geteuid() ||
+			   (st.st_mode & 0022) || st.st_nlink != 1) {
+			snprintf(err, errlen, "refusing unexpected stale pin %s", pins[i]);
+			close(fd);
+			return -1;
+		} else if (!unlinkat(fd, name, 0) || errno == ENOENT) {
+			continue;
+		}
+		{
 			snprintf(err, errlen, "cannot remove stale pin %s: %s", pins[i],
 				 strerror(errno));
+			close(fd);
 			return -1;
 		}
 	}
+	close(fd);
 	return 0;
 }

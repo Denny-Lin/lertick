@@ -1,5 +1,24 @@
 # Validation boundaries
 
+`make test-deployment` checks private telemetry output, controller/maintenance
+lock lifetime, source-build fingerprints and the deployment helper using
+temporary files and stub tools. It never loads BPF or changes host scheduling.
+It is part of the Ubuntu and musl CI jobs.
+
+On a target Linux machine with the native loader already built:
+
+```sh
+python3 tests/test_loader_deployment.py --loader build/scx_lertick
+sudo python3 tests/test_loader_deployment.py --loader build/scx_lertick --live
+```
+
+The default invocation checks CLI and unsafe output rejection only. `--live`
+also verifies the BPF programs and maintenance lock without attaching. In an
+idle disposable QEMU/KVM VM, explicitly add `--allow-attach` for short signal,
+loader-death, all-task-learning and telemetry-failure recovery checks. That
+flag refuses an active scheduler or a non-VM host. Ordinary hardware users
+should use the finite foreground trial in the [native guide](../docs/INSTALL.md).
+
 `make test-burst-profiles` checks the optional deterministic burst workloads'
 phase boundaries, seed vectors and unsigned-width bounds. It is an input
 fixture test, not a model-accuracy result. `python3 tests/test_confirmation.py`

@@ -7,6 +7,7 @@
 #define _GNU_SOURCE
 #include <assert.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +41,7 @@ static void put(const char *root, const char *rel, const char *text)
 static void test_cpulist(void)
 {
 	unsigned char mask[16];
+	char extreme[80];
 
 	memset(mask, 0, sizeof(mask));
 	assert(ltlw_parse_cpulist("0 1 2 3\n", mask, 16) == 4);
@@ -52,6 +54,10 @@ static void test_cpulist(void)
 	assert(ltlw_parse_cpulist("a", mask, 16) == -1);
 	assert(ltlw_parse_cpulist("3-1", mask, 16) == -1);
 	assert(ltlw_parse_cpulist("1x", mask, 16) == -1);
+	memset(mask, 0, sizeof(mask));
+	snprintf(extreme, sizeof(extreme), "0-%ld", LONG_MAX);
+	assert(ltlw_parse_cpulist(extreme, mask, 16) == 16);
+	assert(ltlw_parse_cpulist("0-92233720368547758070", mask, 16) == -1);
 }
 
 static void make_board(const char *root, bool sim)
@@ -211,13 +217,25 @@ static void test_publish(void)
 
 static void test_pin_prepare(void)
 {
-	char dir[300], err[512];
-	const char *pins[] = { "/nonexistent/a" };
+	char dir[300], pin[350], err[512];
+	const char *pins[] = { pin };
 
 	snprintf(dir, sizeof(dir), "%s/notbpf/lertick", base);
+	snprintf(pin, sizeof(pin), "%s/map", dir);
 	mkdir(dir, 0755);
 	assert(ltlw_pin_prepare(dir, pins, 1, err, sizeof(err)) == -1);
 	assert(strstr(err, "mount -t bpf"));
+	/* Reject paths outside the protected directory before filesystem access. */
+	pins[0] = "/nonexistent/a";
+	assert(ltlw_pin_prepare(dir, pins, 1, err, sizeof(err)) == -1);
+	assert(strstr(err, "direct child"));
+	snprintf(pin, sizeof(pin), "%s/../other", dir);
+	pins[0] = pin;
+	assert(ltlw_pin_prepare(dir, pins, 1, err, sizeof(err)) == -1);
+	assert(strstr(err, "direct child"));
+	snprintf(pin, sizeof(pin), "%s/..", dir);
+	assert(ltlw_pin_prepare(dir, pins, 1, err, sizeof(err)) == -1);
+	assert(strstr(err, "direct child"));
 }
 
 int main(void)
