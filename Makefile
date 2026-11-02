@@ -17,7 +17,7 @@ BPF_CFLAGS ?= -O2 -g -target bpf -mcpu=v3 -Wall -Wno-compare-distinct-pointer-ty
 BPF_CFLAGS += -D__TARGET_ARCH_$(TARGET_ARCH) -Ivendor/bpf-compat -I/usr/include/$(MULTIARCH)
 BPF_HEADERS := $(wildcard vendor/scx/*.h) $(wildcard vendor/lerwatt/*.h) $(wildcard src/shared/*.h)
 
-.PHONY: all clean preflight test-model test-accounting test-cpuperf test-lerwatt workload reference
+.PHONY: all clean preflight test-model test-accounting test-burst-profiles test-cpuperf test-lerwatt workload reference
 all: $(BUILD)/scx_lertick $(BUILD)/burst_workload $(BUILD)/phase2_workload $(BUILD)/lifecycle_workload
 
 $(BUILD):
@@ -41,7 +41,7 @@ $(BUILD)/scx_lertick: src/userspace/scx_lertick.c src/userspace/lerwatt_plugin.c
 $(BUILD)/burst_workload: benchmarks/burst_workload.c | $(BUILD)
 	$(CC) $(CFLAGS) $< -o $@ -pthread -lm
 
-$(BUILD)/phase2_workload: benchmarks/phase2_workload.c | $(BUILD)
+$(BUILD)/phase2_workload: benchmarks/phase2_workload.c benchmarks/burst_profiles.h | $(BUILD)
 	$(CC) $(CFLAGS) $< -o $@ -pthread -lm
 
 $(BUILD)/lifecycle_workload: tests/lifecycle_workload.c | $(BUILD)
@@ -58,6 +58,12 @@ $(BUILD)/test_accounting: tests/test_accounting.c src/shared/accounting.h src/sh
 
 test-accounting: $(BUILD)/test_accounting
 	$(BUILD)/test_accounting
+
+$(BUILD)/test_burst_profiles: tests/test_burst_profiles.c benchmarks/burst_profiles.h | $(BUILD)
+	$(CC) -Ibenchmarks -O2 -std=c11 -Wall -Wextra -Werror $< -o $@
+
+test-burst-profiles: $(BUILD)/test_burst_profiles
+	$(BUILD)/test_burst_profiles
 
 $(BUILD)/test_cpuperf: tests/test_cpuperf.c src/shared/cpuperf.h src/shared/model.h | $(BUILD)
 	$(CC) -Isrc/shared -O2 -std=c11 -Wall -Wextra -Werror $< -o $@ -lm

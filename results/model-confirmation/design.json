@@ -1,0 +1,22 @@
+{
+  "baseline_model_commit": "6beaba2",
+  "model_parameters_changed": false,
+  "frozen_before_confirmation_model_scores": true,
+  "sha256": {
+    "src/shared/model.h": "9ce54cb889d29d2532c4ea465c728143e2cb44dfd43dd27c32b24d3641a3c639",
+    "src/bpf/scx_lertick.bpf.c": "9a2ae2499edf4c2bb891ea51607f823f1960755f0aaa42b08e8a7984c9abda9b",
+    "src/userspace/scx_lertick.c": "ffaeceb9e4c62d7d321726257d91eec140eb2f8dbeac172ab5a8d69df41ee9c7",
+    "benchmarks/burst_profiles.h": "67b455786d1b385050c238a96d9724b0e678d3ba2ce0488449fb26f3e2b3a5ff",
+    "benchmarks/phase2_workload.c": "d2911d032789c9dd401e4520a3d18b081627d177cca204654977927613e218b2",
+    "benchmarks/run_phase2.py": "cb138294c09c5276cffaa870c444d800ee45cd75e86fb637e42799ddf51e8522",
+    "benchmarks/run_model_confirmation.py": "f189b7e658b93795a0e4b340866cf0a465289ed594ee6046a6258fc74ed69945"
+  },
+  "order_seed": 2026110201,
+  "burst_seed_base": 2026110211,
+  "repetitions": 5,
+  "duration_s": 30,
+  "warmup_s": 5,
+  "primary_sample_buffers_prefaulted": true,
+  "modes_are_separate_randomized_sessions_not_causal_preemption_test": true,
+  "data_policy": "Retain all raw data and hashes locally; publish compact per-trial metrics and counter boundaries rather than adding more large archives to Git."
+}

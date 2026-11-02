@@ -21,6 +21,7 @@ STATE = Path("/sys/kernel/sched_ext/state")
 OPS = Path("/sys/kernel/sched_ext/root/ops")
 BPF_STATS = Path("/proc/sys/kernel/bpf_stats_enabled")
 WORKLOADS = ("cpu", "shortburst", "wakeheavy", "mixed", "multicore", "affinity", "kernelcompile", "memory")
+BURST_WORKLOADS = ("stepburst", "alternatingburst", "rampburst", "randomstepburst")
 LERTICK_POLICIES = {name: (name, "bias", "trunc") for name in ("fixed", "shadow", "online", "ewma")}
 LERTICK_POLICIES.update({"shadow-ewma-prior": ("shadow", "ewma", "trunc"),
                          "online-ewma-prior": ("online", "ewma", "trunc"),
@@ -163,6 +164,9 @@ def summarize_workload(path):
         raise RuntimeError("workload sample buffer overflow: raw results would be incomplete")
     if any(event["samples"] == 0 or event["cpu_service_ns"] == 0 for event in workers):
         raise RuntimeError("workload made no progress: possible starvation")
+    requested = [event["target_cpu_ns"] for event in bursts if "target_cpu_ns" in event]
+    if any(event["cpu_ns"] < event["target_cpu_ns"] for event in bursts if "target_cpu_ns" in event):
+        raise RuntimeError("recorded burst CPU service did not reach its requested target")
     # Compute-only work units can be compared within a workload; memory access
     # iterations intentionally do not count as equivalent compute operations.
     return {"window": window, "workers": workers, "initial_affinity_verified": affinity_verified,
@@ -171,6 +175,8 @@ def summarize_workload(path):
             "deadline_to_run_ns": quantiles([event["wake_lateness_ns"] for event in bursts]),
             "burst_completion_ns": quantiles([event["completion_ns"] for event in bursts]),
             "burst_cpu_service_ns": quantiles([event["cpu_ns"] for event in bursts]),
+            "requested_burst_target_ns": quantiles(requested),
+            "requested_burst_target_mean_ns": sum(requested) / len(requested) if requested else None,
             "jain_cpu_service_fairness": fairness,
             "minimum_cpu_service_share": min(shares) / sum(shares) if shares else None,
             "cpu_worker_max_progress_gap_ns": max((event["max_progress_gap_ns"] for event in cpu_workers), default=None),
@@ -407,10 +413,17 @@ class Benchmark:
             else:
                 command = [ROOT / "build/phase2_workload", "--workload", workload,
                            "--duration", str(self.args.duration), "--warmup", str(self.args.warmup),
-                           "--cpus", self.args.cpus, "--memory-mib", str(self.args.memory_mib)]
+                           "--cpus", self.args.cpus, "--memory-mib", str(self.args.memory_mib),
+                           "--burst-seed", str(self.args.burst_seed + repetition)]
+                if self.args.prefault_samples:
+                    command.append("--prefault-samples")
                 worker = self.launch(command, directory / "workload.jsonl", directory / "workload.log")
                 self.finish(worker, self.args.duration + self.args.warmup + 120)
                 result = summarize_workload(directory / "workload.jsonl")
+                if result["window"].get("burst_seed") != self.args.burst_seed + repetition:
+                    raise RuntimeError("workload input seed does not match the trial configuration")
+                if result["window"].get("sample_pages_prefaulted") != self.args.prefault_samples:
+                    raise RuntimeError("workload sample-prefault setting does not match the trial configuration")
             utilization_end, pressure_end, vm_end = cpu_ticks(), psi(), vm_counters()
             after_programs = programs() if self.stats_enabled else {}
             if observer:
@@ -567,10 +580,12 @@ class Benchmark:
             raise RuntimeError("bpftrace is required for kernel wake latency; install it or explicitly select --without-wake-observer")
         if "kernelcompile" in self.workloads and not shutil.which(str(self.args.perf)):
             raise RuntimeError("kernelcompile requires a working perf executable; provide --perf PATH")
-        if any(workload not in WORKLOADS for workload in self.workloads):
+        if any(workload not in (*WORKLOADS, *BURST_WORKLOADS) for workload in self.workloads):
             raise RuntimeError("unknown workload category")
         if self.args.repetitions < 1 or not math.isfinite(self.args.duration) or not math.isfinite(self.args.warmup) or self.args.duration <= 0 or self.args.warmup < 0:
             raise RuntimeError("duration and repetition count must be positive; warmup must be finite and nonnegative")
+        if not 0 <= self.args.burst_seed <= (1 << 64) - self.args.repetitions:
+            raise RuntimeError("burst seed plus repetition must fit an unsigned 64-bit integer")
         if set(self.policies) - {"default", "scx_simple", *LERTICK_POLICIES, *self.extra}:
             raise RuntimeError("unknown policy")
         manifest = {"kernel": os.uname().release, "architecture": os.uname().machine,
@@ -583,7 +598,8 @@ class Benchmark:
                                  (ROOT / "build/phase2_workload", ROOT / "build/scx_lertick", *self.extra.values(),
                                   *([self.args.reference] if self.args.reference else [])) if path.exists()},
                     "benchmark_sources": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in
-                                          (ROOT / "benchmarks/phase2_workload.c", ROOT / "benchmarks/run_phase2.py", ROOT / "benchmarks/wake_latency.bt")},
+                                          (ROOT / "benchmarks/phase2_workload.c", ROOT / "benchmarks/burst_profiles.h",
+                                           ROOT / "benchmarks/run_phase2.py", ROOT / "benchmarks/wake_latency.bt")},
                     "compiler": subprocess.run(["cc", "--version"], capture_output=True, text=True).stdout,
                     "smoke_only": self.args.smoke, "source_git_commit": subprocess.run(
                         ["git", "-C", ROOT, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()}
@@ -648,6 +664,8 @@ def main():
     parser.add_argument("--duration", type=float, default=10)
     parser.add_argument("--warmup", type=float, default=2)
     parser.add_argument("--seed", type=int, default=20261009)
+    parser.add_argument("--burst-seed", type=int, default=20261102)
+    parser.add_argument("--prefault-samples", action="store_true")
     parser.add_argument("--cpus", default=",".join(str(cpu) for cpu in sorted(os.sched_getaffinity(0))) if hasattr(os, "sched_getaffinity") else "0")
     parser.add_argument("--memory-mib", type=int, default=3600)
     parser.add_argument("--kernel-source", type=Path)
