@@ -107,3 +107,15 @@ Failures remain recorded:
 
 Shared weights, joint retraining, physical energy savings, universal hardware
 compatibility and long-duration reliability are not established by these tests.
+
+## CI fixture timing follow-up
+
+The initial musl/BusyBox CI failed an update transaction because the stub-only
+service fixture exceeded its fixed 15-second subprocess limit; other platforms
+passed. [CI failure excerpt](ci-musl-failure.log) preserves the timeout. The
+fixture now allows 45 seconds and reports the last 12 stub events if it still
+times out. All transaction assertions remain. No production watchdog, kernel
+thermal setting, learning gate or performance acceptance criterion changed.
+This is not a runtime speedup claim. The matching revision passed the full
+[Linux service fixture](linux-service-fixture-followup.log); CI must pass this
+revision before merge.

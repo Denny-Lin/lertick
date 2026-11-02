@@ -98,7 +98,12 @@ with tempfile.TemporaryDirectory(prefix='lertick-service-fixtures-') as td:
  def calls():return [json.loads(x) for x in log.read_text().splitlines()]
  def clear():log.write_text('')
  def run(cmd,ok=True,extra=None,bundle=None):
-  p=subprocess.run([str(tree/'scripts/service_manager.sh'),str(prefix),cmd,str(bundle or tree)],env=dict(env,**(extra or {})),capture_output=True,text=True,timeout=15)
+  # Transactions launch many trust/hash stub processes. Slow musl/container
+  # runners need a fixture budget, not the worker's production watchdog budget.
+  try:
+   p=subprocess.run([str(tree/'scripts/service_manager.sh'),str(prefix),cmd,str(bundle or tree)],env=dict(env,**(extra or {})),capture_output=True,text=True,timeout=45)
+  except subprocess.TimeoutExpired as error:
+   raise AssertionError(('fixture transaction timed out',cmd,calls()[-12:])) from error
   assert (p.returncode==0)==ok,(cmd,p.returncode,p.stdout,p.stderr)
   return p
  def marker(name):return (prefix/'lib/lertick'/name).read_text().strip()

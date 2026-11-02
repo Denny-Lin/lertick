@@ -104,7 +104,7 @@
       "tests/test_online_utility.py": "c9676a2fa618910196b3826820860accbc8026abc4544afb1519bf72dd0a99fd",
       "tests/test_power_integration.py": "197d6bfa589b825af08282d5c4aef01c390b36b434ce5fc257890264f6b427f8",
       "tests/test_report.py": "4464a43a6723e095d05947c258029a7fa89028939a0e85b68b6dec12cab4f801",
-      "tests/test_service.sh": "eedfd5c4450ba7c72e1cc7e7b461e0f3dec42c61b454c70e07604c413b555f06",
+      "tests/test_service.sh": "6b836cbc8009b7f5642f5aee6871e4eb75d74b60f4cb152a09604d64fa1acd1c",
       "tests/test_service_systemd.py": "6854fd0b358a56f5e24d4698496feac409a331c010274f03699891c92495fd49",
       "tests/validate_linux.py": "3a7b9fbf94ad417cedfb57f81218bfa0df3ba47ede61380327da6f7d5d84cffc",
       "tests/validate_phase2.py": "db695af5508f66e73dca1aee87c617df47675fc53b02acdc715b659b2936f4e2",
@@ -115,5 +115,7 @@
   "sched_ext": "disabled",
   "vcpus": 8,
   "archive_retained": true,
-  "recorded_utc": "2026-11-02T17:29:36.558451+00:00"
+  "recorded_utc": "2026-11-02T17:29:36.558451+00:00",
+  "fixture_followup_utc": "2026-11-02T17:42:56.173831+00:00",
+  "fixture_followup": "Only test transaction budget/timeout diagnostics changed after live tests; the matching revision passed the full Linux service fixture."
 }
