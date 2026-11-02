@@ -69,6 +69,12 @@ inside QEMU/KVM, refuses concurrent power experiments and restores the original
 kernel preemption mode. Every environment retains five randomized repetitions.
 See [the prospective protocol](../results/model-confirmation/PROTOCOL.md).
 
+`compact_confirmation.py` keeps every trial and its raw global counter
+boundaries, verifies the reported error deltas and records the full archive's
+hash. Compact exports reproduce model analysis without committing another
+large raw dataset. Full archives remain retained separately; recomputing
+per-job latency percentiles still needs the complete raw traces.
+
 Burst sleeps begin after each completed CPU burst; missed deadlines do not cause
 catch-up jobs. The standalone workload defaults to 1GiB; the runner defaults to
 3600MiB for the 4GiB test VM with a temporary 2GiB swap file. Memory size is
