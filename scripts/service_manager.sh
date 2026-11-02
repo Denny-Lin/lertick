@@ -196,7 +196,9 @@ case $command in
         require_service; check_start_safe
         # An explicit user retry may clear systemd's start-rate limit; automatic
         # update/recovery paths intentionally never reset or retry in a loop.
-        systemctl reset-failed lertick.service
+        # A newly installed unit may not be loaded yet. This reset is best-effort;
+        # the actual start/enable operation below must still report any failure.
+        systemctl reset-failed lertick.service 2>/dev/null || :
         case $command in start) systemctl start lertick.service ;; restart) systemctl restart lertick.service ;; enable) systemctl enable --now lertick.service ;; esac
         check_running || fail 'service did not confirm ready/attached; inspect lertick status and journalctl -u lertick'
         printf 'Lertick is ready and running.\n'; exit 0 ;;

@@ -37,7 +37,10 @@ if name=='systemctl':
   sys.exit(0)
  if cmd=='is-active':sys.exit(0 if s['active'] else 3)
  if cmd=='is-enabled':sys.exit(0 if s['enabled'] else 1)
- if cmd in ['daemon-reload','reset-failed']:sys.exit(0)
+ if cmd=='reset-failed':
+  if env.get('STUB_RESET_NOT_LOADED')=='1':print('Unit lertick.service not loaded.',file=sys.stderr);sys.exit(1)
+  sys.exit(0)
+ if cmd=='daemon-reload':sys.exit(0)
  if cmd in ['stop','disable','restart']:
   if s['active']:kf.write_text('disabled')
   s['active']=False
@@ -99,7 +102,8 @@ with tempfile.TemporaryDirectory(prefix='lertick-service-fixtures-') as td:
  for part in ['Type=notify','NotifyAccess=main','Restart=no','--duration 0','--summary-only','--sample-ms 60000','--notify','NoNewPrivileges=yes','LogRateLimitBurst=100']:
   assert part in unittext,part
  for file in (prefix/'lib/lertick/releases'/first).iterdir():assert not file.is_symlink() and not(file.stat().st_mode&0o222)
- clear();run('enable');assert [c['args'][0] for c in calls() if c['tool']=='systemctl'].index('reset-failed')<[c['args'][0] for c in calls() if c['tool']=='systemctl'].index('enable');assert json.loads(service.read_text())['active'] and json.loads(service.read_text())['enabled'];assert [c['tool'] for c in calls()].index('registered')<[c['tool'] for c in calls()].index('ready')
+ # First enable must proceed even when reset-failed says the new unit is not loaded.
+ clear();run('enable',extra={'STUB_RESET_NOT_LOADED':'1'});assert [c['args'][0] for c in calls() if c['tool']=='systemctl'].index('reset-failed')<[c['args'][0] for c in calls() if c['tool']=='systemctl'].index('enable');assert json.loads(service.read_text())['active'] and json.loads(service.read_text())['enabled'];assert [c['tool'] for c in calls()].index('registered')<[c['tool'] for c in calls()].index('ready')
  # Candidate is verified while old service remains active; only then does stop happen.
  changed('two');clear();run('update');second=marker('current');assert second!=first and marker('previous')==first
  cc=calls();verify=next(i for i,c in enumerate(cc) if c['tool']=='verify');stop=next(i for i,c in enumerate(cc) if c['tool']=='systemctl' and c['args'][0]=='stop')
