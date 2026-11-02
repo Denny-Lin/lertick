@@ -96,7 +96,7 @@ Docker was not used.
 At this earlier decision, the user explicitly authorized a local commit on the existing project branch
 and withheld permission to push until reviewing the results. Phase 1 changes
 therefore remained local until the publication approval recorded above. See [actual results](PHASE1_RESULTS.md),
-[deployment commands](DEPLOYMENT.md), and [license provenance](../THIRD_PARTY.md).
+[deployment commands](DEPLOYMENT.md), and [license provenance](legal/THIRD_PARTY.md).
 
 The documents under `docs/planning/` retain their original Phase 0 reasoning
 with a historical banner. Their earlier approval gates, status statements,

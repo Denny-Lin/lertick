@@ -1,5 +1,12 @@
 # Working on Lertick
 
+Keep root Markdown limited to the product `README.md` and these agent
+instructions. Use [docs/README.md](docs/README.md) as the documentation index;
+guides and changelog belong in `docs/`, provenance in `docs/legal/`, and GitHub
+community policies in `.github/`. Preserve root license files and update all
+relative links when moving documents. Historical raw evidence retains its
+original contents.
+
 Keep deployment usable on the user's running Linux machine. Foreground runs are
 continuous by default; finite trials must be explicit. Never attach a scheduler,
 stop another experiment, change a kernel or run fault injection without an

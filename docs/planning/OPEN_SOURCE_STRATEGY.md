@@ -6,7 +6,7 @@
 > allocation, reclaim, DAMON/DAMOS, NUMA memory placement, and joint CPU/memory
 > management are background research only, neither active nor backup development
 > directions. See the [archive index](README.md), [current Phase 1 results](../PHASE1_RESULTS.md),
-> [decision record](../DECISIONS.md), and [current licensing](../../THIRD_PARTY.md).
+> [decision record](../DECISIONS.md), and [current licensing](../legal/THIRD_PARTY.md).
 > Phase 2 implementation has not been approved.
 
 Status: Phase 0 planning. Source/name checks: 2026-10-09. The public umbrella repository is `Denny-Lin/linux-resource-learning`; the proposed CPU scheduler brand is **ScxSprout (`scx-sprout`)**. The name and direction are proposals, not an approved implementation or software release.
@@ -66,7 +66,7 @@ Source, benchmark, and demo directories currently contain boundary documents, no
 
 Use [Linux kernel C conventions](https://docs.kernel.org/process/coding-style.html), file-level SPDX licensing, short auditable functions, bounded arithmetic, and explicit task/map lifetimes. Documentation and experiment-design work can proceed independently of model and BPF code.
 
-The [contribution guide](../../CONTRIBUTING.md) defines the pull-request workflow and maintainer checklist. The [starter tasks](../GOOD_FIRST_ISSUES.md) offer source validation, translations, lifecycle analysis, arithmetic review, test design, and compatibility audits. Mark tasks as `good first issue` only after a maintainer supplies clear scope and support. Do not manufacture contributor activity or create issue volume to imply adoption.
+The [contribution guide](../../.github/CONTRIBUTING.md) defines the pull-request workflow and maintainer checklist. The [starter tasks](../GOOD_FIRST_ISSUES.md) offer source validation, translations, lifecycle analysis, arithmetic review, test design, and compatibility audits. Mark tasks as `good first issue` only after a maintainer supplies clear scope and support. Do not manufacture contributor activity or create issue volume to imply adoption.
 
 Compatibility reports must distinguish build, verifier acceptance, successful attach, task scheduling, recovery, and performance. Each needs exact version/config evidence. Prefer one pinned target with complete checks over a long unsupported kernel list.
 

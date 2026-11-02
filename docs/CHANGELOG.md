@@ -102,10 +102,10 @@
 - Recorded three four-second comparison repetitions per policy against the
   default Linux scheduler and official non-ML `scx_simple`. Online p99 completion
   latency was worse than fixed and default in this short comparison; no ML
-  improvement is demonstrated. See [Phase 1 results](docs/PHASE1_RESULTS.md) and
-  [validation evidence](results/phase1/validation.json).
+  improvement is demonstrated. See [Phase 1 results](PHASE1_RESULTS.md) and
+  [validation evidence](../results/phase1/validation.json).
 - Retained upstream GPL provenance alongside the original MIT model, workloads
-  and documents; see [THIRD_PARTY](THIRD_PARTY.md).
+  and documents; see [THIRD_PARTY](legal/THIRD_PARTY.md).
 
 ### Original Phase 0 background research
 

@@ -447,5 +447,5 @@ reclaim, DAMON/DAMOS, NUMA memory placement, and joint CPU/memory management are
 outside the project scope; archived material is background research only.
 Root privileges are required in the guest. The official
 reference and derived scheduler/helpers retain their GPL notices; see
-[THIRD_PARTY.md](../THIRD_PARTY.md). Only outcomes backed by the committed result
+[THIRD_PARTY.md](legal/THIRD_PARTY.md). Only outcomes backed by the committed result
 artifacts belong in the tested-support claim.

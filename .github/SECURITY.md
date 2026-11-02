@@ -2,7 +2,7 @@
 
 ## Status
 
-Lertick contains an experimental C/eBPF sched_ext CPU scheduler and privileged loader. [Native installation](docs/INSTALL.md), continuous foreground use and an opt-in [systemd service](docs/DAILY_USE.md) are available; there is no supported production release. Installation alone does not start or enable the service. Keep an independent administrator terminal or console for a new-kernel run. The recorded runtime evidence comes from an Ubuntu ARM64 VM, not physical-hardware performance or long-term production measurements. See the exact [deployment results](docs/PHASE1_RESULTS.md) and [VM reproduction](docs/DEPLOYMENT.md).
+Lertick contains an experimental C/eBPF sched_ext CPU scheduler and privileged loader. [Native installation](../docs/INSTALL.md), continuous foreground use and an opt-in [systemd service](../docs/DAILY_USE.md) are available; there is no supported production release. Installation alone does not start or enable the service. Keep an independent administrator terminal or console for a new-kernel run. The recorded runtime evidence comes from an Ubuntu ARM64 VM, not physical-hardware performance or long-term production measurements. See the exact [deployment results](../docs/PHASE1_RESULTS.md) and [VM reproduction](../docs/DEPLOYMENT.md).
 
 ## Reporting
 
@@ -20,7 +20,7 @@ The raw loader defaults to learning task names beginning with `lertick`, or an e
 
 Requested telemetry files are newly created with mode `0600`; existing files and special paths are refused. The retained snapshot map holds at most 4,096 entries; map-full failures are counted. Live per-task BPF storage follows kernel task lifetime. Compact output does not remove the internal per-task state needed for scheduling. Journald retention follows host policy, and explicit standalone telemetry files have no automatic rotation.
 
-`lertick report` produces a local report and never uploads it. The default excludes raw journal and task details; `--include-logs` explicitly includes bounded raw diagnostics that may contain personal data. It runs with the caller's permissions and records missing optional data when access is denied. Inspect every report before sharing it. See [report privacy](docs/DAILY_USE.md#logs-and-private-reports).
+`lertick report` produces a local report and never uploads it. The default excludes raw journal and task details; `--include-logs` explicitly includes bounded raw diagnostics that may contain personal data. It runs with the caller's permissions and records missing optional data when access is denied. Inspect every report before sharing it. See [report privacy](../docs/DAILY_USE.md#logs-and-private-reports).
 
 Build from a checkout that other users cannot modify, and use a protected root-owned installation prefix. Builds and dependency downloads run as the normal user; only installation and kernel operations request sudo. A private runtime lock serializes Lertick ownership and maintenance. Uninstall disables/stops the owned managed service, but refuses to abort a foreign or independently launched foreground scheduler. Other privileged sched_ext managers do not share the lock, and the kernel remains the final attachment authority. CPU cgroup quotas and hierarchical isolation are not implemented or validated by this scheduler; do not assume those policies retain their fair-scheduler semantics during a trial.
 

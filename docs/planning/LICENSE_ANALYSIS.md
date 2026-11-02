@@ -6,7 +6,7 @@
 > allocation, reclaim, DAMON/DAMOS, NUMA memory placement, and joint CPU/memory
 > management are background research only, neither active nor backup development
 > directions. See the [archive index](README.md), [current Phase 1 results](../PHASE1_RESULTS.md),
-> [decision record](../DECISIONS.md), and [current licensing](../../THIRD_PARTY.md).
+> [decision record](../DECISIONS.md), and [current licensing](../legal/THIRD_PARTY.md).
 > Phase 2 implementation has not been approved.
 
 Reviewed: 2026-10-09. This records the project's licensing choice and engineering boundaries; it is not a legal opinion about every possible future integration.
@@ -48,4 +48,4 @@ An Apache userspace executable can still be a separate component in a mixed-lice
 
 Before the first code release: inventory every SPDX identifier and dependency; include license texts and notices; record copied-source SHAs; confirm libbpf and scheduler helper terms; ensure source accompanies GPL-covered distribution where required; make the README's license summary match the real files. CI should eventually validate SPDX/notice consistency, but no automated tool can establish legal compatibility on its own.
 
-Original contributions use the applicable file license, with no CLA currently required. A maintainer cannot relicense someone else's contribution without permission. See [CONTRIBUTING](../../CONTRIBUTING.md).
+Original contributions use the applicable file license, with no CLA currently required. A maintainer cannot relicense someone else's contribution without permission. See [CONTRIBUTING](../../.github/CONTRIBUTING.md).

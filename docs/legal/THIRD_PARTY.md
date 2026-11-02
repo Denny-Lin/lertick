@@ -7,23 +7,23 @@ pinned at commit `370b1cea95c6bb668d5b9261f069d433142b9986`.
 virtual-time dispatch, and user-exit-info patterns; `scx_qmap.bpf.c` supplies the
 task-storage allocation pattern. The implementation files retain attribution and are
 licensed under GPL-2.0-only, with the full text in
-[LICENSES/GPL-2.0-only.txt](LICENSES/GPL-2.0-only.txt).
+[LICENSES/GPL-2.0-only.txt](../../LICENSES/GPL-2.0-only.txt).
 
-`vendor/scx/` contains only the common, compatibility, enum, and user-exit-info
-headers needed by these two implementation files. `vendor/bpf-compat/gnu/stubs.h`
+[vendor/scx/](../../vendor/scx/) contains only the common, compatibility, enum, and user-exit-info
+headers needed by these two implementation files. [vendor/bpf-compat/gnu/stubs.h](../../vendor/bpf-compat/gnu/stubs.h)
 is the official empty glibc stub shim needed for cross-target BPF compilation.
 These files are copied unchanged from the pinned revision, including their
 original notices. Generated enum headers belong to that same revision; they are
-not generated from the deployment guest. `scripts/fetch_reference.sh` retrieves
+not generated from the deployment guest. [scripts/fetch_reference.sh](../../scripts/fetch_reference.sh) retrieves
 the complete pinned source for inspection and comparison; the build itself does
 not require a network fetch.
 
-`vendor/lerwatt/contract.h` is the MIT-licensed shared-map layout from
+[vendor/lerwatt/contract.h](../../vendor/lerwatt/contract.h) is the MIT-licensed shared-map layout from
 [Lerwatt](https://github.com/Denny-Lin/lerwatt), copied unchanged; Lerwatt holds
 the canonical copy.
 
 The project's original research documents and independently authored material
-retain the root MIT license. That license does not override the GPL notices in
+retain the [root MIT license](../../LICENSE). That license does not override the GPL notices in
 the scheduler, loader, their build scripts, or vendored helpers. Distributed
 scheduler executables and BPF objects require corresponding GPL source and
 notices.

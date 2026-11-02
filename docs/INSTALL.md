@@ -218,4 +218,4 @@ The portable fixtures do not load or attach Lertick to those systems' kernels. C
 
 Historical scheduler benchmarks used four vCPUs; later integration and model-confirmation runs used eight. See [the exact VM deployment record](DEPLOYMENT.md#recorded-environment) for the original environment and preserved experiments.
 
-The original [VM preparation and reproduction guide](DEPLOYMENT.md), [validation suite](../tests/README.md), [benchmark protocol](PHASE2_BENCHMARKS.md) and [third-party licensing](../THIRD_PARTY.md) retain the deeper procedures and evidence. Distro packages for other sched_ext schedulers are not Lertick packages.
+The original [VM preparation and reproduction guide](DEPLOYMENT.md), [validation suite](../tests/README.md), [benchmark protocol](PHASE2_BENCHMARKS.md) and [third-party licensing](legal/THIRD_PARTY.md) retain the deeper procedures and evidence. Distro packages for other sched_ext schedulers are not Lertick packages.

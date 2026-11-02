@@ -136,7 +136,7 @@ Raw log inclusion is a separate choice:
 (umask 077; set -C; lertick report --include-logs > lertick-report-with-logs.json)
 ```
 
-This includes at most 200 entries with an additional byte limit. Logs can contain names, PIDs, paths or other personal information. Journald also maintains process and host metadata. Review the output before sharing; bounded size does not make it anonymous. Full research telemetry should also be inspected before inclusion in an issue. See the [security policy](../SECURITY.md).
+This includes at most 200 entries with an additional byte limit. Logs can contain names, PIDs, paths or other personal information. Journald also maintains process and host metadata. Review the output before sharing; bounded size does not make it anonymous. Full research telemetry should also be inspected before inclusion in an issue. See the [security policy](../.github/SECURITY.md).
 
 Reports describe observed health, configuration and failures. They cannot infer an application speedup from model counters or prove that the absence of a log entry means no error occurred.
 

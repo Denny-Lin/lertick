@@ -15,13 +15,13 @@ PLANNING = (
     "BENCHMARK_PLAN.md", "RECOMMENDATION.md",
 )
 REQUIRED = (
-    "README.md", "LICENSE", "CONTRIBUTING.md",
-    "CODE_OF_CONDUCT.md", "SECURITY.md", "CHANGELOG.md", "docs/DEPLOYMENT.md",
+    "README.md", "LICENSE", ".github/CONTRIBUTING.md",
+    ".github/CODE_OF_CONDUCT.md", ".github/SECURITY.md", "docs/CHANGELOG.md", "docs/DEPLOYMENT.md",
     "src/README.md", "tests/README.md", "benchmarks/README.md",
     "examples/README.md", ".github/workflows/docs.yml", "docs/PHASE1_RESULTS.md",
     "docs/DECISIONS.md", "docs/NAMING.md", "docs/REBRAND_VALIDATION.md",
-    "docs/planning/README.md", "THIRD_PARTY.md", "results/phase1/README.md",
-    "docs/INSTALL.md", "docs/OVERVIEW.md", "docs/assets/lertick-overview.svg",
+    "docs/planning/README.md", "docs/legal/THIRD_PARTY.md", "results/phase1/README.md",
+    "docs/README.md", "docs/INSTALL.md", "docs/OVERVIEW.md", "docs/assets/lertick-overview.svg",
 )
 LINK = re.compile(r"!?\[[^\]\n]+\]\((<[^>]+>|[^\s)]+)(?:\s+\"[^\"]*\")?\)")
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")

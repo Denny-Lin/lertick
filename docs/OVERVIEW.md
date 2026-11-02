@@ -26,7 +26,7 @@ Compilation, BPF verifier acceptance, sched_ext registration, real task executio
 
 ## Features and modes
 
-- C/eBPF struct_ops scheduler derived from the pinned [official sched_ext C examples](../THIRD_PARTY.md).
+- C/eBPF struct_ops scheduler derived from the pinned [official sched_ext C examples](legal/THIRD_PARTY.md).
 - Weighted virtual-time dispatch charges actual CPU service independently of predictions.
 - CPU bursts accumulate across preemption and slice expiration; verified wake-to-sleep episodes provide labels. Attachment and exit are censored.
 - Per-task five-feature Q16 linear model with bounded LMS updates. Features: bias, previous burst, burst EWMA, sleep interval and queue depth.
@@ -166,7 +166,7 @@ Use uppercase `S`. Deliberate watchdog tests require VM-only guards, partial swi
 | [Phase 2 evidence](../results/phase2/README.md) | Raw archives, manifests and integrity checks |
 | [Phase 1 report](PHASE1_RESULTS.md) and [original evidence](../results/phase1/README.md) | Preserved historical validation under the ScxSprout name |
 | [Rebranding validation](REBRAND_VALIDATION.md) | Naming changes and separate regressions |
-| [Contributing](../CONTRIBUTING.md) and [security policy](../SECURITY.md) | Contribution and reporting guidance |
+| [Contributing](../.github/CONTRIBUTING.md) and [security policy](../.github/SECURITY.md) | Contribution and reporting guidance |
 
 Active scope is **Linux CPU scheduling**: burst prediction, in-kernel learning, adaptive slices, fairness, responsiveness and low scheduling overhead. Memory pressure is benchmark interference; memory allocation, reclaim, DAMON/DAMOS and NUMA memory placement are outside active development. Earlier research remains in the [background archive](planning/README.md).
 
@@ -174,4 +174,4 @@ Cross-kernel compatibility, bare-metal performance, long-term production behavio
 
 ## License
 
-Original documents, the independent model and workloads use [MIT](../LICENSE). The scheduler, loader, associated build material and vendored helpers retain their GPL notices. See [third-party provenance and license boundaries](../THIRD_PARTY.md).
+Original documents, the independent model and workloads use [MIT](../LICENSE). The scheduler, loader, associated build material and vendored helpers retain their GPL notices. See [third-party provenance and license boundaries](legal/THIRD_PARTY.md).

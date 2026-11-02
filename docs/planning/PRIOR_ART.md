@@ -6,7 +6,7 @@
 > allocation, reclaim, DAMON/DAMOS, NUMA memory placement, and joint CPU/memory
 > management are background research only, neither active nor backup development
 > directions. See the [archive index](README.md), [current Phase 1 results](../PHASE1_RESULTS.md),
-> [decision record](../DECISIONS.md), and [current licensing](../../THIRD_PARTY.md).
+> [decision record](../DECISIONS.md), and [current licensing](../legal/THIRD_PARTY.md).
 > Phase 2 implementation has not been approved.
 
 Status: **Phase 0 survey; no implementation or benchmark replication.**

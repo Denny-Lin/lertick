@@ -25,7 +25,7 @@ and BPF map memory bounds remain relevant to scheduler testing and safety.
 | [PROJECT_COMPARISON](PROJECT_COMPARISON.md) | Original comparison of six possible project directions |
 | [ARCHITECTURE](ARCHITECTURE.md) | Initial CPU design and superseded memory-controller alternative |
 | [OPEN_SOURCE_STRATEGY](OPEN_SOURCE_STRATEGY.md) | Original naming checks and contribution proposals |
-| [LICENSE_ANALYSIS](LICENSE_ANALYSIS.md) | Original licensing analysis; current boundaries are in [THIRD_PARTY](../../THIRD_PARTY.md) |
+| [LICENSE_ANALYSIS](LICENSE_ANALYSIS.md) | Original licensing analysis; current boundaries are in [THIRD_PARTY](../legal/THIRD_PARTY.md) |
 | [ROADMAP](ROADMAP.md) | Original phases, effort estimates, and decision gates |
 | [BENCHMARK_PLAN](BENCHMARK_PLAN.md) | CPU measurement ideas plus a superseded memory experiment |
 | [RECOMMENDATION](RECOMMENDATION.md) | Original CPU recommendation and risks before implementation |

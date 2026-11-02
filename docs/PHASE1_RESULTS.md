@@ -36,7 +36,7 @@ for current commands. This rebrand does not alter the Phase 1 policy.
 The official reference is
 [`sched-ext/scx-c-examples@370b1cea95c6bb668d5b9261f069d433142b9986`](https://github.com/sched-ext/scx-c-examples/tree/370b1cea95c6bb668d5b9261f069d433142b9986).
 Required headers are copied unchanged. GPL-derived scheduler/loader code and
-MIT original model/workload material have explicit [license boundaries](../THIRD_PARTY.md).
+MIT original model/workload material have explicit [license boundaries](legal/THIRD_PARTY.md).
 
 Default slices are fixed at 2 ms. Online mode can request 0.5–5 ms after eight
 valid labels, using predicted remaining CPU service. Predictions are capped at

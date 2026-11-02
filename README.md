@@ -133,6 +133,8 @@ Ubuntu release numbers alone do not determine support. Stock Ubuntu 22.04/24.04 
 
 ## Go further
 
+**[Browse all documentation →](docs/README.md)**
+
 | I want to… | Start here |
 | --- | --- |
 | Install on a compatible kernel | [Native installation](docs/INSTALL.md) |
@@ -140,6 +142,6 @@ Ubuntu release numbers alone do not determine support. Stock Ubuntu 22.04/24.04 
 | Inspect the model, dispatch and CPU-frequency integration | [Implementation and modes](docs/OVERVIEW.md) · [Correctness](docs/PHASE2_CORRECTNESS.md) |
 | Connect the optional Lerwatt power manager | [Shared integration guide](docs/INTEGRATION.md) |
 | Reproduce the VM results | [VM reproduction](docs/DEPLOYMENT.md) · [Benchmarks](benchmarks/README.md) |
-| Contribute or report a problem | [Contributing](CONTRIBUTING.md) · [Report a bug](https://github.com/Denny-Lin/lertick/issues/new?template=bug_report.yml) · [Security](SECURITY.md) |
+| Contribute or report a problem | [Contributing](.github/CONTRIBUTING.md) · [Report a bug](https://github.com/Denny-Lin/lertick/issues/new?template=bug_report.yml) · [Security](.github/SECURITY.md) |
 
-Lertick is **learning + tick**. Scheduler, loader and associated build material retain **GPL-2.0-only** notices; independently authored model, workloads and documents use **MIT**. [License boundaries and provenance →](THIRD_PARTY.md)
+Lertick is **learning + tick**. Scheduler, loader and associated build material retain **GPL-2.0-only** notices; independently authored model, workloads and documents use **MIT**. [License boundaries and provenance →](docs/legal/THIRD_PARTY.md)
