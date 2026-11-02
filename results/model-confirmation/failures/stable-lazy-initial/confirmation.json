@@ -1,0 +1,44 @@
+{
+  "started_unix": 1793588271.9737039,
+  "kernel": "7.0.0-38-generic",
+  "virtualization": "qemu",
+  "original_preemption": "full (lazy) \n",
+  "sessions": [
+    {
+      "mode": "lazy",
+      "prefault_samples": true,
+      "workloads": [
+        "shortburst",
+        "wakeheavy",
+        "mixed",
+        "multicore"
+      ],
+      "policies": [
+        "shadow",
+        "shadow-ewma-carry"
+      ],
+      "repetitions": 5,
+      "duration_s": 30,
+      "warmup_s": 5,
+      "order_seed": 2026110201,
+      "burst_seed": 2026110211
+    }
+  ],
+  "sha256": {
+    "src/shared/model.h": "9ce54cb889d29d2532c4ea465c728143e2cb44dfd43dd27c32b24d3641a3c639",
+    "src/bpf/scx_lertick.bpf.c": "9a2ae2499edf4c2bb891ea51607f823f1960755f0aaa42b08e8a7984c9abda9b",
+    "src/userspace/scx_lertick.c": "ffaeceb9e4c62d7d321726257d91eec140eb2f8dbeac172ab5a8d69df41ee9c7",
+    "benchmarks/phase2_workload.c": "d2911d032789c9dd401e4520a3d18b081627d177cca204654977927613e218b2",
+    "benchmarks/burst_profiles.h": "67b455786d1b385050c238a96d9724b0e678d3ba2ce0488449fb26f3e2b3a5ff",
+    "benchmarks/run_phase2.py": "cb138294c09c5276cffaa870c444d800ee45cd75e86fb637e42799ddf51e8522",
+    "benchmarks/run_model_confirmation.py": "f189b7e658b93795a0e4b340866cf0a465289ed594ee6046a6258fc74ed69945",
+    "build/scx_lertick": "5d93679101efafc62266bbe9b8b284ee71e07e8cdbe1e777b128ec9f328037f4",
+    "build/phase2_workload": "1251c6d02e1181cdc6cc8d1f44240f0226ac8c03df5fd344e33534e1721b2f7e"
+  },
+  "completed": false,
+  "performance_claim": false,
+  "failure": "RuntimeError('benchmark exited 1; preserve /var/tmp/lertick-model-confirmation-0b23633/stable-lazy/lazy-prefault')",
+  "finished_unix": 1793588883.9985356,
+  "final_preemption": "full (lazy) \n",
+  "final_state": "disabled"
+}

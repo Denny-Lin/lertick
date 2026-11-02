@@ -1,0 +1,15 @@
+{
+  "kernel_reason": "runnable task stall",
+  "task": "lertick_c07[99140]",
+  "reported_runnable_wait_s": 1.113,
+  "original_model": "bias/trunc",
+  "scheduler_mode": "shadow",
+  "adaptive_slice_decisions": false,
+  "guest_final_fallback_utc_approx": "2026-11-02T03:07:47.55Z",
+  "host_display_on_utc": "2026-11-02T03:07:45Z",
+  "host_sleep_events_in_window": 0,
+  "causal_attribution": "Unproven. Temporal proximity to display wake is only an observation; do not claim a host or scheduler root cause.",
+  "recovery": "Linux default restored; sched_ext disabled; original lazy preemption preserved.",
+  "diagnostic": "Five unchanged-model/timeout 35-second mixed-shadow runs with an extra read-only context-switch observer passed; marked diagnostic/smoke, excluded from performance confirmation. Observer curtask matched prev_pid at all177684switches.",
+  "followup": "One complete fresh 40-trial repeat is in progress with unchanged binaries, flags, watchdog and seeds. A successful retry does not erase or resolve this failure."
+}

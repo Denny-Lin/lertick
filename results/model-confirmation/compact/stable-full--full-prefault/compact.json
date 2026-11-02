@@ -1,0 +1,12 @@
+{
+  "source_name": "stable-full/full-prefault",
+  "complete_trials": 40,
+  "performance_claim": false,
+  "all_planned_trials_retained": true,
+  "limits": "Full raw logs retained separately; per-job percentile recomputation needs those logs.",
+  "raw_archive": {
+    "name": "stable-full.tgz",
+    "bytes": 80051963,
+    "sha256": "5f96996ace578bf9dd05488ab02a373f1e0f94033a0fc6a0159a87aea13da3f1"
+  }
+}

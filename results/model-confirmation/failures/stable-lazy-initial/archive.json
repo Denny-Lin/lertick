@@ -1,0 +1,8 @@
+{
+  "name": "stable-lazy-failed.tgz",
+  "bytes": 32993664,
+  "sha256": "93600ba59954c4b9a986fb0112122926e41bd8dddae34fe9000ef0ecddf2dd28",
+  "complete_session": false,
+  "failure_retained": true,
+  "guest_data_not_deleted": true
+}

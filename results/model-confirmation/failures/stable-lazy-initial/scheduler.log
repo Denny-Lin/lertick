@@ -1,0 +1,134 @@
+
+DEBUG DUMP
+================================================================================
+
+kworker/u32:1[97963] triggered exit kind 1026:
+  runnable task stall (lertick_c07[99140] failed to run for 1.113s)
+
+Backtrace:
+  scx_exit+0x64/0xc8
+  scx_watchdog_workfn+0x178/0x280
+  process_one_work+0x1a0/0x578
+  worker_thread+0x19c/0x350
+  kthread+0x114/0x130
+  ret_from_fork+0x10/0x20
+
+CPU states
+----------
+
+CPU 0   : nr_run=6 flags=0x1 cpu_rel=0 ops_qseq=5111862 ksync=11247191
+          curr=lertick_b02[99135] class=ext_sched_class
+
+ *R lertick_b02[99135] -5ms
+      scx_state/flags=3/0xd dsq_flags=0x0 ops_state/qseq=0/0
+      sticky/holding_cpu=-1/-1 dsq_id=(n/a)
+      dsq_vtime=2701125532 slice=697500 weight=100
+      cpus=01 no_mig=0
+
+    cpu_clock_sample+0xc0/0xd0
+    posix_cpu_clock_get+0xb0/0xd0
+    0x2
+    runqueues+0x0/0x1140
+
+  R lertick_c07[99140] -1113ms
+      scx_state/flags=3/0x9 dsq_flags=0x1 ops_state/qseq=0/0
+      sticky/holding_cpu=-1/-1 dsq_id=0x0
+      dsq_vtime=2718196711 slice=2000000 weight=100
+      cpus=01 no_mig=0
+
+    el0_interrupt+0x1a8/0x1f0
+    __el0_irq_handler_common+0x1c/0x40
+    el0t_64_irq_handler+0x14/0x30
+    el0t_64_irq+0x1b8/0x1c0
+
+  R lertick_c04[99137] -11ms
+      scx_state/flags=3/0x9 dsq_flags=0x1 ops_state/qseq=0/0
+      sticky/holding_cpu=-1/-1 dsq_id=0x0
+      dsq_vtime=2701294834 slice=2000000 weight=100
+      cpus=01 no_mig=0
+
+    el0_interrupt+0x1a8/0x1f0
+    __el0_irq_handler_common+0x1c/0x40
+    el0t_64_irq_handler+0x14/0x30
+    el0t_64_irq+0x1b8/0x1c0
+
+  R lertick_c06[99139] -8ms
+      scx_state/flags=3/0x9 dsq_flags=0x1 ops_state/qseq=0/0
+      sticky/holding_cpu=-1/-1 dsq_id=0x0
+      dsq_vtime=2701467947 slice=2000000 weight=100
+      cpus=01 no_mig=0
+
+    el0_interrupt+0x1a8/0x1f0
+    __el0_irq_handler_common+0x1c/0x40
+    el0t_64_irq_handler+0x14/0x30
+    el0t_64_irq+0x1b8/0x1c0
+
+  R lertick_c05[99138] -4ms
+      scx_state/flags=3/0x9 dsq_flags=0x1 ops_state/qseq=0/0
+      sticky/holding_cpu=-1/-1 dsq_id=0x0
+      dsq_vtime=2703205133 slice=2000000 weight=100
+      cpus=01 no_mig=0
+
+    el0_interrupt+0x1a8/0x1f0
+    __el0_irq_handler_common+0x1c/0x40
+    el0t_64_irq_handler+0x14/0x30
+    el0t_64_irq+0x1b8/0x1c0
+
+  R lertick_b03[99136] -1ms
+      scx_state/flags=3/0x9 dsq_flags=0x1 ops_state/qseq=0/0
+      sticky/holding_cpu=-1/-1 dsq_id=0x0
+      dsq_vtime=2702093086 slice=2000000 weight=100
+      cpus=01 no_mig=0
+
+    el0_interrupt+0x1a8/0x1f0
+    __el0_irq_handler_common+0x1c/0x40
+    el0t_64_irq_handler+0x14/0x30
+    el0t_64_irq+0x1b8/0x1c0
+
+CPU 4   : nr_run=1 flags=0x1 cpu_rel=0 ops_qseq=81395 ksync=695631
+          curr=kworker/u32:1[97963] class=ext_sched_class
+
+ *R kworker/u32:1[97963] +0ms
+      scx_state/flags=3/0xd dsq_flags=0x0 ops_state/qseq=0/0
+      sticky/holding_cpu=-1/-1 dsq_id=(n/a)
+      dsq_vtime=2521723003 slice=2000000 weight=100
+      cpus=ff no_mig=0
+
+    scx_dump_state+0x818/0x988
+    scx_error_irq_workfn+0x6c/0xa8
+    irq_work_single+0x34/0xc8
+    irq_work_run_list+0x54/0xb0
+    irq_work_run+0x2c/0x60
+    do_handle_IPI+0xd0/0x490
+    ipi_handler+0x38/0x68
+    handle_percpu_devid_irq+0xc0/0x3c0
+    handle_irq_desc+0x58/0x98
+    generic_handle_domain_irq+0x24/0x50
+    gic_handle_irq+0x94/0x1d0
+    call_on_irq_stack+0x48/0x68
+    do_interrupt_handler+0xb0/0xb8
+    el1_interrupt+0x50/0xe0
+    el1h_64_irq_handler+0x1c/0x40
+    el1h_64_irq+0x84/0x88
+    queue_delayed_work_on+0x18/0x130
+    scx_watchdog_workfn+0x1d4/0x280
+    process_one_work+0x1a0/0x578
+    worker_thread+0x19c/0x350
+    kthread+0x114/0x130
+    ret_from_fork+0x10/0x20
+
+Event counters
+--------------
+              SCX_EV_SELECT_CPU_FALLBACK:                0
+       SCX_EV_DISPATCH_LOCAL_DSQ_OFFLINE:                0
+               SCX_EV_DISPATCH_KEEP_LAST:                0
+                 SCX_EV_ENQ_SKIP_EXITING:                0
+      SCX_EV_ENQ_SKIP_MIGRATION_DISABLED:                1
+                 SCX_EV_REFILL_SLICE_DFL:                1
+                  SCX_EV_BYPASS_DURATION:         10560362
+                  SCX_EV_BYPASS_DISPATCH:                0
+                  SCX_EV_BYPASS_ACTIVATE:                1
+
+================================================================================
+
+EXIT: runnable task stall (lertick_c07[99140] failed to run for 1.113s)

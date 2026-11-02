@@ -1,0 +1,6 @@
+{
+  "error": "command exited 1: /home/ubuntu/lertick-burst-init/build/scx_lertick --mode shadow --model-init bias --model-update trunc --duration 3600 --sample-ms 1000 --stats-json /var/tmp/lertick-model-confirmation-0b23633/stable-lazy/lazy-prefault/r02-mixed-shadow/scheduler.jsonl",
+  "policy": "shadow",
+  "registered_ops": "scx_lertick",
+  "workload": "mixed"
+}
