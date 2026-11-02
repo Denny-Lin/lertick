@@ -1,0 +1,45 @@
+{
+  "architecture": "aarch64",
+  "arguments": {
+    "bpf_runtime": "False",
+    "cpus": "0,1,2,3",
+    "duration": "10.0",
+    "extra_scheduler": "[]",
+    "kernel_build": "None",
+    "kernel_source": "None",
+    "memory_mib": "3600",
+    "output": "/var/tmp/lertick-precision-6beaba2/shadow-factorial",
+    "perf": "perf",
+    "policies": "shadow,shadow-ewma-prior,shadow-carry,shadow-ewma-carry",
+    "profile": "False",
+    "reference": "None",
+    "repetitions": "5",
+    "resume": "False",
+    "seed": "2026110102",
+    "smoke": "False",
+    "warmup": "2.0",
+    "without_wake_observer": "False",
+    "workloads": "shortburst,wakeheavy,mixed,multicore"
+  },
+  "benchmark_sources": {
+    "benchmarks/phase2_workload.c": "d138132aa14dec94fcabf98eefc4650de8da0231c23e739c31432ec281725173",
+    "benchmarks/run_phase2.py": "d68d51299a963e3e7111137f2ca4df95ad99784898adee3c177347e7bd2783d2",
+    "benchmarks/wake_latency.bt": "7daca1d262f0176995d72ef2798f16ff29fae53cfe69423f0af58199927d826e"
+  },
+  "compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "environment": {
+    "cmdline": "BOOT_IMAGE=/vmlinuz-7.0.0-38-generic root=UUID=86f7cf19-9959-4dba-91b1-0052c9d45c21 ro console=tty1 console=ttyAMA0",
+    "cpuinfo": "processor\t: 0\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 1\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 2\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 3\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 4\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 5\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 6\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0\n\nprocessor\t: 7\nBogoMIPS\t: 48.00\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp flagm2 frint bf16 bti afp ebf16\nCPU implementer\t: 0x61\nCPU architecture: 8\nCPU variant\t: 0x0\nCPU part\t: 0x000\nCPU revision\t: 0",
+    "meminfo": "MemTotal:        3985168 kB\nMemFree:         1478012 kB\nMemAvailable:    3560020 kB\nBuffers:           32488 kB\nCached:          2154008 kB\nSwapCached:            0 kB\nActive:           961136 kB\nInactive:        1271680 kB\nActive(anon):      56420 kB\nInactive(anon):        0 kB\nActive(file):     904716 kB\nInactive(file):  1271680 kB\nUnevictable:       26236 kB\nMlocked:           26236 kB\nSwapTotal:             0 kB\nSwapFree:              0 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              1616 kB\nWriteback:             0 kB\nAnonPages:         72728 kB\nMapped:            57264 kB\nShmem:              2532 kB\nKReclaimable:      66308 kB\nSlab:             145436 kB\nSReclaimable:      66308 kB\nSUnreclaim:        79128 kB\nKernelStack:        3008 kB\nShadowCallStack:     784 kB\nPageTables:         3520 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:     1992584 kB\nCommitted_AS:     273728 kB\nVmallocTotal:   135288315904 kB\nVmallocUsed:       12876 kB\nVmallocChunk:          0 kB\nPercpu:             4320 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:     77824 kB\nFilePmdMapped:         0 kB\nCmaTotal:          32768 kB\nCmaFree:          228352 kB\nBalloon:               0 kB\nGPUActive:             0 kB\nGPUReclaim:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB",
+    "os_release": "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.5 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo"
+  },
+  "kernel": "7.0.0-38-generic",
+  "preemption_mode": "(full) lazy",
+  "programs": {
+    "/home/ubuntu/lertick-burst-init/build/phase2_workload": "852ac8df85147cbc3bbb0fc2aa1791e295e6e44e96072f6d0cec62a07e8b2787",
+    "/home/ubuntu/lertick-burst-init/build/scx_lertick": "5d93679101efafc62266bbe9b8b284ee71e07e8cdbe1e777b128ec9f328037f4"
+  },
+  "smoke_only": false,
+  "source_git_commit": "6beaba249299d0971fddfe5aa8027f22c08619f8",
+  "swap": "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority"
+}

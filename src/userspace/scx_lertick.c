@@ -383,6 +383,8 @@ static void usage(FILE *out, const char *argv0)
 		"  --check                 Probe kernel config, BTF, BPF permission, sched_ext\n"
 		"  --verbose               Emit libbpf debug/verifier diagnostics\n"
 		"  --profile               Time in-kernel model operations (observer cost)\n"
+		"  --model-init bias|ewma  Linear-model prior (default bias; ewma uses burst history)\n"
+		"  --model-update trunc|carry  Fixed-point LMS update precision (default trunc)\n"
 		"  --sample-ms N           Snapshot interval (100..10000, default 1000)\n"
 		"  --tracked-tgid PID      Track this TGID (default comm prefix lertick)\n"
 		"  --track-all             Learn all tasks (includes compiler descendants)\n"
@@ -457,6 +459,8 @@ int main(int argc, char **argv)
 	const char *cpuperf_arg = "auto", *cpuperf_reason = "explicit";
 	unsigned cpuperf = LERTICK_CPUPERF_MAX;
 	bool lerwatt = false, pinned = false, cpu_report;
+	bool model_init_ewma = false;
+	bool model_update_carry = false;
 	static struct ltlw_topology topo;
 	struct ltlw_demand_state demand = { 0 };
 	struct lt_demand_rec *demand_mem = MAP_FAILED;
@@ -466,7 +470,7 @@ int main(int argc, char **argv)
 	int ncpus;
 	enum { OPT_CHECK = 1000, OPT_SAMPLE, OPT_TRACK, OPT_FIXED, OPT_MIN, OPT_MAX,
 	       OPT_PARTIAL, OPT_FAULT, OPT_STALL, OPT_DANGER, OPT_EXPECT, OPT_PROFILE, OPT_ALL,
-	       OPT_CPUPERF, OPT_LERWATT };
+	       OPT_CPUPERF, OPT_LERWATT, OPT_MODEL_INIT, OPT_MODEL_UPDATE };
 	static const struct option opts[] = {
 		{ "mode", required_argument, NULL, 'm' }, { "duration", required_argument, NULL, 'd' },
 		{ "stats-json", required_argument, NULL, 'o' }, { "verbose", no_argument, NULL, 'v' },
@@ -479,6 +483,8 @@ int main(int argc, char **argv)
 		{ "fault-stall", no_argument, NULL, OPT_FAULT }, { "stall-tgid", required_argument, NULL, OPT_STALL },
 		{ "dangerous-vm-test", no_argument, NULL, OPT_DANGER }, { "expect-watchdog", no_argument, NULL, OPT_EXPECT },
 		{ "cpuperf", required_argument, NULL, OPT_CPUPERF }, { "lerwatt", no_argument, NULL, OPT_LERWATT },
+		{ "model-init", required_argument, NULL, OPT_MODEL_INIT },
+		{ "model-update", required_argument, NULL, OPT_MODEL_UPDATE },
 		{ NULL, 0, NULL, 0 },
 	};
 	while ((opt = getopt_long(argc, argv, "m:d:o:vh", opts, NULL)) != -1) {
@@ -516,6 +522,20 @@ int main(int argc, char **argv)
 			}
 			break;
 		case OPT_LERWATT: lerwatt = true; break;
+		case OPT_MODEL_INIT:
+			if (strcmp(optarg, "bias") && strcmp(optarg, "ewma")) {
+				usage(stderr, argv[0]);
+				return 2;
+			}
+			model_init_ewma = !strcmp(optarg, "ewma");
+			break;
+		case OPT_MODEL_UPDATE:
+			if (strcmp(optarg, "trunc") && strcmp(optarg, "carry")) {
+				usage(stderr, argv[0]);
+				return 2;
+			}
+			model_update_carry = !strcmp(optarg, "carry");
+			break;
 		default: usage(stderr, argv[0]); return 2;
 		}
 	}
@@ -585,6 +605,8 @@ int main(int argc, char **argv)
 	skel->rodata->fault_stall = fault;
 	skel->rodata->stall_tgid = stall_tgid;
 	skel->rodata->profile_model = profile;
+	skel->rodata->model_init_ewma = model_init_ewma;
+	skel->rodata->model_update_carry = model_update_carry;
 	skel->rodata->track_all = track_all;
 	skel->rodata->cpuperf_mode = cpuperf;
 	skel->rodata->lerwatt_enabled = lerwatt;
@@ -662,6 +684,8 @@ int main(int argc, char **argv)
 		fprintf(out, ",\"cpuperf\":\"%s\",\"cpuperf_reason\":\"%s\",\"lerwatt\":%s",
 			cpuperf == LERTICK_CPUPERF_UTIL ? "util" : "max", cpuperf_reason,
 			lerwatt ? "true" : "false");
+		fprintf(out, ",\"model_init\":\"%s\"", model_init_ewma ? "ewma" : "bias");
+		fprintf(out, ",\"model_update\":\"%s\"", model_update_carry ? "carry" : "trunc");
 		if (lerwatt)
 			emit_topology(out, &topo);
 		fprintf(out, "}\n"); fflush(out);
