@@ -32,10 +32,18 @@ Compilation, BPF verifier acceptance, sched_ext registration, real task executio
 - Training and inference execute inside eBPF; the C/libbpf loader handles attachment and JSONL telemetry.
 - Default prediction-selected budgets are 0.5–5 ms after eight valid labels, with a 2 ms fallback. Bounds apply to newly assigned budgets, not exact execution time or resumed remaining budgets.
 
-An eight-vCPU, full-preemption shadow comparison of both options reduced model
+An earlier eight-vCPU, full-preemption shadow comparison of both options reduced model
 MAE by about 52–82% across four custom workloads, mostly catching up with EWMA.
-The earlier lazy-preemption pilot was inconclusive. Defaults remain unchanged;
-see [the complete experiment and limitations](results/model-precision/README.md).
+The earlier lazy-preemption pilot was inconclusive; see
+[that experiment and its limitations](results/model-precision/README.md).
+
+Longer 30-second confirmation adds fresh burst patterns and online controls.
+The candidate regresses on alternating bursts, where the original model already
+beats EWMA. Lower prediction error does not consistently improve throughput;
+shortburst wake p99 worsens by 35.65% against original online mode. One natural
+lazy-mode watchdog fallback remains unresolved, despite a successful complete
+retry. Defaults remain unchanged. The [confirmation report](results/model-confirmation/README.md)
+preserves every outcome, raw-data hash and deadline omission.
 
 | Mode | Learning or prediction | Newly assigned slice (defaults) |
 | --- | --- | --- |

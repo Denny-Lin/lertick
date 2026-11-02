@@ -48,6 +48,33 @@ runs on other systems use an explicit unknown-mask marker.
 | `kernelcompile` | Real parallel rebuilds of Linux `kernel/sched/built-in.a` |
 | `memory` | Four CPU and two 300us/1700us workers plus an anonymous page walker |
 
+Four optional confirmation workloads use four sleeping workers and four CPU
+workers across the selected CPUs: `stepburst` alternates 75us/2500us every 7 s;
+`alternatingburst` alternates 75us/1750us per job; `rampburst` ramps 75us to
+3000us every 4 s; `randomstepburst` changes a seeded 75–2500us target every
+17 jobs. `--burst-seed` is recorded and checked, with one seed per repetition.
+The scheduler never receives these targets or seeds. Each buffered sample
+retains its requested target and job index; kernel prediction labels remain
+actual verified CPU service, including execution outside the burn loop.
+The original eight default workload categories remain unchanged.
+
+`--prefault-samples` touches the buffered sample pages before calibration and
+warm-up. It is off by default for compatibility with historical protocols;
+the confirmation runner enables it explicitly and records the setting. The
+observer stage compares demand-faulted and prefaulted logging buffers.
+
+`run_model_confirmation.py --print-plan --stage stable-shadow` displays the
+longer confirmation plan without changing anything. Execution requires root
+inside QEMU/KVM, refuses concurrent power experiments and restores the original
+kernel preemption mode. Every environment retains five randomized repetitions.
+See [the prospective protocol](../results/model-confirmation/PROTOCOL.md).
+
+`compact_confirmation.py` keeps every trial and its raw global counter
+boundaries, verifies the reported error deltas and records the full archive's
+hash. Compact exports reproduce model analysis without committing another
+large raw dataset. Full archives remain retained separately; recomputing
+per-job latency percentiles still needs the complete raw traces.
+
 Burst sleeps begin after each completed CPU burst; missed deadlines do not cause
 catch-up jobs. The standalone workload defaults to 1GiB; the runner defaults to
 3600MiB for the 4GiB test VM with a temporary 2GiB swap file. Memory size is

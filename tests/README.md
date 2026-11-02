@@ -1,5 +1,11 @@
 # Validation boundaries
 
+`make test-burst-profiles` checks the optional deterministic burst workloads'
+phase boundaries, seed vectors and unsigned-width bounds. It is an input
+fixture test, not a model-accuracy result. `python3 tests/test_confirmation.py`
+tests that the confirmation controller refuses active schedulers and restores
+preemption on child or write errors without touching real kernel settings.
+
 Run `python3 tests/check_docs.py` from any working directory. It checks required planning files, local Markdown link targets, and text hygiene. CI runs the same command without root privileges or network access. It does not verify remote URLs, claim scientific completeness, compile BPF, or establish runtime safety.
 
 The original host model test runs on macOS or Linux:

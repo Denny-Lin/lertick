@@ -1,0 +1,12 @@
+{
+  "source_name": "heldout-lazy-a/lazy-prefault",
+  "complete_trials": 20,
+  "performance_claim": false,
+  "all_planned_trials_retained": true,
+  "limits": "Full raw logs retained separately; per-job percentile recomputation needs those logs.",
+  "raw_archive": {
+    "name": "heldout-lazy-a.tgz",
+    "bytes": 67572083,
+    "sha256": "616b039fe2281320ebdfd14a93eef8bafdef1ae4979dc73a80094a00aaf1a55f"
+  }
+}

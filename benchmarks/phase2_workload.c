@@ -13,6 +13,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include "burst_profiles.h"
 #ifdef __linux__
 #include <sched.h>
 #include <sys/mman.h>
@@ -31,6 +32,7 @@ enum role { ROLE_CPU, ROLE_BURST, ROLE_MEMORY };
 struct sample {
 	uint64_t end_ns, cpu_ns, wall_ns, wake_lateness_ns, completion_ns;
 	uint64_t units, progress_gap_ns;
+	uint64_t target_cpu_ns, iteration;
 	int cpu;
 };
 
@@ -59,6 +61,9 @@ static struct worker workers[MAX_WORKERS];
 static uint64_t start_ns, measured_start_ns, end_ns;
 static int cpus[MAX_CPUS], cpu_count, worker_count, migrating, spread;
 static size_t memory_bytes = 1024ULL * 1024 * 1024;
+static enum lertick_burst_profile burst_profile;
+static uint64_t burst_seed = UINT64_C(20261102);
+static int prefault_samples;
 
 static void fail(const char *operation)
 {
@@ -147,13 +152,13 @@ static void calibrate(struct worker *worker)
 	if (worker->batch > 65536) worker->batch = 65536;
 }
 
-static uint64_t burn(struct worker *worker, uint64_t *cpu_ns)
+static uint64_t burn(struct worker *worker, uint64_t target_ns, uint64_t *cpu_ns)
 {
 	uint64_t begin = clock_ns(CLOCK_THREAD_CPUTIME_ID), elapsed, units = 0;
 	do {
 		units += compute(worker, worker->batch);
 		elapsed = clock_ns(CLOCK_THREAD_CPUTIME_ID) - begin;
-	} while (elapsed < worker->burst_ns);
+	} while (elapsed < target_ns);
 	*cpu_ns = elapsed;
 	return units;
 }
@@ -200,6 +205,14 @@ static void *run_worker(void *argument)
 		for (size_t offset = 0; offset < worker->memory_bytes; offset += 4096)
 			((volatile unsigned char *)worker->memory)[offset] = (unsigned char)offset;
 	}
+	if (prefault_samples) {
+		volatile unsigned char *pages = (volatile unsigned char *)worker->samples;
+		size_t bytes = MAX_SAMPLES * sizeof(*worker->samples);
+
+		for (size_t offset = 0; offset < bytes; offset += 4096)
+			pages[offset] = 0;
+		pages[bytes - 1] = 0;
+	}
 	calibrate(worker);
 	pthread_mutex_lock(&ready_mutex);
 	workers_ready++;
@@ -223,7 +236,10 @@ static void *run_worker(void *argument)
 		current_cpu = sched_getcpu();
 		if (current_cpu < 0) fail("sched_getcpu");
 #endif
-		units = burn(worker, &service);
+		uint64_t target = worker->role == ROLE_BURST ?
+			lertick_burst_target_ns(burst_profile, worker->burst_ns, burst_seed,
+				worker->index, iteration, beginning - start_ns) : worker->burst_ns;
+		units = burn(worker, target, &service);
 		finished = clock_ns(CLOCK_MONOTONIC);
 		if (measured && finished <= end_ns) {
 			uint64_t gap = finished - previous_end;
@@ -245,6 +261,8 @@ static void *run_worker(void *argument)
 				sample->units = units;
 				sample->progress_gap_ns = gap;
 				sample->cpu = current_cpu;
+				sample->target_cpu_ns = target;
+				sample->iteration = iteration;
 			} else worker->dropped_samples++;
 		}
 		previous_end = finished;
@@ -310,6 +328,14 @@ static void setup(const char *workload)
 	} else if (!strcmp(workload, "affinity")) {
 		migrating = spread = 1;
 		for (int i = 0; i < 8; i++) add_worker(ROLE_CPU, 1000, 0);
+	} else if (!strcmp(workload, "stepburst") || !strcmp(workload, "alternatingburst") ||
+		   !strcmp(workload, "rampburst") || !strcmp(workload, "randomstepburst")) {
+		burst_profile = !strcmp(workload, "stepburst") ? LERTICK_BURST_STEP :
+			!strcmp(workload, "alternatingburst") ? LERTICK_BURST_ALTERNATING :
+			!strcmp(workload, "rampburst") ? LERTICK_BURST_RAMP : LERTICK_BURST_RANDOM_STEP;
+		spread = 1;
+		for (int i = 0; i < 4; i++) add_worker(ROLE_BURST, 200, 1000);
+		for (int i = 0; i < 4; i++) add_worker(ROLE_CPU, 1000, 0);
 	} else if (!strcmp(workload, "memory")) {
 		spread = 1;
 		for (int i = 0; i < 4; i++) add_worker(ROLE_CPU, 1000, 0);
@@ -343,6 +369,8 @@ int main(int argc, char **argv)
 		{"warmup", required_argument, NULL, 'u'},
 		{"cpus", required_argument, NULL, 'c'},
 		{"memory-mib", required_argument, NULL, 'm'},
+		{"burst-seed", required_argument, NULL, 'b'},
+		{"prefault-samples", no_argument, NULL, 'p'},
 		{"help", no_argument, NULL, 'h'}, {NULL, 0, NULL, 0}
 	};
 	const char *workload = "cpu";
@@ -354,6 +382,15 @@ int main(int argc, char **argv)
 		switch (option) {
 		case 'w': workload = optarg; break;
 		case 'c': parse_cpus(optarg); break;
+		case 'p': prefault_samples = 1; break;
+		case 'b':
+			errno = 0;
+			burst_seed = strtoull(optarg, &tail, 10);
+			if (errno || !*optarg || *tail || strspn(optarg, "0123456789") != strlen(optarg)) {
+				fprintf(stderr, "burst-seed must be an unsigned 64-bit decimal integer\n");
+				return 1;
+			}
+			break;
 		case 'm': {
 			unsigned long mib = strtoul(optarg, &tail, 10);
 			if (!*optarg || *tail || mib < 1 || mib > 4096) {
@@ -371,7 +408,9 @@ int main(int argc, char **argv)
 			break;
 		case 'h':
 			printf("Usage: %s --workload cpu|shortburst|wakeheavy|mixed|multicore|affinity|memory\n"
-			       "  [--duration 10] [--warmup 2] [--cpus 0,1,2,3] [--memory-mib 1024]\n", argv[0]);
+			       "  or stepburst|alternatingburst|rampburst|randomstepburst\n"
+			       "  [--duration 10] [--warmup 2] [--cpus 0,1,2,3] [--memory-mib 1024]\n"
+			       "  [--burst-seed 20261102] [--prefault-samples]\n", argv[0]);
 			return 0;
 		default: return 1;
 		}
@@ -406,8 +445,10 @@ int main(int argc, char **argv)
 		if (pthread_join(workers[i].thread, NULL)) fail("pthread_join");
 	printf("{\"event\":\"window\",\"workload\":\"%s\",\"pid\":%ld,\"start_ns\":%" PRIu64
 	       ",\"measured_start_ns\":%" PRIu64 ",\"end_ns\":%" PRIu64
-	       ",\"duration_seconds\":%.6f,\"warmup_seconds\":%.6f,\"cpu_count\":%d,\"workers\":%d,\"selected_cpus\":[",
-	       workload, (long)getpid(), start_ns, measured_start_ns, end_ns, duration, warmup, cpu_count, worker_count);
+	       ",\"duration_seconds\":%.6f,\"warmup_seconds\":%.6f,\"cpu_count\":%d,\"workers\":%d,"
+	       "\"burst_profile\":%d,\"burst_seed\":%" PRIu64 ",\"sample_pages_prefaulted\":%s,\"selected_cpus\":[",
+	       workload, (long)getpid(), start_ns, measured_start_ns, end_ns, duration, warmup, cpu_count, worker_count,
+	       burst_profile, burst_seed, prefault_samples ? "true" : "false");
 	for (int i = 0; i < cpu_count; i++) printf("%s%d", i ? "," : "", cpus[i]);
 	printf("]}\n");
 	for (int i = 0; i < worker_count; i++) {
@@ -433,8 +474,10 @@ int main(int argc, char **argv)
 			printf("{\"event\":\"sample\",\"tid\":%" PRIu64 ",\"role\":\"%s\",\"end_ns\":%" PRIu64
 			       ",\"cpu_ns\":%" PRIu64 ",\"wall_ns\":%" PRIu64 ",\"wake_lateness_ns\":%" PRIu64
 			       ",\"completion_ns\":%" PRIu64 ",\"units\":%" PRIu64 ",\"progress_gap_ns\":%" PRIu64
-			       ",\"cpu\":%d}\n", worker->tid, role, sample->end_ns, sample->cpu_ns, sample->wall_ns,
-			       sample->wake_lateness_ns, sample->completion_ns, sample->units, sample->progress_gap_ns, sample->cpu);
+			       ",\"cpu\":%d,\"target_cpu_ns\":%" PRIu64 ",\"iteration\":%" PRIu64 "}\n",
+			       worker->tid, role, sample->end_ns, sample->cpu_ns, sample->wall_ns,
+			       sample->wake_lateness_ns, sample->completion_ns, sample->units, sample->progress_gap_ns, sample->cpu,
+			       sample->target_cpu_ns, sample->iteration);
 		}
 		free(worker->samples);
 		if (worker->memory) {

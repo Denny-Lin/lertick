@@ -1,0 +1,1047 @@
+{
+  "completed_trials": 20,
+  "groups": [
+    {
+      "metrics": {
+        "bpf_callback_calls": null,
+        "bpf_runtime_total_ns": null,
+        "burst_completion_ns.p50": {
+          "bootstrap_median_ci95": [
+            1450036.5,
+            1469849.0
+          ],
+          "iqr": 12436.5,
+          "maximum": 1469849.0,
+          "median": 1457224.0,
+          "minimum": 1450036.5,
+          "n": 5
+        },
+        "burst_completion_ns.p95": {
+          "bootstrap_median_ci95": [
+            4282677.199999999,
+            4327168.3
+          ],
+          "iqr": 18745.89999999851,
+          "maximum": 4327168.3,
+          "median": 4311338.95,
+          "minimum": 4282677.199999999,
+          "n": 5
+        },
+        "burst_completion_ns.p99": {
+          "bootstrap_median_ci95": [
+            4953386.53,
+            4963465.34
+          ],
+          "iqr": 1622.0000000009313,
+          "maximum": 4963465.34,
+          "median": 4955641.0,
+          "minimum": 4953386.53,
+          "n": 5
+        },
+        "burst_jobs_per_s": {
+          "bootstrap_median_ci95": [
+            1439.1333333333334,
+            1449.8
+          ],
+          "iqr": 6.2999999999999545,
+          "maximum": 1449.8,
+          "median": 1448.1,
+          "minimum": 1439.1333333333334,
+          "n": 5
+        },
+        "completion_time_ns.p50": null,
+        "completion_time_ns.p95": null,
+        "completion_time_ns.p99": null,
+        "cpu_worker_max_progress_gap_ns": {
+          "bootstrap_median_ci95": [
+            6976962.0,
+            9824895.0
+          ],
+          "iqr": 84959.0,
+          "maximum": 9824895,
+          "median": 7004627,
+          "minimum": 6976962,
+          "n": 5
+        },
+        "deadline_to_run_ns.p50": {
+          "bootstrap_median_ci95": [
+            661636.0,
+            700803.0
+          ],
+          "iqr": 16208.5,
+          "maximum": 700803.0,
+          "median": 668719.0,
+          "minimum": 661636.0,
+          "n": 5
+        },
+        "deadline_to_run_ns.p95": {
+          "bootstrap_median_ci95": [
+            1826198.7,
+            1865822.4999999998
+          ],
+          "iqr": 32377.099999999395,
+          "maximum": 1865822.4999999998,
+          "median": 1836920.6500000001,
+          "minimum": 1826198.7,
+          "n": 5
+        },
+        "deadline_to_run_ns.p99": {
+          "bootstrap_median_ci95": [
+            2257942.88,
+            2308179.0199999996
+          ],
+          "iqr": 27095.059999997728,
+          "maximum": 2308179.0199999996,
+          "median": 2304349.74,
+          "minimum": 2257942.88,
+          "n": 5
+        },
+        "ewma_mae_ns": {
+          "bootstrap_median_ci95": [
+            8319.10009151224,
+            9745.43596717684
+          ],
+          "iqr": 392.9337748494272,
+          "maximum": 9745.43596717684,
+          "median": 8555.219658355145,
+          "minimum": 8319.10009151224,
+          "n": 5
+        },
+        "involuntary_context_switches": {
+          "bootstrap_median_ci95": [
+            33559.0,
+            33748.0
+          ],
+          "iqr": 133.0,
+          "maximum": 33748,
+          "median": 33632,
+          "minimum": 33559,
+          "n": 5
+        },
+        "jain_cpu_service_fairness": {
+          "bootstrap_median_ci95": [
+            0.9999999960472656,
+            0.9999999994842572
+          ],
+          "iqr": 1.0479559442444497e-09,
+          "maximum": 0.9999999994842572,
+          "median": 0.9999999986031778,
+          "minimum": 0.9999999960472656,
+          "n": 5
+        },
+        "kernel_observed_migrations": null,
+        "linear_mae_ns": {
+          "bootstrap_median_ci95": [
+            59477.74362846031,
+            60832.16453070256
+          ],
+          "iqr": 534.2434747211519,
+          "maximum": 60832.16453070256,
+          "median": 59829.044591965205,
+          "minimum": 59477.74362846031,
+          "n": 5
+        },
+        "observed_migrations": {
+          "bootstrap_median_ci95": [
+            61076.0,
+            62159.0
+          ],
+          "iqr": 130.0,
+          "maximum": 62159,
+          "median": 61618,
+          "minimum": 61076,
+          "n": 5
+        },
+        "throughput_compilations_per_s": null,
+        "throughput_units_per_s": {
+          "bootstrap_median_ci95": [
+            2572406456.5666666,
+            2618326057.8333335
+          ],
+          "iqr": 3347018.1666669846,
+          "maximum": 2618326057.8333335,
+          "median": 2615982835.5,
+          "minimum": 2572406456.5666666,
+          "n": 5
+        },
+        "voluntary_and_involuntary_context_switches": null,
+        "voluntary_context_switches": {
+          "bootstrap_median_ci95": [
+            43175.0,
+            43494.0
+          ],
+          "iqr": 189.0,
+          "maximum": 43494,
+          "median": 43444,
+          "minimum": 43175,
+          "n": 5
+        },
+        "wake_to_run_ns.p50": {
+          "bootstrap_median_ci95": [
+            518169.5,
+            652462.0
+          ],
+          "iqr": 90604.0,
+          "maximum": 652462.0,
+          "median": 620587.0,
+          "minimum": 518169.5,
+          "n": 5
+        },
+        "wake_to_run_ns.p95": {
+          "bootstrap_median_ci95": [
+            1750636.5999999994,
+            1798640.1999999995
+          ],
+          "iqr": 18097.949999998324,
+          "maximum": 1798640.1999999995,
+          "median": 1763671.6,
+          "minimum": 1750636.5999999994,
+          "n": 5
+        },
+        "wake_to_run_ns.p99": {
+          "bootstrap_median_ci95": [
+            1955477.1099999999,
+            2259609.9999999995
+          ],
+          "iqr": 67000.94000001857,
+          "maximum": 2259609.9999999995,
+          "median": 2194480.720000002,
+          "minimum": 1955477.1099999999,
+          "n": 5
+        },
+        "worker_cpu_utilization_core_equivalents": {
+          "bootstrap_median_ci95": [
+            3.9996884169333335,
+            3.9998744748333332
+          ],
+          "iqr": 0.00011709900000012041,
+          "maximum": 3.9998744748333332,
+          "median": 3.999839413966667,
+          "minimum": 3.9996884169333335,
+          "n": 5
+        }
+      },
+      "policy": "shadow",
+      "trials": 5,
+      "workload": "stepburst"
+    },
+    {
+      "metrics": {
+        "bpf_callback_calls": null,
+        "bpf_runtime_total_ns": null,
+        "burst_completion_ns.p50": {
+          "bootstrap_median_ci95": [
+            1452662.0,
+            1461932.0
+          ],
+          "iqr": 5292.0,
+          "maximum": 1461932.0,
+          "median": 1460078.0,
+          "minimum": 1452662.0,
+          "n": 5
+        },
+        "burst_completion_ns.p95": {
+          "bootstrap_median_ci95": [
+            4283790.299999996,
+            4331556.0
+          ],
+          "iqr": 16837.400000002235,
+          "maximum": 4331556.0,
+          "median": 4304880.45,
+          "minimum": 4283790.299999996,
+          "n": 5
+        },
+        "burst_completion_ns.p99": {
+          "bootstrap_median_ci95": [
+            4949731.24,
+            4958211.31
+          ],
+          "iqr": 5119.000000000931,
+          "maximum": 4958211.31,
+          "median": 4953502.87,
+          "minimum": 4949731.24,
+          "n": 5
+        },
+        "burst_jobs_per_s": {
+          "bootstrap_median_ci95": [
+            1445.0333333333333,
+            1451.4666666666667
+          ],
+          "iqr": 1.9666666666664696,
+          "maximum": 1451.4666666666667,
+          "median": 1448.2666666666667,
+          "minimum": 1445.0333333333333,
+          "n": 5
+        },
+        "completion_time_ns.p50": null,
+        "completion_time_ns.p95": null,
+        "completion_time_ns.p99": null,
+        "cpu_worker_max_progress_gap_ns": {
+          "bootstrap_median_ci95": [
+            6923961.0,
+            7070170.0
+          ],
+          "iqr": 62958.0,
+          "maximum": 7070170,
+          "median": 7041586,
+          "minimum": 6923961,
+          "n": 5
+        },
+        "deadline_to_run_ns.p50": {
+          "bootstrap_median_ci95": [
+            637927.5,
+            672219.0
+          ],
+          "iqr": 12187.0,
+          "maximum": 672219.0,
+          "median": 657948.0,
+          "minimum": 637927.5,
+          "n": 5
+        },
+        "deadline_to_run_ns.p95": {
+          "bootstrap_median_ci95": [
+            1832778.7999999998,
+            1853623.0
+          ],
+          "iqr": 11310.549999999814,
+          "maximum": 1853623.0,
+          "median": 1840185.0,
+          "minimum": 1832778.7999999998,
+          "n": 5
+        },
+        "deadline_to_run_ns.p99": {
+          "bootstrap_median_ci95": [
+            2290652.31,
+            2305751.0
+          ],
+          "iqr": 9131.189999999944,
+          "maximum": 2305751.0,
+          "median": 2296816.999999999,
+          "minimum": 2290652.31,
+          "n": 5
+        },
+        "ewma_mae_ns": {
+          "bootstrap_median_ci95": [
+            8348.18343141071,
+            8763.857928736104
+          ],
+          "iqr": 135.8290911220829,
+          "maximum": 8763.857928736104,
+          "median": 8503.01303423201,
+          "minimum": 8348.18343141071,
+          "n": 5
+        },
+        "involuntary_context_switches": {
+          "bootstrap_median_ci95": [
+            33686.0,
+            33768.0
+          ],
+          "iqr": 14.0,
+          "maximum": 33768,
+          "median": 33711,
+          "minimum": 33686,
+          "n": 5
+        },
+        "jain_cpu_service_fairness": {
+          "bootstrap_median_ci95": [
+            0.9999999926094619,
+            0.9999999981605499
+          ],
+          "iqr": 1.3979939428310217e-10,
+          "maximum": 0.9999999981605499,
+          "median": 0.9999999975582848,
+          "minimum": 0.9999999926094619,
+          "n": 5
+        },
+        "kernel_observed_migrations": null,
+        "linear_mae_ns": {
+          "bootstrap_median_ci95": [
+            10139.751036109266,
+            10523.65087082563
+          ],
+          "iqr": 142.1525830753926,
+          "maximum": 10523.65087082563,
+          "median": 10279.72705860831,
+          "minimum": 10139.751036109266,
+          "n": 5
+        },
+        "observed_migrations": {
+          "bootstrap_median_ci95": [
+            61598.0,
+            61805.0
+          ],
+          "iqr": 114.0,
+          "maximum": 61805,
+          "median": 61722,
+          "minimum": 61598,
+          "n": 5
+        },
+        "throughput_compilations_per_s": null,
+        "throughput_units_per_s": {
+          "bootstrap_median_ci95": [
+            2613764274.6666665,
+            2620202389.266667
+          ],
+          "iqr": 2033502.5333333015,
+          "maximum": 2620202389.266667,
+          "median": 2617549620.133333,
+          "minimum": 2613764274.6666665,
+          "n": 5
+        },
+        "voluntary_and_involuntary_context_switches": null,
+        "voluntary_context_switches": {
+          "bootstrap_median_ci95": [
+            43353.0,
+            43546.0
+          ],
+          "iqr": 59.0,
+          "maximum": 43546,
+          "median": 43450,
+          "minimum": 43353,
+          "n": 5
+        },
+        "wake_to_run_ns.p50": {
+          "bootstrap_median_ci95": [
+            509690.5,
+            708900.5
+          ],
+          "iqr": 80500.0,
+          "maximum": 708900.5,
+          "median": 604858.0,
+          "minimum": 509690.5,
+          "n": 5
+        },
+        "wake_to_run_ns.p95": {
+          "bootstrap_median_ci95": [
+            1678596.1999999997,
+            1806157.5999999996
+          ],
+          "iqr": 20825.400000000605,
+          "maximum": 1806157.5999999996,
+          "median": 1780145.5999999994,
+          "minimum": 1678596.1999999997,
+          "n": 5
+        },
+        "wake_to_run_ns.p99": {
+          "bootstrap_median_ci95": [
+            2044947.369999997,
+            2284208.3600000003
+          ],
+          "iqr": 102235.12000000104,
+          "maximum": 2284208.3600000003,
+          "median": 2238311.0,
+          "minimum": 2044947.369999997,
+          "n": 5
+        },
+        "worker_cpu_utilization_core_equivalents": {
+          "bootstrap_median_ci95": [
+            3.9995323737333335,
+            3.9998661236
+          ],
+          "iqr": 4.483636666696711e-05,
+          "maximum": 3.9998661236,
+          "median": 3.999768167,
+          "minimum": 3.9995323737333335,
+          "n": 5
+        }
+      },
+      "policy": "shadow-ewma-carry",
+      "trials": 5,
+      "workload": "stepburst"
+    },
+    {
+      "metrics": {
+        "bpf_callback_calls": null,
+        "bpf_runtime_total_ns": null,
+        "burst_completion_ns.p50": {
+          "bootstrap_median_ci95": [
+            1876935.0,
+            1985061.0
+          ],
+          "iqr": 28084.0,
+          "maximum": 1985061.0,
+          "median": 1939435.5,
+          "minimum": 1876935.0,
+          "n": 5
+        },
+        "burst_completion_ns.p95": {
+          "bootstrap_median_ci95": [
+            3658988.0,
+            3666990.0999999996
+          ],
+          "iqr": 4250.0,
+          "maximum": 3666990.0999999996,
+          "median": 3664996.1999999997,
+          "minimum": 3658988.0,
+          "n": 5
+        },
+        "burst_completion_ns.p99": {
+          "bootstrap_median_ci95": [
+            3677821.09,
+            3701322.0
+          ],
+          "iqr": 12874.429999999702,
+          "maximum": 3701322.0,
+          "median": 3699321.0,
+          "minimum": 3677821.09,
+          "n": 5
+        },
+        "burst_jobs_per_s": {
+          "bootstrap_median_ci95": [
+            1333.0666666666666,
+            1333.3333333333333
+          ],
+          "iqr": 0.13333333333321207,
+          "maximum": 1333.3333333333333,
+          "median": 1333.2333333333333,
+          "minimum": 1333.0666666666666,
+          "n": 5
+        },
+        "completion_time_ns.p50": null,
+        "completion_time_ns.p95": null,
+        "completion_time_ns.p99": null,
+        "cpu_worker_max_progress_gap_ns": {
+          "bootstrap_median_ci95": [
+            4604321.0,
+            8402512.0
+          ],
+          "iqr": 1179384.0,
+          "maximum": 8402512,
+          "median": 4980240,
+          "minimum": 4604321,
+          "n": 5
+        },
+        "deadline_to_run_ns.p50": {
+          "bootstrap_median_ci95": [
+            1009221.0,
+            1055242.5
+          ],
+          "iqr": 27125.5,
+          "maximum": 1055242.5,
+          "median": 1045534.5,
+          "minimum": 1009221.0,
+          "n": 5
+        },
+        "deadline_to_run_ns.p95": {
+          "bootstrap_median_ci95": [
+            1900536.9,
+            1907560.25
+          ],
+          "iqr": 5038.000000000233,
+          "maximum": 1907560.25,
+          "median": 1905935.0,
+          "minimum": 1900536.9,
+          "n": 5
+        },
+        "deadline_to_run_ns.p99": {
+          "bootstrap_median_ci95": [
+            1918852.0,
+            1942773.0
+          ],
+          "iqr": 14247.91999999946,
+          "maximum": 1942773.0,
+          "median": 1938852.4100000001,
+          "minimum": 1918852.0,
+          "n": 5
+        },
+        "ewma_mae_ns": {
+          "bootstrap_median_ci95": [
+            955237.4302707545,
+            959721.447627085
+          ],
+          "iqr": 1438.5051198168658,
+          "maximum": 959721.447627085,
+          "median": 957592.8963248075,
+          "minimum": 955237.4302707545,
+          "n": 5
+        },
+        "involuntary_context_switches": {
+          "bootstrap_median_ci95": [
+            30017.0,
+            30034.0
+          ],
+          "iqr": 1.0,
+          "maximum": 30034,
+          "median": 30029,
+          "minimum": 30017,
+          "n": 5
+        },
+        "jain_cpu_service_fairness": {
+          "bootstrap_median_ci95": [
+            0.9999999948302717,
+            0.9999999999303837
+          ],
+          "iqr": 2.8369491200663788e-09,
+          "maximum": 0.9999999999303837,
+          "median": 0.9999999989586489,
+          "minimum": 0.9999999948302717,
+          "n": 5
+        },
+        "kernel_observed_migrations": null,
+        "linear_mae_ns": {
+          "bootstrap_median_ci95": [
+            364173.82436457503,
+            376162.9440123257
+          ],
+          "iqr": 10623.922365423,
+          "maximum": 376162.9440123257,
+          "median": 370933.3052304634,
+          "minimum": 364173.82436457503,
+          "n": 5
+        },
+        "observed_migrations": {
+          "bootstrap_median_ci95": [
+            58156.0,
+            59013.0
+          ],
+          "iqr": 707.0,
+          "maximum": 59013,
+          "median": 58452,
+          "minimum": 58156,
+          "n": 5
+        },
+        "throughput_compilations_per_s": null,
+        "throughput_units_per_s": {
+          "bootstrap_median_ci95": [
+            2612877742.366667,
+            2618866024.5666666
+          ],
+          "iqr": 3280617.066666603,
+          "maximum": 2618866024.5666666,
+          "median": 2614762335.3,
+          "minimum": 2612877742.366667,
+          "n": 5
+        },
+        "voluntary_and_involuntary_context_switches": null,
+        "voluntary_context_switches": {
+          "bootstrap_median_ci95": [
+            39994.0,
+            40000.0
+          ],
+          "iqr": 2.0,
+          "maximum": 40000,
+          "median": 39998,
+          "minimum": 39994,
+          "n": 5
+        },
+        "wake_to_run_ns.p50": {
+          "bootstrap_median_ci95": [
+            592670.5,
+            614170.5
+          ],
+          "iqr": 5625.5,
+          "maximum": 614170.5,
+          "median": 610732.5,
+          "minimum": 592670.5,
+          "n": 5
+        },
+        "wake_to_run_ns.p95": {
+          "bootstrap_median_ci95": [
+            1775807.1499999992,
+            1850972.05
+          ],
+          "iqr": 17401.40000000014,
+          "maximum": 1850972.05,
+          "median": 1846772.4,
+          "minimum": 1775807.1499999992,
+          "n": 5
+        },
+        "wake_to_run_ns.p99": {
+          "bootstrap_median_ci95": [
+            1842972.0799999998,
+            1871180.51
+          ],
+          "iqr": 8997.350000000093,
+          "maximum": 1871180.51,
+          "median": 1865387.0,
+          "minimum": 1842972.0799999998,
+          "n": 5
+        },
+        "worker_cpu_utilization_core_equivalents": {
+          "bootstrap_median_ci95": [
+            3.999850674933333,
+            4.000015910966667
+          ],
+          "iqr": 6.430186666639415e-05,
+          "maximum": 4.000015910966667,
+          "median": 3.999933325233333,
+          "minimum": 3.999850674933333,
+          "n": 5
+        }
+      },
+      "policy": "shadow",
+      "trials": 5,
+      "workload": "alternatingburst"
+    },
+    {
+      "metrics": {
+        "bpf_callback_calls": null,
+        "bpf_runtime_total_ns": null,
+        "burst_completion_ns.p50": {
+          "bootstrap_median_ci95": [
+            1757059.0,
+            2245521.0
+          ],
+          "iqr": 147979.5,
+          "maximum": 2245521.0,
+          "median": 1929435.0,
+          "minimum": 1757059.0,
+          "n": 5
+        },
+        "burst_completion_ns.p95": {
+          "bootstrap_median_ci95": [
+            3659988.0,
+            3669529.0
+          ],
+          "iqr": 4370.899999999907,
+          "maximum": 3669529.0,
+          "median": 3665155.0,
+          "minimum": 3659988.0,
+          "n": 5
+        },
+        "burst_completion_ns.p99": {
+          "bootstrap_median_ci95": [
+            3679030.84,
+            3697404.0
+          ],
+          "iqr": 8670.150000000373,
+          "maximum": 3697404.0,
+          "median": 3691698.6599999997,
+          "minimum": 3679030.84,
+          "n": 5
+        },
+        "burst_jobs_per_s": {
+          "bootstrap_median_ci95": [
+            1333.2,
+            1333.3333333333333
+          ],
+          "iqr": 0.03333333333330302,
+          "maximum": 1333.3333333333333,
+          "median": 1333.3,
+          "minimum": 1333.2,
+          "n": 5
+        },
+        "completion_time_ns.p50": null,
+        "completion_time_ns.p95": null,
+        "completion_time_ns.p99": null,
+        "cpu_worker_max_progress_gap_ns": {
+          "bootstrap_median_ci95": [
+            4771878.0,
+            5126157.0
+          ],
+          "iqr": 314544.0,
+          "maximum": 5126157,
+          "median": 4986407,
+          "minimum": 4771878,
+          "n": 5
+        },
+        "deadline_to_run_ns.p50": {
+          "bootstrap_median_ci95": [
+            1016929.0,
+            1118180.5
+          ],
+          "iqr": 38105.0,
+          "maximum": 1118180.5,
+          "median": 1053826.0,
+          "minimum": 1016929.0,
+          "n": 5
+        },
+        "deadline_to_run_ns.p95": {
+          "bootstrap_median_ci95": [
+            1901101.1,
+            1910643.0
+          ],
+          "iqr": 5334.0,
+          "maximum": 1910643.0,
+          "median": 1906768.25,
+          "minimum": 1901101.1,
+          "n": 5
+        },
+        "deadline_to_run_ns.p99": {
+          "bootstrap_median_ci95": [
+            1920351.02,
+            1938435.4200000002
+          ],
+          "iqr": 8626.970000000205,
+          "maximum": 1938435.4200000002,
+          "median": 1931060.8399999999,
+          "minimum": 1920351.02,
+          "n": 5
+        },
+        "ewma_mae_ns": {
+          "bootstrap_median_ci95": [
+            955065.1360745342,
+            959856.4487841191
+          ],
+          "iqr": 1156.5370635912986,
+          "maximum": 959856.4487841191,
+          "median": 957714.7140195738,
+          "minimum": 955065.1360745342,
+          "n": 5
+        },
+        "involuntary_context_switches": {
+          "bootstrap_median_ci95": [
+            30019.0,
+            30030.0
+          ],
+          "iqr": 9.0,
+          "maximum": 30030,
+          "median": 30027,
+          "minimum": 30019,
+          "n": 5
+        },
+        "jain_cpu_service_fairness": {
+          "bootstrap_median_ci95": [
+            0.9999999930606589,
+            0.9999999987208259
+          ],
+          "iqr": 4.4307677526944644e-09,
+          "maximum": 0.9999999987208259,
+          "median": 0.9999999962304064,
+          "minimum": 0.9999999930606589,
+          "n": 5
+        },
+        "kernel_observed_migrations": null,
+        "linear_mae_ns": {
+          "bootstrap_median_ci95": [
+            424593.31640061666,
+            434608.5483478261
+          ],
+          "iqr": 5211.304128813907,
+          "maximum": 434608.5483478261,
+          "median": 432664.0106314273,
+          "minimum": 424593.31640061666,
+          "n": 5
+        },
+        "observed_migrations": {
+          "bootstrap_median_ci95": [
+            58594.0,
+            58929.0
+          ],
+          "iqr": 17.0,
+          "maximum": 58929,
+          "median": 58697,
+          "minimum": 58594,
+          "n": 5
+        },
+        "throughput_compilations_per_s": null,
+        "throughput_units_per_s": {
+          "bootstrap_median_ci95": [
+            2613618306.766667,
+            2617683622.9
+          ],
+          "iqr": 2408100.933333397,
+          "maximum": 2617683622.9,
+          "median": 2615859388.3333335,
+          "minimum": 2613618306.766667,
+          "n": 5
+        },
+        "voluntary_and_involuntary_context_switches": null,
+        "voluntary_context_switches": {
+          "bootstrap_median_ci95": [
+            39996.0,
+            40002.0
+          ],
+          "iqr": 0.0,
+          "maximum": 40002,
+          "median": 40000,
+          "minimum": 39996,
+          "n": 5
+        },
+        "wake_to_run_ns.p50": {
+          "bootstrap_median_ci95": [
+            581420.5,
+            1383571.0
+          ],
+          "iqr": 53104.5,
+          "maximum": 1383571.0,
+          "median": 614462.5,
+          "minimum": 581420.5,
+          "n": 5
+        },
+        "wake_to_run_ns.p95": {
+          "bootstrap_median_ci95": [
+            1466051.0,
+            1847608.45
+          ],
+          "iqr": 28028.5,
+          "maximum": 1847608.45,
+          "median": 1841595.0,
+          "minimum": 1466051.0,
+          "n": 5
+        },
+        "wake_to_run_ns.p99": {
+          "bootstrap_median_ci95": [
+            1831265.74,
+            1870186.0799999998
+          ],
+          "iqr": 9156.580000000075,
+          "maximum": 1870186.0799999998,
+          "median": 1859928.42,
+          "minimum": 1831265.74,
+          "n": 5
+        },
+        "worker_cpu_utilization_core_equivalents": {
+          "bootstrap_median_ci95": [
+            3.9998577440666665,
+            4.0000497819
+          ],
+          "iqr": 6.125690000002848e-05,
+          "maximum": 4.0000497819,
+          "median": 3.999905071,
+          "minimum": 3.9998577440666665,
+          "n": 5
+        }
+      },
+      "policy": "shadow-ewma-carry",
+      "trials": 5,
+      "workload": "alternatingburst"
+    }
+  ],
+  "limitations": "five repetitions give coarse uncertainty; many workload comparisons require confirmation; ARM64 QEMU results are not bare-metal claims",
+  "method": "trial-level median; seeded 10,000 bootstrap resamples; paired randomized repetition blocks",
+  "paired_online_comparisons": [],
+  "planned_trials": 20,
+  "prediction_latency_correlations": [
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "fixed",
+      "workload": "stepburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": 0.8751352902315496,
+      "n": 5,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "shadow",
+      "workload": "stepburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "online",
+      "workload": "stepburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "ewma",
+      "workload": "stepburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "shadow-ewma-prior",
+      "workload": "stepburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "online-ewma-prior",
+      "workload": "stepburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "shadow-carry",
+      "workload": "stepburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": -0.788030004215027,
+      "n": 5,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "shadow-ewma-carry",
+      "workload": "stepburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "online-carry",
+      "workload": "stepburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "online-ewma-carry",
+      "workload": "stepburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "fixed",
+      "workload": "alternatingburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": 0.2719138007536727,
+      "n": 5,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "shadow",
+      "workload": "alternatingburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "online",
+      "workload": "alternatingburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "ewma",
+      "workload": "alternatingburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "shadow-ewma-prior",
+      "workload": "alternatingburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "online-ewma-prior",
+      "workload": "alternatingburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "shadow-carry",
+      "workload": "alternatingburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": 0.5939944565802283,
+      "n": 5,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "shadow-ewma-carry",
+      "workload": "alternatingburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "online-carry",
+      "workload": "alternatingburst"
+    },
+    {
+      "mae_vs_p99_completion_pearson": null,
+      "n": 0,
+      "note": "descriptive within-policy trial correlation; five trials cannot establish causation",
+      "policy": "online-ewma-carry",
+      "workload": "alternatingburst"
+    }
+  ]
+}

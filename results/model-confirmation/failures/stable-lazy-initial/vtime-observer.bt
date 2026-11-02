@@ -1,0 +1,7 @@
+BEGIN { printf("{\"event\":\"ready\"}\n"); }
+tracepoint:sched:sched_switch
+/cpu == 0/
+{
+ $p=(struct task_struct *)curtask;
+ printf("{\"t\":%llu,\"cpu\":%d,\"prev\":%d,\"next\":%d,\"state\":%lld,\"curpid\":%d,\"vtime\":%llu,\"runtime\":%llu,\"slice\":%llu}\n",nsecs(monotonic),cpu,args->prev_pid,args->next_pid,args->prev_state,$p->pid,$p->scx.dsq_vtime,$p->se.sum_exec_runtime,$p->scx.slice);
+}

@@ -1,0 +1,68 @@
+{
+  "raw_directory": "results/local/model-confirmation-0b23633/archives",
+  "full_raw_archives_retained_outside_git": true,
+  "entries": [
+    {
+      "name": "stable-full.tgz",
+      "bytes": 80051963,
+      "sha256": "5f96996ace578bf9dd05488ab02a373f1e0f94033a0fc6a0159a87aea13da3f1",
+      "completed_confirmation": true
+    },
+    {
+      "name": "stable-lazy-repeat.tgz",
+      "bytes": 77836646,
+      "sha256": "1bbfcb6e1fd9efc756454ebee5d8bb005f8b9b27c8d53f1ee0c52f0333b8b4bb",
+      "completed_confirmation": true
+    },
+    {
+      "name": "online-short.tgz",
+      "bytes": 70611876,
+      "sha256": "a8a14f550c453b9c30b9b8df0ac9fb8f9635cc42750f762ccaf8bd904f9a80c0",
+      "completed_confirmation": true
+    },
+    {
+      "name": "online-contended.tgz",
+      "bytes": 83530056,
+      "sha256": "9ae7064f92d3e3ff6bcfe63ed152429c0704ebaec12fa4f56d9aabec61aba5bf",
+      "completed_confirmation": true
+    },
+    {
+      "name": "heldout-full-a.tgz",
+      "bytes": 67913366,
+      "sha256": "6844a43f3f79794b42053eae44e0d4bed7e7f24ff8a6b623ed7f457fe1ed7f6e",
+      "completed_confirmation": true
+    },
+    {
+      "name": "heldout-full-b.tgz",
+      "bytes": 65726544,
+      "sha256": "c691a153a87d63a942e0d64a30f77a41103b791ae7f8bb06c36c6259080bf1a2",
+      "completed_confirmation": true
+    },
+    {
+      "name": "heldout-lazy-a.tgz",
+      "bytes": 67572083,
+      "sha256": "616b039fe2281320ebdfd14a93eef8bafdef1ae4979dc73a80094a00aaf1a55f",
+      "completed_confirmation": true
+    },
+    {
+      "name": "heldout-lazy-b.tgz",
+      "bytes": 65761173,
+      "sha256": "f67e3f42074f4432761371748b7b2be0248bd702ca86593931683686fb82439b",
+      "completed_confirmation": true
+    },
+    {
+      "name": "stable-lazy-failed.tgz",
+      "bytes": 32993664,
+      "sha256": "93600ba59954c4b9a986fb0112122926e41bd8dddae34fe9000ef0ecddf2dd28",
+      "completed_confirmation": false,
+      "scope": "retained failure"
+    },
+    {
+      "name": "lazy-stall-diagnostic.tgz",
+      "bytes": 9469389,
+      "sha256": "4e755e67ec255c08e22e81dc71412b3b4b87ea201a47c6347012671b03d60c8d",
+      "completed_confirmation": false,
+      "scope": "diagnostic smoke only"
+    }
+  ]
+}
