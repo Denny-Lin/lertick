@@ -182,6 +182,11 @@ with tempfile.TemporaryDirectory(prefix='lertick-deploy-fixtures-') as directory
     invoke('install',extra={'PREFIX':'/'},ok=False)
     invoke('install-locked',ok=False)
     invoke('version')
+    # Root may not execute even --help until every prebuilt bundle file is trusted.
+    for command in ['install','update']:
+        for untrusted in [tree/'build/scx_lertick',tree/'scripts/collect_report.py']:
+            clear();invoke(command,extra={'PREFIX':str(prefix),'STUB_UID':'0','STUB_BAD_OWNER':str(untrusted)},ok=False)
+            assert not any(x['tool'] in ['loader','build','sudo','maintenance','copy'] for x in calls()), 'root executed candidate code before trust checks'
 
     # Run the actual build orchestrator with fake tools and kernel metadata.
     executable(tree/'scripts/native_build.sh',(project/'scripts/native_build.sh').read_text())

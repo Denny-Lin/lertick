@@ -186,6 +186,18 @@ if [ "$command" = update ] && [ "$source_tree" = no ]; then
 fi
 case $command in
     install|update|uninstall|rollback|start|stop|restart|enable|disable)
+        case $command in
+            install|update)
+                if [ "$source_tree" = yes ] && [ "$(id -u)" -eq 0 ]; then
+                    # Reject untrusted prebuilt bundles before executing even --help.
+                    # Normal users still build first and pass exact bytes to sudo staging.
+                    for candidate_file in "$loader" "$script" "$manager" "$tool_dir/templates/lertick.service.in" "$report"; do
+                        [ -f "$candidate_file" ] && [ ! -L "$candidate_file" ] || fail "missing/non-regular candidate file: $candidate_file"
+                        trusted_root_path "$candidate_file"
+                    done
+                fi
+                ;;
+        esac
         if [ -n "$destdir" ]; then
             if [ "$command" = uninstall ]; then
                 stage_target=$destdir$prefix
@@ -207,8 +219,6 @@ case $command in
                     # Build/download stays unprivileged; root only stages/verifies exact copied bytes.
                     exec sudo "$manager" "$prefix" "$command" "$tool_dir"
                 fi
-                # Direct root invocation can only consume a prebuilt root-trusted bundle.
-                for candidate_file in "$loader" "$script" "$manager" "$tool_dir/templates/lertick.service.in"; do trusted_root_path "$candidate_file"; done
                 ;;
         esac
         become_root
