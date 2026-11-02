@@ -5,10 +5,14 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <signal.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -20,7 +24,7 @@ static char root[PATH_MAX];
 
 static void cleanup(void)
 {
-	const char *names[] = { "instance.lock", "victim", "stats", "symlink", "hardlink", "fifo", "state" };
+	const char *names[] = { "instance.lock", "victim", "stats", "symlink", "hardlink", "fifo", "state", "notify.sock" };
 	char path[PATH_MAX + 32];
 
 	for (unsigned i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
@@ -46,6 +50,8 @@ int main(int argc, char **argv)
 	char lock[PATH_MAX + 32], stats[PATH_MAX + 32], victim[PATH_MAX + 32];
 	char symlink_path[PATH_MAX + 32], hardlink_path[PATH_MAX + 32], fifo[PATH_MAX + 32], state[PATH_MAX + 32];
 	char self[PATH_MAX], buf[32];
+	struct sockaddr_un notify_address = { .sun_family = AF_UNIX };
+	struct timeval notify_timeout = { .tv_sec = 2 };
 	struct stat st, original;
 	int fd, other, status, ready[2], release[2];
 	pid_t child;
@@ -118,6 +124,41 @@ int main(int argc, char **argv)
 	CHECK(lt_runtime_require_idle(state, true) < 0, "state read accepted a FIFO");
 	CHECK(!unlink(state), "cannot clear state fixture");
 
+	CHECK(lt_runtime_notify(NULL, "READY=1") == -EINVAL &&
+	      lt_runtime_notify("relative-socket", "READY=1") == -EINVAL,
+	      "notify accepted an invalid address");
+	fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+	CHECK(fd >= 0, "cannot create notification receiver");
+	CHECK(!setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &notify_timeout, sizeof(notify_timeout)), "notify timeout setup failed");
+	CHECK(snprintf(notify_address.sun_path, sizeof(notify_address.sun_path), "%s/notify.sock", root) <
+	      (int)sizeof(notify_address.sun_path), "notification fixture path too long");
+	socklen_t notify_length = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + strlen(notify_address.sun_path) + 1);
+#ifdef __APPLE__
+	notify_address.sun_len = (unsigned char)notify_length;
+#endif
+	CHECK(!bind(fd, (const struct sockaddr *)&notify_address, notify_length), "cannot bind notification receiver");
+	CHECK(!lt_runtime_notify(notify_address.sun_path, "READY=1"), "filesystem notification send failed");
+	ssize_t received = recv(fd, buf, sizeof(buf) - 1, 0);
+	CHECK(received == 7 && !memcmp(buf, "READY=1", 7), "notification payload changed");
+	close(fd);
+#ifdef __linux__
+	fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+	CHECK(fd >= 0, "cannot create abstract notification receiver");
+	CHECK(!setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &notify_timeout, sizeof(notify_timeout)), "abstract notify timeout setup failed");
+	char abstract_name[80];
+
+	snprintf(abstract_name, sizeof(abstract_name), "@lertick-notify-test-%ld", (long)getpid());
+	memset(&notify_address, 0, sizeof(notify_address));
+	notify_address.sun_family = AF_UNIX;
+	memcpy(notify_address.sun_path + 1, abstract_name + 1, strlen(abstract_name));
+	notify_length = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + strlen(abstract_name));
+	CHECK(!bind(fd, (const struct sockaddr *)&notify_address, notify_length), "cannot bind abstract notification receiver");
+	CHECK(!lt_runtime_notify(abstract_name, "READY=1"), "abstract notification send failed");
+	received = recv(fd, buf, sizeof(buf) - 1, 0);
+	CHECK(received == 7 && !memcmp(buf, "READY=1", 7), "abstract notification payload changed");
+	close(fd);
+#endif
+
 	/* The exec child must hold the same lock even if its supervising loader
 	 * is killed while install/remove is still mutating files.
 	 */
@@ -155,6 +196,6 @@ int main(int argc, char **argv)
 	alarm(0);
 	CHECK(other >= 0, "maintenance child did not release the lock");
 	close(other);
-	puts("loader runtime: private output, lock ownership, idle-state guard and maintenance lifetime passed");
+	puts("loader runtime: private output, lock ownership, idle-state guard, readiness notify and maintenance lifetime passed");
 	return 0;
 }

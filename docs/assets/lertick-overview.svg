@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="640" viewBox="0 0 1120 640" role="img" aria-labelledby="title desc">
   <title id="title">Lertick. Learning, at the core of Linux.</title>
-  <desc id="desc">A silver processor illustration on a light background. Lertick trains and predicts task CPU bursts inside eBPF and selects bounded new time-slice budgets. A compatible sched_ext kernel is required. Concept illustration, not a hardware measurement or application screenshot.</desc>
+  <desc id="desc">A silver processor illustration on a light background. Lertick trains and predicts task CPU bursts inside eBPF and selects bounded new time-slice budgets. Continuous operation is the default, with foreground and systemd service paths. A compatible sched_ext kernel is required. Concept illustration, not a hardware measurement or application screenshot.</desc>
   <defs>
     <linearGradient id="headline" x1="0" x2="1">
       <stop stop-color="#0071e3"/>
@@ -31,7 +31,7 @@
     <text x="560" y="57" fill="#6e6e73" font-size="13" font-weight="600" letter-spacing="1.8">LEARNING INSIDE THE KERNEL</text>
     <text x="560" y="140" fill="#1d1d1f" font-size="68" font-weight="700" letter-spacing="-2.7">Learning, at the core.</text>
     <text x="560" y="215" fill="url(#headline)" font-size="68" font-weight="700" letter-spacing="-2.7">Built for Linux.</text>
-    <text x="560" y="259" fill="#6e6e73" font-size="21">Task bursts. Learned slices. Your Linux scheduler.</text>
+    <text x="560" y="259" fill="#6e6e73" font-size="21">Task bursts. Learned slices. Your daily Linux scheduler.</text>
   </g>
   <ellipse cx="560" cy="422" rx="300" ry="153" fill="url(#halo)"/>
   <ellipse cx="560" cy="515" rx="193" ry="28" fill="url(#shadow)"/>
@@ -69,7 +69,7 @@
     <text x="187" y="592" fill="#6e6e73" font-size="13">Training and inference on your CPU.</text>
     <text x="560" y="569" fill="#1d1d1f" font-size="19" font-weight="600">Bounded budgets.</text>
     <text x="560" y="592" fill="#6e6e73" font-size="13">0.5–5 ms defaults after warm-up.</text>
-    <text x="933" y="569" fill="#1d1d1f" font-size="19" font-weight="600">30-second trials.</text>
-    <text x="933" y="592" fill="#6e6e73" font-size="13">Ctrl-C to stop. Kernel fallback.</text>
+    <text x="933" y="569" fill="#1d1d1f" font-size="19" font-weight="600">Continuous by default.</text>
+    <text x="933" y="592" fill="#6e6e73" font-size="13">Foreground or systemd. Kernel fallback.</text>
   </g>
 </svg>

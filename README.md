@@ -4,8 +4,8 @@
 
 <p align="center">
   <a href="#get-started-on-linux">Get started →</a> &nbsp;&nbsp;
-  <a href="#how-it-works">Explore Lertick →</a> &nbsp;&nbsp;
-  <a href="docs/INSTALL.md">Installation guide →</a>
+  <a href="docs/DAILY_USE.md">Daily use →</a> &nbsp;&nbsp;
+  <a href="#how-it-works">Explore Lertick →</a>
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 <p align="center">
   <strong>Learns task bursts.</strong> Training and inference run inside eBPF.<br />
   <strong>Adapts time slices.</strong> Predictions select bounded new CPU budgets.<br />
-  <strong>Runs on your Linux.</strong> A finite foreground trial, with kernel fallback.
+  <strong>Stays on until stopped.</strong> Continuous foreground or systemd service, with kernel fallback.
 </p>
 
 <p align="center">
@@ -44,7 +44,7 @@ On **Ubuntu 24.04**, install the build tools and matching kernel tools, then use
 ```sh
 sudo apt-get update
 sudo apt-get install --no-install-recommends \
-  git ca-certificates build-essential clang-18 llvm-18 pkg-config \
+  git ca-certificates build-essential clang-18 llvm-18 pkg-config python3 \
   libelf-dev zlib1g-dev libzstd-dev util-linux linux-tools-common "linux-tools-$(uname -r)"
 git clone https://github.com/Denny-Lin/lertick.git
 cd lertick
@@ -53,28 +53,42 @@ cd lertick
 
 The first build downloads pinned libbpf source and builds it locally. No distribution library is replaced. If `bpftool version` fails or your distribution packages it differently, use the [toolchain guide](docs/INSTALL.md#2-install-build-prerequisites).
 
-### 3. Verify, then try 30 seconds
+### 3. Enable your daily scheduler
 
 ```sh
 lertick check
 lertick verify
-lertick run --duration 30
+lertick enable
+lertick status
 ```
 
-`verify` asks the BPF verifier to load the programs **without attaching the scheduler**. Continue only after it succeeds. `run` activates online mode with all-task learning; it is an active scheduling trial. Press **Ctrl-C** to stop early. Normal expiry or loader termination releases its unpinned scheduler link.
+`verify` loads the BPF programs **without attaching the scheduler**. `enable` starts Lertick now and at boot. Installation alone leaves it stopped. The service uses online mode, all-task learning and compact aggregate health summaries every 60 seconds. No per-task names or PIDs appear in those summaries.
 
 ```mermaid
 flowchart LR
-    A[Install] --> B{Check + verify}
-    B -->|Pass| C[30-second trial]
-    B -->|Fail| D[Resolve kernel or tool requirement]
-    C --> E[Finish or Ctrl-C]
+    A[Install] --> B[Verify]
+    B --> C[Enable]
+    C --> D[Continuous scheduling]
+    D --> E[Stop or fallback]
     E --> F[Kernel default scheduler]
     classDef default fill:#f5f5f7,stroke:#d2d2d7,color:#1d1d1f
     linkStyle default stroke:#86868b,stroke-width:1.5px
 ```
 
-`lertick plan` prints a command without loading or attaching anything. `lertick status` reports the current scheduler. After stopping, `lertick uninstall` removes the installed tools. Installation never starts a service or enables scheduling at boot. [Full usage and recovery →](docs/INSTALL.md)
+The service reports ready only after actual scheduler registration and its first health check. If it fails or the kernel falls back, `Restart=no` leaves the default scheduler running instead of retrying in a loop. Daily operation remains experimental. [Service behavior and recovery →](docs/DAILY_USE.md#service-readiness-and-fallback)
+
+### Keep control
+
+| Command | What it does |
+| --- | --- |
+| `lertick update` | Build and verify a candidate before replacing the managed service; retain a complete previous bundle. |
+| `lertick rollback` | Restore the retained previous bundle, preserving enabled/active intent. |
+| `lertick report` | Print a local JSON report for review and manual sharing; no upload or raw logs by default. |
+| `lertick stop` | Stop the service now. `lertick disable` also turns off boot startup. |
+| `lertick run` | Run continuously in the foreground until Ctrl-C; no boot-time enablement. |
+| `lertick trial` | Run an explicit 30-second foreground trial. |
+
+`run` and the raw loader default to `--duration 0`, meaning until stopped. Use `trial` or `run --duration 30` for a finite session. Stop the service before a foreground run; Lertick refuses a second active scheduler. `lertick plan` prints a command without building, loading or attaching anything. [Daily use, updates and reporting →](docs/DAILY_USE.md)
 
 ## How it works
 
@@ -96,16 +110,20 @@ The model learns while tasks run, with no offline dataset, model download or clo
 
 The helper learns from all eligible tasks by default. The raw loader's historical name-prefix default remains available for reproducible experiments. `shadow` trains while using fixed slices, and **still activates the scheduler**; it is not a passive preview.
 
+Models restart with each attachment. Continuous learning adapts within a run; updating the code does not by itself establish better throughput or latency. [Measured improvement workflow →](docs/DAILY_USE.md#improve-performance-with-evidence)
+
 ## What has been tested
 
 | Validation | Evidence |
 | --- | --- |
 | Runtime environment | **Ubuntu 24.04.5 LTS, ARM64, Linux 7.0.0-38-generic**, in a VM |
 | Kernel integration | BPF verifier acceptance, registration, task execution, in-kernel model updates and bounded adaptive budgets |
+| Continuous loader checks in that VM | Unlimited default, compact 60-second summaries, readiness after registration/initial health, and verifier-only loading without replacing the active scheduler |
+| Daily service lifecycle in that VM | 65-second continuous session; enable/start/stop/restart/disable, update, injected startup failure with old-bundle recovery, manual rollback, inactive update, local reports and uninstall |
 | Historical correctness and recovery | 19 correctness cases, 15 recovery tests, churn and concurrent fork checks |
 | Historical benchmarks | 360 completed scheduler/control trials with retained results and uncertainty |
 
-Ubuntu release numbers alone do not determine support. Stock Ubuntu 22.04/24.04 GA kernels are not the tested sched_ext target; HWE/OEM kernels can differ. Other kernels require their own build, verifier and runtime checks. Physical-hardware performance remains unverified. [Exact requirements and deployment evidence →](docs/INSTALL.md)
+Ubuntu release numbers alone do not determine support. Stock Ubuntu 22.04/24.04 GA kernels are not the tested sched_ext target; HWE/OEM kernels can differ. Other kernels require their own build, verifier and runtime checks. Short loader checks do not establish days of service uptime, physical-hardware performance or cross-kernel compatibility. [Exact requirements and deployment evidence →](docs/INSTALL.md)
 
 **Learning works in the kernel. A scheduling advantage is not established.** Current comparisons found no reliable throughput gain over fixed slices, and some wake-latency cases regressed. Model variants and their unresolved outcomes remain documented. [Results and limitations →](docs/PHASE2_RESULTS.md) · [Model confirmation →](results/model-confirmation/README.md)
 
@@ -113,10 +131,11 @@ Ubuntu release numbers alone do not determine support. Stock Ubuntu 22.04/24.04 
 
 | I want to… | Start here |
 | --- | --- |
-| Install, select a mode, log a trial or recover | [Native installation](docs/INSTALL.md) |
+| Install on a compatible kernel | [Native installation](docs/INSTALL.md) |
+| Run daily, update, roll back or collect a report | [Daily use](docs/DAILY_USE.md) |
 | Inspect the model, dispatch and CPU-frequency integration | [Implementation and modes](docs/OVERVIEW.md) · [Correctness](docs/PHASE2_CORRECTNESS.md) |
 | Connect the optional Lerwatt power manager | [Lerwatt integration](docs/DEPLOYMENT.md#cpu-frequency-targets-and-the-lerwatt-plug-in) |
 | Reproduce the VM results | [VM reproduction](docs/DEPLOYMENT.md) · [Benchmarks](benchmarks/README.md) |
-| Contribute or report a problem | [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/Denny-Lin/lertick/issues) · [Security](SECURITY.md) |
+| Contribute or report a problem | [Contributing](CONTRIBUTING.md) · [Report a bug](https://github.com/Denny-Lin/lertick/issues/new?template=bug_report.yml) · [Security](SECURITY.md) |
 
 Lertick is **learning + tick**. Scheduler, loader and associated build material retain **GPL-2.0-only** notices; independently authored model, workloads and documents use **MIT**. [License boundaries and provenance →](THIRD_PARTY.md)

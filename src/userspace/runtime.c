@@ -2,9 +2,12 @@
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
+#include <stddef.h>
 #include <string.h>
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -190,4 +193,48 @@ int lt_runtime_sleep_until(uint64_t deadline_ns, volatile sig_atomic_t *stop)
 			return error;
 	}
 	return 0;
+}
+
+int lt_runtime_notify(const char *socket_name, const char *message)
+{
+	struct sockaddr_un address = { .sun_family = AF_UNIX };
+	size_t length;
+	socklen_t address_length;
+	int fd, error;
+	ssize_t sent;
+
+	if (!socket_name || !message || !message[0] ||
+	    (socket_name[0] != '/' && socket_name[0] != '@'))
+		return -EINVAL;
+	length = strlen(socket_name);
+	if (length < 2 || length >= sizeof(address.sun_path))
+		return -ENAMETOOLONG;
+	memcpy(address.sun_path, socket_name, length + 1);
+	address_length = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + length + 1);
+	if (socket_name[0] == '@') {
+#ifdef __linux__
+		address.sun_path[0] = '\0';
+		address_length--;
+#else
+		return -EAFNOSUPPORT;
+#endif
+	}
+#ifdef __APPLE__
+	address.sun_len = (unsigned char)address_length;
+#endif
+	fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+	if (fd < 0)
+		return -errno;
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) || fcntl(fd, F_SETFL, O_NONBLOCK)) {
+		error = -errno;
+		close(fd);
+		return error;
+	}
+	do {
+		sent = sendto(fd, message, strlen(message), 0,
+			      (const struct sockaddr *)&address, address_length);
+	} while (sent < 0 && errno == EINTR);
+	error = sent < 0 ? -errno : (size_t)sent != strlen(message) ? -EIO : 0;
+	close(fd);
+	return error;
 }

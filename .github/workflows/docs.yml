@@ -45,8 +45,8 @@ jobs:
       - name: Check script syntax
         run: |
           bash -n scripts/preflight.sh scripts/fetch_reference.sh scripts/build_libbpf.sh
-          sh -n deploy.sh scripts/native_build.sh tests/test_deploy.sh
-          python3 -m py_compile tests/test_loader_deployment.py tests/validate_linux.py tests/validate_phase2.py tests/validate_watchdog_flags.py benchmarks/run_phase2.py benchmarks/run_model_confirmation.py benchmarks/compact_confirmation.py benchmarks/analyze_phase2.py benchmarks/analyze_model_init.py benchmarks/analyze_online_utility.py scripts/qemu_vm.py
+          sh -n deploy.sh scripts/native_build.sh scripts/service_manager.sh tests/test_deploy.sh tests/test_service.sh
+          python3 -m py_compile scripts/collect_report.py tests/test_report.py tests/test_loader_deployment.py tests/validate_linux.py tests/validate_phase2.py tests/validate_watchdog_flags.py benchmarks/run_phase2.py benchmarks/run_model_confirmation.py benchmarks/compact_confirmation.py benchmarks/analyze_phase2.py benchmarks/analyze_model_init.py benchmarks/analyze_online_utility.py scripts/qemu_vm.py
 
   musl-deployment:
     runs-on: ubuntu-24.04
@@ -60,7 +60,7 @@ jobs:
           docker run --rm -v "$PWD:/source:ro" alpine:3.22 sh -ec '
             apk add --no-cache build-base linux-headers python3 bash util-linux
             mkdir /work
-            cp -R /source/Makefile /source/src /source/vendor /source/scripts /source/tests /source/deploy.sh /work/
+            cp -R /source/Makefile /source/src /source/vendor /source/scripts /source/tests /source/templates /source/deploy.sh /work/
             cd /work
             make test-deployment
           '

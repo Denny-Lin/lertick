@@ -1,0 +1,23 @@
+# Lertick managed unit; prefix=@PREFIX@
+[Unit]
+Description=Lertick adaptive Linux scheduler
+Documentation=https://github.com/Denny-Lin/lertick
+After=local-fs.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStart=@PREFIX@/sbin/scx_lertick --mode online --duration 0 --track-all --cpuperf auto --summary-only --sample-ms 60000 --notify
+Restart=no
+KillMode=control-group
+TimeoutStartSec=30
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=yes
+StandardOutput=journal
+StandardError=journal
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=100
+
+[Install]
+WantedBy=multi-user.target

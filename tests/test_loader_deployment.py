@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import resource
 import signal
+import socket
 import subprocess
 import tempfile
 import time
@@ -65,14 +66,18 @@ def main():
     assert "--verify" in invoke("--help").stdout
     result = invoke("--version")
     assert result.returncode == 0 and result.stdout.startswith("scx_lertick ")
-    for options in [ ["--duration", "0"], ["--duration", "-1"],
+    for options in [ ["--duration", "-1"], ["--duration", "3601"],
                      ["--duration", "4294967297"], ["--duration", "10junk"],
-                     ["--sample-ms", "99"], ["--check", "--verify"],
+                     ["--sample-ms", "0"], ["--sample-ms", "99"],
+                     ["--sample-ms", "3600001"], ["--check", "--verify"],
+                     ["--summary-only", "--full-stats"], ["--check", "--notify"],
                      ["--maintenance"], ["--maintenance", "/bin/true"],
                      ["--maintenance", "--", "relative-command"],
                      ["--verify", "--maintenance", "--", "/bin/true"],
                      ["--min-slice-us", "5000", "--fixed-slice-us", "1000"],
-                     ["unexpected"], ["--fault-stall"] ]:
+                     ["unexpected"], ["--fault-stall"],
+                     ["--fault-stall", "--partial", "--dangerous-vm-test", "--stall-tgid", "1"],
+                     ["--fault-stall", "--partial", "--dangerous-vm-test", "--stall-tgid", "1", "--duration", "0"] ]:
         assert invoke(*options).returncode == 2, options
 
     with tempfile.TemporaryDirectory(prefix="lertick-loader-deployment-") as directory:
@@ -91,6 +96,13 @@ def main():
             assert result.returncode != 0, output
             assert time.monotonic() - started < 3, f"blocked on output {output}"
             assert victim.read_text() == "keep this unchanged\n"
+        # Check parser acceptance without loading BPF: the existing output
+        # is rejected after successful option parsing and before probing.
+        for options in (["--duration", "0"], ["--duration", "3600"],
+                        ["--sample-ms", "60000"], ["--sample-ms", "3600000"],
+                        ["--summary-only"], ["--duration", "0", "--full-stats"]):
+            result = invoke(*options, "--stats-json", victim)
+            assert result.returncode == 1, (options, result.stderr)
 
         if not (args.live or args.allow_attach):
             print("loader deployment: CLI and private-output rejection passed; no BPF load/attach requested")
@@ -130,9 +142,12 @@ def main():
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             wait_for(entered.exists, "maintenance command did not start")
-            for options in (["--verify"], ["--maintenance", "--", "/bin/true"]):
-                result = invoke(*options)
-                assert result.returncode != 0 and "lock" in result.stderr.lower(), result.stderr
+            # Verification creates private unpinned BPF objects only, so it
+            # may preflight an update while another owner holds the lock.
+            result = invoke("--verify")
+            assert result.returncode == 0, result.stderr
+            result = invoke("--maintenance", "--", "/bin/true")
+            assert result.returncode != 0 and "lock" in result.stderr.lower(), result.stderr
             process.kill()
             process.wait(timeout=5)
             result = invoke("--maintenance", "--", "/bin/true")
@@ -191,6 +206,49 @@ def main():
             wait_for(lambda: STATE.read_text().strip() == "disabled", "signal did not restore default scheduling")
             if sig != signal.SIGKILL:
                 assert records(output)[-1]["default_restored"] is True
+
+        # Default duration is continuous, compact, and low-volume. Readiness
+        # requires a registered scheduler plus its first successful health
+        # sample. Candidate verification must not detach this running owner.
+        notify_path = work / "notify.sock"
+        receiver = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        receiver.bind(str(notify_path))
+        receiver.settimeout(10)
+        output = work / "continuous-default.jsonl"
+        environment = os.environ.copy()
+        environment["NOTIFY_SOCKET"] = str(notify_path)
+        process = subprocess.Popen([loader, "--mode", "fixed", "--notify", "--stats-json", str(output)],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=environment)
+        owned.append(process)
+        try:
+            notification = receiver.recv(1024)
+            assert b"READY=1" in notification
+            assert process.poll() is None and STATE.read_text().strip() == "enabled"
+            data = records(output)
+            registration = next(row for row in data if row.get("event") == "registered")
+            assert registration["duration_seconds"] == 0 and registration["sample_ms"] == 60000
+            assert registration["summary_only"] is True
+            summaries = [row for row in data if row.get("event") == "snapshot"]
+            assert summaries and all(row["summary_only"] and row["tasks"] == [] and "cpus" not in row
+                                     for row in summaries)
+            enable_sequence = Path("/sys/kernel/sched_ext/enable_seq")
+            before = enable_sequence.read_text() if enable_sequence.exists() else None
+            result = invoke("--verify", "--mode", "online")
+            assert result.returncode == 0, result.stderr
+            assert process.poll() is None and STATE.read_text().strip() == "enabled"
+            if before is not None:
+                assert enable_sequence.read_text() == before, "candidate verification replaced the active scheduler"
+            process.terminate()
+            _, error = process.communicate(timeout=10)
+            assert process.returncode == 0, error
+            assert b"STOPPING=1" in receiver.recv(1024)
+            assert STATE.read_text().strip() == "disabled"
+            assert not any('"pid"' in json.dumps(row) or '"comm"' in json.dumps(row) for row in records(output))
+        finally:
+            receiver.close()
+            if process.poll() is None:
+                process.terminate()
+                process.communicate(timeout=10)
 
         # Exercise the existing all-task eligibility switch without changing
         # any model prior, update rule, dispatch policy or slice defaults.

@@ -2,7 +2,7 @@
 
 [← Back to Lertick](../README.md)
 
-Lertick builds on the target Linux machine and runs as a finite foreground scheduler. The helper installs two commands; it does not install a kernel, enable a service or start scheduling at boot.
+Lertick builds on the target Linux machine and supports continuous foreground use or a managed systemd service. Installation adds the commands and service unit without starting or enabling it. Run `lertick enable` afterward to start now and enable startup at boot. See [daily use, updates and reporting](DAILY_USE.md).
 
 **A compatible running kernel can load and unload Lertick without a reboot.** If your current kernel lacks the required sched_ext support, changing kernels requires booting the replacement first. Installing the helper alone cannot add that support.
 
@@ -38,11 +38,11 @@ For Ubuntu 24.04 with its normal repositories enabled:
 ```sh
 sudo apt-get update
 sudo apt-get install --no-install-recommends \
-  git ca-certificates build-essential clang-18 llvm-18 \
+  git ca-certificates build-essential clang-18 llvm-18 python3 \
   pkg-config libelf-dev zlib1g-dev libzstd-dev util-linux
 ```
 
-Clang 18 must include its BPF target. Ubuntu lists [clang-18 in Noble's Universe repository](https://packages.ubuntu.com/noble/clang-18). The native build also uses `flock` to serialize builds in one checkout; Ubuntu's base installation normally includes it through `util-linux`. Other Ubuntu releases and Linux distributions may package the required toolchain differently; the commands above do not establish compatibility for those releases.
+Clang 18 must include its BPF target. Ubuntu lists [clang-18 in Noble's Universe repository](https://packages.ubuntu.com/noble/clang-18). The native build also uses `flock` to serialize builds in one checkout; Ubuntu's base installation normally includes it through `util-linux`. Python 3 runs the local support-report collector. Other Ubuntu releases and Linux distributions may package the required toolchain differently; the commands above do not establish compatibility for those releases.
 
 You also need a working `bpftool` that can dump the live BTF and generate a libbpf skeleton. On Ubuntu releases that supply it through versioned kernel tools, install the tools for the **running** kernel:
 
@@ -76,18 +76,18 @@ The source helper builds the native loader and pinned dependency as needed befor
 | --- | --- |
 | `check` | Inspect the running kernel, live interfaces and current BPF permissions. It does not attach a scheduler. |
 | `verify` | Ask the kernel verifier to load Lertick's BPF programs, then release them. It does not attach the scheduler or pin its optional shared maps. |
-| `plan` | Print the proposed foreground trial without building, sudo, BPF loading or attachment. |
-| `status` | Report the current sched_ext state and scheduler name when available. |
+| `plan` | Print the proposed foreground run without building, sudo, BPF loading or attachment. |
+| `status` | Report service and sched_ext state when available. |
 
-Verification is more than compilation, but it is not a scheduling test. Successful registration and actual execution are established only when a trial attaches and runs. The loader refuses to replace an already enabled sched_ext scheduler. Stop its owning service or process deliberately before trying Lertick; the helper does not stop other schedulers for you.
+Verification is more than compilation, but it is not a scheduling test. Successful registration and actual execution are established only when a run attaches and executes. Verifier-only loading can check a candidate while the current scheduler remains active; it never replaces that scheduler. A new active run refuses to replace an enabled sched_ext scheduler. The managed updater stops only its own service after preparing the candidate; it does not stop a foreign or foreground scheduler for you.
 
-## 4. Install and run a short trial
+## 4. Install and enable daily use
 
 ```sh
 ./deploy.sh install
 lertick status
-lertick plan
-lertick run --duration 30
+lertick enable
+lertick status
 ```
 
 The default installation is:
@@ -97,11 +97,20 @@ The default installation is:
 | `/usr/local/bin/lertick` | Deployment helper |
 | `/usr/local/sbin/scx_lertick` | Native loader with its embedded BPF object |
 
-`run` defaults to **online mode, 30 seconds, all-task model tracking and automatic CPU-performance targets**. It schedules the machine's eligible fair-class tasks through sched_ext while active. This is an experimental scheduler trial, not a passive monitor. Keep an independent administrator terminal or VM console available for new-kernel experiments.
+The installation also includes its management/reporting helpers and a systemd unit. On Ubuntu/systemd, `lertick enable` starts the service immediately and enables it at boot; `lertick disable` stops it and disables boot startup. Installing the files alone does neither. The service remains on Linux's default scheduler if Lertick fails and does not automatically retry in a loop. See [service behavior](DAILY_USE.md#service-readiness-and-fallback).
+
+For a first finite check, stop the service before starting a foreground trial:
+
+```sh
+lertick stop
+lertick trial --duration 30
+```
+
+`run` defaults to **continuous online mode**, all-task model tracking and automatic CPU-performance targets. It runs until stopped; `--duration 0` makes that choice explicit. `trial` defaults to 30 seconds, and `run --duration 30` is also finite. Both schedule the machine's eligible fair-class tasks through sched_ext while active. Daily use remains experimental, and enabling a service does not establish production stability. Keep an independent administrator terminal or VM console for a new-kernel run.
 
 Lertick currently implements no cgroup scheduling callbacks. Per-task weighted CPU-service accounting does not establish cgroup bandwidth or hierarchical isolation. Do not assume `cpu.max`, hierarchical `cpu.weight` or `cpu.idle` retain the default scheduler's behavior during a trial; the kernel documents these as [scheduler-dependent controls](https://docs.kernel.org/scheduler/sched-ext.html#scheduler-dependent-knobs).
 
-Keep the machine awake during an initial trial. Duration uses monotonic running time, so time suspended is not counted. Suspend/resume and CPU hotplug are not established by the short deployment checks below; inspect status and re-verify before another trial after such changes.
+Keep the machine awake during an initial trial. Finite duration uses monotonic running time, so time suspended is not counted. Suspend/resume and CPU hotplug are not established by the short deployment checks below; inspect status and re-verify before resuming use after such changes.
 
 Press **Ctrl-C** to stop early. Normal expiry and loader termination detach its unpinned scheduler link, returning tasks to the kernel's default scheduler. Check the exit diagnostics and status afterward:
 
@@ -114,7 +123,7 @@ The expected state after Lertick stops, with no other scheduler starting, is `di
 For another control mode or fresh telemetry:
 
 ```sh
-lertick run --mode shadow --duration 30 \
+lertick trial --mode shadow --duration 30 \
   --sample-ms 1000 --stats-json lertick-shadow-new.jsonl
 ```
 
@@ -129,15 +138,17 @@ lertick run --mode shadow --duration 30 \
 
 The default bounds are 0.5–5 ms after eight valid labels, with a 2 ms fallback. They bound newly assigned budgets, not exact execution time or the remaining budget of an already running task. Lower prediction error has not established a general throughput or latency advantage; consult the [recorded comparisons](PHASE2_RESULTS.md) and [long-window confirmation](../results/model-confirmation/README.md).
 
-The helper forwards `--mode`, `--duration`, `--sample-ms` and `--stats-json`; tracking and CPU-performance defaults are fixed for this simple trial path. For targeted tracking, partial switching, model experiments or optional Lerwatt coordination, use the advanced loader instructions in [deployment and reproduction](DEPLOYMENT.md). Model tracking and the set of scheduled tasks are distinct: selecting a TGID for learning alone does not isolate scheduling to that process.
+The helper forwards `--mode`, `--duration`, `--sample-ms` and `--stats-json`; tracking and CPU-performance defaults are fixed for this simple path. For targeted tracking, partial switching, full research snapshots, model experiments or optional Lerwatt coordination, use the advanced loader instructions in [deployment and reproduction](DEPLOYMENT.md). Model tracking and the set of scheduled tasks are distinct: selecting a TGID for learning alone does not isolate scheduling to that process.
 
 ## Telemetry and permissions
 
-`--stats-json FILE` creates a fresh private file with mode `0600`. Choose a new filename for each run; existing files, symlinks and special files are rejected. `--stats-json -` writes to stdout, so ordinary shell redirection can create a user-owned log. Use a directory you trust. Telemetry contains task names and PIDs as well as model and scheduler counters, so share it deliberately. Logs are not automatically rotated or size-limited.
+Continuous runs default to compact aggregate health/counters every 60 seconds, without per-task names/PIDs or per-CPU dumps. Explicit finite raw-loader runs retain the older research defaults: full snapshots at one-second intervals. `--full-stats` explicitly enables full research snapshots for a continuous raw-loader run. Full snapshots can contain task names and PIDs; kernel failure diagnostics can contain them too. The service uses journald, whose retention is managed by the host. [Daily logs and report privacy](DAILY_USE.md#logs-and-private-reports) explains the distinction.
+
+`--stats-json FILE` creates a fresh private file with mode `0600`. Choose a new filename for each run; existing files, symlinks and special files are rejected. `--stats-json -` writes to stdout, so ordinary shell redirection can create a user-owned log. Use a directory you trust. Explicit standalone log files are not automatically rotated or size-limited.
 
 System installation requires a root-owned prefix and ancestors that are not group/other writable and do not contain symbolic-link components. The default `/usr/local` is the normal path; a protected prefix such as `/opt/lertick` can be selected with `PREFIX`. A custom prefix's `bin` directory may need to be added to your PATH, or invoke its helper by absolute path.
 
-`DESTDIR` is for package staging, preferably as a normal user. Staging copies files without attaching a scheduler or changing the host kernel. Privileged staging also enforces protected destination paths. The helper does not download distribution packages, change security policy, send SysRq, install boot-time services or stop another scheduler automatically.
+`DESTDIR` is for package staging, preferably as a normal user. Staging copies files without attaching a scheduler or changing the host kernel. Privileged staging also enforces protected destination paths. The helper does not download distribution packages, change security policy, send SysRq or stop another manager's scheduler. Installing a service unit does not enable or start it; those actions require `lertick enable` or `lertick start`.
 
 Run privileged commands only from source you trust. The installer does not authenticate the repository. A successful check does not override BPF restrictions from your kernel or security configuration; preserve the reported error rather than automatically disabling protections.
 
@@ -145,27 +156,43 @@ Run privileged commands only from source you trust. The installer does not authe
 
 The native helper fingerprints its kernel-derived build inputs and invalidates stale generated files when needed. A manual Make build must still start with `make clean` after changing kernels so that `vmlinux.h`, the BPF object and its skeleton are regenerated from the running kernel. Re-run checks and verification before a new-kernel trial. An installed binary built for the previous kernel does not acquire compatibility simply because the kernel still exposes sched_ext.
 
-From your trusted checkout, rebuild and verify for the new running kernel before replacing the installed copy:
+Use the managed update path to prepare, verify and replace the installed bundle for the running kernel:
 
 ```sh
-./deploy.sh verify
-./deploy.sh install
+lertick update
 ```
 
-Stop the foreground trial with Ctrl-C, then remove the commands:
+The installed updater fetches upstream `main` and builds as your normal user before requesting privilege for staging and activation. For a reviewed local checkout, `./deploy.sh update` builds that checkout instead. Read [update and rollback semantics](DAILY_USE.md#update-and-rollback) before changing a running service.
+
+Stop a foreground run with Ctrl-C. To stop managed daily use and remove the installation:
 
 ```sh
+lertick disable
 lertick status
 lertick uninstall
 ```
 
-Uninstall refuses while a sched_ext scheduler is active. File maintenance can still run after a kernel change when sched_ext interfaces are absent; removing installed files does not require loading BPF or restoring a previous kernel. Keep the original checkout until the trial has stopped and its status is understood.
+Uninstall disables/stops Lertick's managed service before removing the installation. It refuses to abort a foreign scheduler or an independently launched foreground loader; stop those through their owner first. File maintenance can still run after a kernel change when sched_ext interfaces are absent; removing installed files does not require loading BPF or restoring a previous kernel. Keep the original checkout until the scheduler has stopped and its status is understood. On a non-systemd machine, use the [continuous foreground path](DAILY_USE.md#without-systemd).
 
 If an independent administrator needs an emergency kernel abort, the documented mechanism is uppercase SysRq-S. The helper never sends it automatically; it would abort the active sched_ext scheduler, including one owned by somebody else. Follow the [manual recovery instructions](DEPLOYMENT.md#recovery-and-watchdog-test) from an independent control path.
 
 ## Tested scope and reproduction
 
-The native deployment checks below were completed on **2026-11-02, America/Los_Angeles**, in an **Ubuntu 24.04.5 LTS ARM64 VM running Linux `7.0.0-38-generic`**, with Clang 18.1.3, bpftool 7.7 and pinned libbpf 1.7.0. These tests exercised a running sched_ext kernel, beyond compiling in a container.
+The native deployment checks were completed on **2026-11-02, America/Los_Angeles**, in an **Ubuntu 24.04.5 LTS ARM64 VM running Linux `7.0.0-38-generic`**, with Clang 18.1.3, bpftool 7.7 and pinned libbpf 1.7.0. These tests exercised a running sched_ext kernel, beyond compiling in a container.
+
+The daily-service checks used **systemd 255.4** in that same VM:
+
+| Daily lifecycle check | Recorded result |
+| --- | --- |
+| Continuous default and readiness | Raw-loader continuous/notify tests passed. The real systemd service stayed active with the same main process for 65 seconds, beyond the former 30-second trial default. |
+| Installation and explicit intent | A normal-user build installed files without enabling/starting. Enable, stop, start, restart and disable behaved as documented; stop confirmed kernel-default scheduling. No reboot was needed. |
+| Controlled update | Candidate verification ran while the old service remained active. A helper/report-only change produced a distinct full-bundle revision; the active service switched successfully. |
+| Failed activation and rollback | An injected `/bin/false` candidate unit failed startup after BPF verification. One recovery restored the old active/enabled bundle and retained the original previous revision. Manual rollback also passed. |
+| Stopped-service update | Update preserved inactive state and the existing boot-enabled preference. Explicit rapid start/restart succeeded after the helper cleared the unit's failed/start-limit state. |
+| Local reports | Ordinary-user and explicit-root JSON reports parsed, matched installed bundle hashes, omitted raw logs and task identifiers, and did not upload. Root journal access supplied aggregate counters. |
+| Cleanup | Disable/uninstall removed the owned unit and boot link. Final state was `sched_ext=disabled`, unit not found/inactive. |
+
+These are short lifecycle checks, not a multi-day soak test. Fixture tests additionally exercise rejected verification, a candidate with broken maintenance/startup, unsafe paths, foreign schedulers, contention and report privacy; they do not substitute for native kernel tests. The earlier finite checks remain recorded below.
 
 | Native VM check | Recorded result |
 | --- | --- |

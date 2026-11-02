@@ -9,7 +9,7 @@ Active work covers CPU-burst prediction, bounded adaptive time slices, CPU sched
 1. Read the [current results](docs/PHASE2_RESULTS.md), [deployment guide](docs/DEPLOYMENT.md), and historical [prior art](docs/planning/PRIOR_ART.md).
 2. For a design change, open a focused proposal with the problem, alternatives, primary references, and falsifiable validation. Small documentation fixes may go directly to a pull request.
 3. Fork and create a topic branch. Keep one logical change per commit; use an imperative subject and explain why the change is needed.
-4. Run `python3 tests/check_docs.py`, `make test-model test-accounting`, and `git diff --check`. Changes to scheduling or loading also need actual Linux verifier, execution, and recovery evidence from the [validation runner](tests/README.md). Document checks you could not run.
+4. Run `python3 tests/check_docs.py`, `make test-model test-accounting`, and `git diff --check`. Deployment changes also require `make test-deployment` on Linux. Changes to scheduling or loading also need actual Linux verifier, execution, and recovery evidence from the [validation runner](tests/README.md). Document checks you could not run.
 5. Submit a pull request with scope, evidence, tests, compatibility, recovery implications, and licensing provenance. Do not invent measurements.
 
 Contributions are submitted under the applicable file's license. No CLA is currently required. Do not contribute material you cannot license. Preserve authorship and upstream SPDX identifiers. Review the implemented [license boundaries and provenance](THIRD_PARTY.md) before C/eBPF contributions.

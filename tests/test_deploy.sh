@@ -64,6 +64,7 @@ if name=='make':
 if name=='scx_lertick':
     log('loader')
     if '--help' in args:print('--check --verify --maintenance');sys.exit(0)
+    if '--version' in args:print('test-version');sys.exit(0)
     if '--check' in args:print('{"event":"kernel_check"}');sys.exit(0)
     if '--verify' in args:log('verify-no-attach');print('{"event":"verified"}');sys.exit(0)
     if '--maintenance' in args:
@@ -100,6 +101,11 @@ with tempfile.TemporaryDirectory(prefix='lertick-deploy-fixtures-') as directory
     executable(tree/'deploy.sh', (project/'deploy.sh').read_text())
     executable(tree/'build/scx_lertick', mux)
     executable(tree/'scripts/native_build.sh', mux)
+    manager=(project/'scripts/service_manager.sh').read_text().replace('unit_dir=/etc/systemd/system',f'unit_dir={work}/etc/systemd/system').replace('lock_dir=/run/lertick-deploy',f'lock_dir={work}/run/lertick-deploy').replace('[ -d /run/systemd/system ]',f'[ -d {work}/no-systemd ]')
+    executable(tree/'scripts/service_manager.sh',manager)
+    executable(tree/'scripts/collect_report.py','#!/usr/bin/env python3\nprint("{}")\n')
+    (tree/'templates').mkdir()
+    (tree/'templates/lertick.service.in').write_text((project/'templates/lertick.service.in').read_text())
     state = work/'state'; state.write_text('disabled')
     log = work/'calls.jsonl'; log.touch()
     env = dict(os.environ, PATH=str(tools)+os.pathsep+os.environ['PATH'], STUB_LOG=str(log),
@@ -124,20 +130,22 @@ with tempfile.TemporaryDirectory(prefix='lertick-deploy-fixtures-') as directory
     quoted="telemetry a'b.jsonl"
     result=invoke('plan','--stats-json',quoted)
     command_line=result.stdout.splitlines()[1]
-    assert shlex.split(command_line)==['sudo',str(tree/'build/scx_lertick'),'--mode','online','--duration','30','--track-all','--cpuperf','auto','--stats-json',quoted]
+    assert shlex.split(command_line)==['sudo',str(tree/'build/scx_lertick'),'--mode','online','--duration','0','--track-all','--cpuperf','auto','--summary-only','--sample-ms','60000','--stats-json',quoted]
     assert calls()==[], 'plan invoked build, sudo or loader'
-    for args in [('run','--fault-stall'),('run','--partial'),('run','--cpuperf','max'),('run','--duration','0'),
+    for args in [('run','--fault-stall'),('run','--partial'),('run','--cpuperf','max'),('run','--duration','-1'),
                  ('run','--duration','3601'),('run','--sample-ms','99'),('check','--mode','online'),('plan','--mode','invalid')]:
         invoke(*args,ok=False)
-    clear();state.write_text('enabled');invoke('check',ok=False);invoke('verify',ok=False);invoke('run',ok=False)
+    clear();state.write_text('enabled');invoke('check',ok=False);invoke('run',ok=False)
     assert not any(x['tool'] in ['loader','sudo','build'] for x in calls()), 'active scheduler was not rejected early'
+    clear();invoke('verify');assert state.read_text()=='enabled' and not any(x['tool']=='attach' for x in calls())
     state.write_text('disabled');clear();invoke('check');invoke('verify')
     assert any(x['tool']=='verify-no-attach' for x in calls()) and not any(x['tool']=='attach' for x in calls())
     assert state.read_text()=='disabled'
     clear();result=invoke('run')
     assert '"event"' not in result.stdout
     attached=[x for x in calls() if x['tool']=='loader' and '--track-all' in x['args']]
-    assert attached and attached[-1]['args']==['--mode','online','--duration','30','--track-all','--cpuperf','auto']
+    assert attached and attached[-1]['args']==['--mode','online','--duration','0','--track-all','--cpuperf','auto','--summary-only','--sample-ms','60000']
+    clear();invoke('trial');assert [x for x in calls() if x['tool']=='loader' and '--track-all' in x['args']][-1]['args']==['--mode','online','--duration','30','--track-all','--cpuperf','auto']
     result=invoke('run','--stats-json','-');assert '"event":"registered"' in result.stdout
     invoke('run',extra={'STUB_LEAVE_ENABLED':'1'},ok=False);state.write_text('disabled')
     for file in [work/'child-started',work/'child-done']:file.unlink(missing_ok=True)
@@ -161,7 +169,7 @@ with tempfile.TemporaryDirectory(prefix='lertick-deploy-fixtures-') as directory
     prefix=work/'protected-prefix';clear()
     invoke('install',extra={'PREFIX':str(prefix)})
     copies=[x for x in calls() if x['tool']=='copy']
-    assert copies and all(x['locked'] for x in copies), 'installation escaped maintenance ownership'
+    assert copies and all(x['locked'] for x in copies if '/sbin/.lertick.' in x['args'][1]), 'installation escaped maintenance ownership'
     state.write_text('enabled');invoke('uninstall',extra={'PREFIX':str(prefix)},ok=False)
     assert (prefix/'sbin/scx_lertick').exists()
     state.write_text('MISSING');invoke('uninstall',extra={'PREFIX':str(prefix)})
@@ -173,6 +181,7 @@ with tempfile.TemporaryDirectory(prefix='lertick-deploy-fixtures-') as directory
     invoke('install',extra={'PREFIX':str(link)},ok=False)
     invoke('install',extra={'PREFIX':'/'},ok=False)
     invoke('install-locked',ok=False)
+    invoke('version')
 
     # Run the actual build orchestrator with fake tools and kernel metadata.
     executable(tree/'scripts/native_build.sh',(project/'scripts/native_build.sh').read_text())
@@ -206,5 +215,5 @@ with tempfile.TemporaryDirectory(prefix='lertick-deploy-fixtures-') as directory
     clear();build({'STUB_UID':'0'},ok=False)
     assert calls()==[], 'root dependency build was allowed'
 
-print('test_deploy: plan/check/verify, finite defaults, signals, trust paths, maintenance, staging and build fingerprints passed (stubs only)')
+print('test_deploy: plan/check/verify, indefinite/finite defaults, signals, trust paths, maintenance, staging and build fingerprints passed (stubs only)')
 PY

@@ -1,0 +1,68 @@
+name: Bug report
+description: Report a reproducible scheduler, installation or service problem.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For suspected security vulnerabilities, use [private reporting](https://github.com/Denny-Lin/lertick/security/advisories/new).
+        This issue will be public. Lertick never uploads a report automatically; review anything you paste or attach.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and what you expected instead. Include measurement units for performance problems.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Lertick version
+      description: Run `lertick version`, or identify the source commit. Write unavailable if the command cannot run.
+    validations:
+      required: true
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel, architecture and distribution
+      description: Include `uname -r`, `uname -m` and your distribution version. Do not include your hostname or unrelated personal data.
+    validations:
+      required: true
+  - type: dropdown
+    id: operation
+    attributes:
+      label: Operation
+      options:
+        - Systemd daily service
+        - Continuous foreground run
+        - Finite trial or research experiment
+        - Build, install, update or rollback
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Provide the smallest repeatable commands/workload, relevant options and whether the problem repeats. Review commands for secrets.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: recovery
+    attributes:
+      label: Service, fallback and recovery observations
+      description: State whether Linux default scheduling returned and whether stop, restart or rollback helped. Do not run fault injection on a daily-use host.
+  - type: textarea
+    id: report
+    attributes:
+      label: Reviewed local report (optional)
+      description: Run `lertick report`, review the JSON, then paste it or attach it manually. `--include-logs` may include task names, PIDs, paths or other personal information; raw logs are not required.
+      render: json
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Sharing review
+      options:
+        - label: I reviewed any attached report, commands and logs for secrets and personal information before sharing.
+          required: true

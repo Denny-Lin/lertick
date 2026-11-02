@@ -21,7 +21,7 @@ BPF_CFLAGS ?= -O2 -g -target bpf -mcpu=v3 -Wall -Wno-compare-distinct-pointer-ty
 BPF_CFLAGS += -D__TARGET_ARCH_$(TARGET_ARCH) -Ivendor/bpf-compat -I/usr/include/$(MULTIARCH)
 BPF_HEADERS := $(wildcard vendor/scx/*.h) $(wildcard vendor/lerwatt/*.h) $(wildcard src/shared/*.h)
 
-.PHONY: all native install uninstall clean preflight test-model test-accounting test-burst-profiles test-cpuperf test-lerwatt test-deployment workload reference
+.PHONY: all native install uninstall clean preflight test-model test-accounting test-burst-profiles test-cpuperf test-lerwatt test-deployment test-report workload reference
 all: $(BUILD)/scx_lertick $(BUILD)/burst_workload $(BUILD)/phase2_workload $(BUILD)/lifecycle_workload
 
 native:
@@ -57,6 +57,11 @@ $(BUILD)/test_loader_runtime: tests/test_loader_runtime.c src/userspace/runtime.
 test-deployment: $(BUILD)/test_loader_runtime
 	$(BUILD)/test_loader_runtime
 	sh tests/test_deploy.sh
+	sh tests/test_service.sh
+	python3 tests/test_report.py
+
+test-report:
+	python3 tests/test_report.py
 
 $(BUILD)/burst_workload: benchmarks/burst_workload.c | $(BUILD)
 	$(CC) $(CFLAGS) $< -o $@ -pthread -lm

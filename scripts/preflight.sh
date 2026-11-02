@@ -2,12 +2,15 @@
 # SPDX-License-Identifier: GPL-2.0-only
 set -euo pipefail
 kernel_only=false
-case ${1:-} in
-    '') ;;
-    --kernel-only) kernel_only=true; shift ;;
-    *) echo 'Usage: scripts/preflight.sh [--kernel-only]' >&2; exit 1 ;;
-esac
-[[ $# == 0 ]] || { echo 'Unexpected preflight arguments.' >&2; exit 1; }
+allow_active=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --kernel-only) kernel_only=true ;;
+        --allow-active) allow_active=true ;;
+        *) echo 'Usage: scripts/preflight.sh [--kernel-only] [--allow-active]' >&2; exit 1 ;;
+    esac
+    shift
+done
 if [[ $(uname -s) != Linux ]]; then
     echo "BLOCKER: sched_ext requires a native Linux kernel." >&2
     exit 1
@@ -33,7 +36,7 @@ done
 [[ -r /sys/kernel/sched_ext/state ]] || { echo 'BLOCKER: sched_ext sysfs unavailable.' >&2; exit 1; }
 state=$(cat /sys/kernel/sched_ext/state)
 printf 'sched_ext state: %s\n' "$state"
-[[ $state == disabled ]] || { echo 'NOT READY: another sched_ext scheduler is active; stop it through its own manager first.' >&2; exit 1; }
+[[ $state == disabled ]] || $allow_active || { echo 'NOT READY: another sched_ext scheduler is active; stop it through its own manager first.' >&2; exit 1; }
 if $kernel_only; then
     printf 'Kernel interfaces available; BPF verifier acceptance is checked separately.\n'
     exit 0

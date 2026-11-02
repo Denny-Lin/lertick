@@ -290,7 +290,7 @@ static int publish_demand(struct scx_lertick *skel, struct lt_demand_rec *mem,
 }
 
 static int emit_snapshot(FILE *out, struct scx_lertick *skel, const char *phase, const char *mode_name,
-			 bool cpus)
+			 bool cpus, bool summary_only)
 {
 	int ncpu = libbpf_num_possible_cpus();
 	__u64 sums[LERTICK_STAT_COUNT] = {0};
@@ -325,6 +325,8 @@ static int emit_snapshot(FILE *out, struct scx_lertick *skel, const char *phase,
 	fprintf(out, ",\"live_tasks\":%lld", (long long)sums[LERTICK_STAT_INIT_TASKS] -
 		(long long)sums[LERTICK_STAT_EXIT_TASKS]);
 	fprintf(out, "},\"tasks\":[");
+	if (summary_only)
+		goto finish_tasks;
 	err = bpf_map_get_next_key(bpf_map__fd(skel->maps.task_snapshots), NULL, &next);
 	/* LRU eviction may invalidate the previous key and restart enumeration. */
 	while (!err && count < LERTICK_MAX_TASK_SNAPSHOTS &&
@@ -368,9 +370,12 @@ static int emit_snapshot(FILE *out, struct scx_lertick *skel, const char *phase,
 		}
 		err = bpf_map_get_next_key(bpf_map__fd(skel->maps.task_snapshots), &key, &next);
 	}
+finish_tasks:
 	fputc(']', out);
-	if (cpus && emit_cpus(out, skel))
+	if (cpus && !summary_only && emit_cpus(out, skel))
 		return -1;
+	if (summary_only)
+		fprintf(out, ",\"summary_only\":true");
 	fprintf(out, "}\n");
 	return fflush(out) || ferror(out) ? -1 : 0;
 }
@@ -392,16 +397,21 @@ static void usage(FILE *out, const char *argv0)
 {
 	fprintf(out, "Usage: %s [--mode fixed|shadow|online|ewma] [--duration SEC] [--stats-json FILE]\n"
 		"  --check                 Probe kernel config, BTF, BPF permission, sched_ext\n"
-		"  --verify                Verify selected BPF programs without attaching or pinning\n"
+		"  --verify                Verify selected BPF programs without attaching/pinning;\n"
+		"                          may run while another scheduler is active\n"
 		"  --maintenance -- /absolute/program args\n"
 		"                          Run file maintenance while holding the controller lock\n"
 		"  --version               Print the build version and exit\n"
 		"  --stats-json FILE       Create a new private JSONL file; '-' is stdout\n"
+		"  --summary-only          Aggregate health/counters, no task IDs/names or per-CPU dump\n"
+		"  --full-stats            Explicitly enable full research snapshots\n"
+		"  --notify                Signal readiness through systemd NOTIFY_SOCKET\n"
 		"  --verbose               Emit libbpf debug/verifier diagnostics\n"
 		"  --profile               Time in-kernel model operations (observer cost)\n"
 		"  --model-init bias|ewma  Linear-model prior (default bias; ewma uses burst history)\n"
 		"  --model-update trunc|carry  Fixed-point LMS update precision (default trunc)\n"
-		"  --sample-ms N           Snapshot interval (100..10000, default 1000)\n"
+		"  --sample-ms N           Snapshot interval (100..3600000); default 60000 for\n"
+		"                          continuous use, 1000 for finite research runs\n"
 		"  --tracked-tgid PID      Track this TGID (default comm prefix lertick)\n"
 		"  --track-all             Learn all tasks (includes compiler descendants)\n"
 		"  --fixed-slice-us N      Fixed/warmup slice (default 2000)\n"
@@ -413,10 +423,11 @@ static void usage(FILE *out, const char *argv0)
 		"                          max keeps the kernel default, every CPU at 1024)\n"
 		"  --lerwatt               Attach the optional Lerwatt plug-in: pin contract\n"
 		"                          maps under " LW_CONTRACT_PIN_DIR ", publish demand\n"
-		"  --fault-stall --stall-tgid PID --partial --dangerous-vm-test\n"
+		"  --fault-stall --stall-tgid PID --partial --dangerous-vm-test --duration SEC\n"
 		"                          QEMU-only opted-task watchdog injection\n"
 		"  --expect-watchdog       Succeed only for observed stall watchdog fallback\n"
-		"Duration is finite (1..3600 seconds, default 30). FILE '-' means stdout.\n"
+		"Duration 0 runs until stopped (default); finite runs accept 1..3600 seconds.\n"
+		"Continuous runs default to compact summaries. FILE '-' means stdout.\n"
 		"This GPL-2.0-only scheduler comes with no warranty. See LICENSES/.\n", argv0);
 }
 
@@ -465,10 +476,12 @@ int main(int argc, char **argv)
 	struct sigaction pipe_action = { .sa_handler = SIG_IGN };
 	struct rlimit memlock = { RLIM_INFINITY, RLIM_INFINITY };
 	const char *stats_path = "-", *mode_name = "online";
-	unsigned duration = 30, sample_ms = 1000, mode = LERTICK_MODE_ONLINE;
+	unsigned duration = 0, sample_ms = 1000, mode = LERTICK_MODE_ONLINE;
 	unsigned fixed_us = 2000, min_us = 500, max_us = 5000, tracked_tgid = 0, stall_tgid = 0;
 	bool check = false, partial = false, fault = false, danger = false, expect_watchdog = false, profile = false;
 	bool verify = false, maintenance = false;
+	bool summary_only = false, full_stats = false, sample_explicit = false;
+	bool notify = false, ready_sent = false;
 	bool track_all = false;
 	bool fallback, restored, watchdog_observed = false, stall_kind_known;
 	__u64 start, next_sample, exit_code;
@@ -492,7 +505,7 @@ int main(int argc, char **argv)
 	enum { OPT_CHECK = 1000, OPT_SAMPLE, OPT_TRACK, OPT_FIXED, OPT_MIN, OPT_MAX,
 	       OPT_PARTIAL, OPT_FAULT, OPT_STALL, OPT_DANGER, OPT_EXPECT, OPT_PROFILE, OPT_ALL,
 	       OPT_CPUPERF, OPT_LERWATT, OPT_MODEL_INIT, OPT_MODEL_UPDATE,
-	       OPT_VERIFY, OPT_MAINTENANCE, OPT_VERSION };
+	       OPT_VERIFY, OPT_MAINTENANCE, OPT_VERSION, OPT_SUMMARY, OPT_FULL_STATS, OPT_NOTIFY };
 	static const struct option opts[] = {
 		{ "mode", required_argument, NULL, 'm' }, { "duration", required_argument, NULL, 'd' },
 		{ "stats-json", required_argument, NULL, 'o' }, { "verbose", no_argument, NULL, 'v' },
@@ -500,6 +513,9 @@ int main(int argc, char **argv)
 		{ "verify", no_argument, NULL, OPT_VERIFY },
 		{ "maintenance", no_argument, NULL, OPT_MAINTENANCE },
 		{ "version", no_argument, NULL, OPT_VERSION },
+		{ "summary-only", no_argument, NULL, OPT_SUMMARY },
+		{ "full-stats", no_argument, NULL, OPT_FULL_STATS },
+		{ "notify", no_argument, NULL, OPT_NOTIFY },
 		{ "profile", no_argument, NULL, OPT_PROFILE },
 		{ "track-all", no_argument, NULL, OPT_ALL },
 		{ "sample-ms", required_argument, NULL, OPT_SAMPLE }, { "tracked-tgid", required_argument, NULL, OPT_TRACK },
@@ -522,7 +538,7 @@ int main(int argc, char **argv)
 			else if (!strcmp(optarg, "ewma")) mode = LERTICK_MODE_EWMA;
 			else { usage(stderr, argv[0]); return 2; }
 			break;
-		case 'd': duration = parse_uint(optarg, 1, 3600); break;
+		case 'd': duration = parse_uint(optarg, 0, 3600); break;
 		case 'o': stats_path = optarg; break;
 		case 'v': verbose = true; break;
 		case 'h': usage(stdout, argv[0]); return 0;
@@ -530,7 +546,13 @@ int main(int argc, char **argv)
 		case OPT_VERIFY: verify = true; break;
 		case OPT_MAINTENANCE: maintenance = true; break;
 		case OPT_VERSION: printf("scx_lertick %s\n", LERTICK_VERSION); return 0;
-		case OPT_SAMPLE: sample_ms = parse_uint(optarg, 100, 10000); break;
+		case OPT_SUMMARY: summary_only = true; break;
+		case OPT_FULL_STATS: full_stats = true; break;
+		case OPT_NOTIFY: notify = true; break;
+		case OPT_SAMPLE:
+			sample_ms = parse_uint(optarg, 100, 3600000);
+			sample_explicit = true;
+			break;
 		case OPT_TRACK: tracked_tgid = parse_uint(optarg, 1, 0x7fffffff); break;
 		case OPT_FIXED: fixed_us = parse_uint(optarg, 100, 20000); break;
 		case OPT_MIN: min_us = parse_uint(optarg, 100, 20000); break;
@@ -568,6 +590,7 @@ int main(int argc, char **argv)
 		}
 	}
 	if ((!maintenance && optind != argc) || (check + verify + maintenance) > 1 ||
+	    (summary_only && full_stats) || (notify && (check || verify || maintenance)) ||
 	    (maintenance && (optind >= argc || optind < 1 || strcmp(argv[optind - 1], "--") ||
 			     argv[optind][0] != '/' || fault || partial || lerwatt)) ||
 	    min_us > fixed_us || fixed_us > max_us) {
@@ -576,9 +599,19 @@ int main(int argc, char **argv)
 			fprintf(stderr, "Maintenance requires --maintenance -- /absolute/program args.\n");
 		return 2;
 	}
-	if ((fault && (!partial || !danger || !stall_tgid || !virtual_machine())) ||
+	if (!duration) {
+		if (!full_stats)
+			summary_only = true;
+		if (!sample_explicit)
+			sample_ms = 60000;
+	}
+	if (notify && (!getenv("NOTIFY_SOCKET") || !getenv("NOTIFY_SOCKET")[0])) {
+		fprintf(stderr, "--notify requires a systemd NOTIFY_SOCKET.\n");
+		return 2;
+	}
+	if ((fault && (!duration || !partial || !danger || !stall_tgid || !virtual_machine())) ||
 	    (!fault && (stall_tgid || danger || expect_watchdog))) {
-		fprintf(stderr, "Fault injection requires --partial --dangerous-vm-test --stall-tgid PID in a detected QEMU/KVM VM.\n");
+		fprintf(stderr, "Fault injection requires a finite --duration (1..3600), --partial --dangerous-vm-test --stall-tgid PID in a detected QEMU/KVM VM.\n");
 		return 2;
 	}
 	libbpf_set_print(print_libbpf);
@@ -593,7 +626,7 @@ int main(int argc, char **argv)
 		out = lt_runtime_stats_open(stats_path);
 		if (!out) { perror(stats_path); return 1; }
 	}
-	if (!check) {
+	if (!check && !verify) {
 		lock_fd = lt_runtime_lock(LT_RUNTIME_DIR);
 		if (lock_fd < 0) {
 			fprintf(stderr, "Cannot acquire Lertick controller/maintenance lock: %s.\n",
@@ -621,7 +654,7 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 	setrlimit(RLIMIT_MEMLOCK, &memlock);
-	status = kernel_check(out, !check);
+	status = kernel_check(out, !check && !verify);
 	if (check || status || exit_req)
 		goto cleanup;
 	ncpus = libbpf_num_possible_cpus();
@@ -817,6 +850,9 @@ int main(int argc, char **argv)
 			lerwatt ? "true" : "false");
 		fprintf(out, ",\"model_init\":\"%s\"", model_init_ewma ? "ewma" : "bias");
 		fprintf(out, ",\"model_update\":\"%s\"", model_update_carry ? "carry" : "trunc");
+		fprintf(out, ",\"duration_seconds\":%u,\"sample_ms\":%u,\"summary_only\":%s,\"version\":",
+			duration, sample_ms, summary_only ? "true" : "false");
+		json_string(out, LERTICK_VERSION);
 		if (lerwatt)
 			emit_topology(out, &topo);
 		fprintf(out, "}\n");
@@ -826,7 +862,8 @@ int main(int argc, char **argv)
 		}
 	}
 	start = now_ns(); next_sample = start; next_publish = start;
-	while (!status && !exit_req && !UEI_EXITED(skel, uei) && now_ns() - start < (__u64)duration * 1000000000) {
+	while (!status && !exit_req && !UEI_EXITED(skel, uei) &&
+	       (!duration || now_ns() - start < (__u64)duration * 1000000000)) {
 		if (lerwatt && now_ns() >= next_publish) {
 			if (publish_demand(skel, demand_mem, &topo, cpuperf == LERTICK_CPUPERF_UTIL,
 					   &demand, cpu_buf)) {
@@ -835,13 +872,35 @@ int main(int argc, char **argv)
 			next_publish = now_ns() + LTLW_PUBLISH_PERIOD_NS;
 		}
 		if (now_ns() >= next_sample) {
-			if (emit_snapshot(out, skel, "periodic", mode_name, cpu_report)) {
+			if (emit_snapshot(out, skel, "periodic", mode_name, cpu_report, summary_only)) {
 				fprintf(stderr, "Failed to read/write scheduler telemetry.\n"); status = 1; break;
 			}
 			next_sample = now_ns() + (__u64)sample_ms * 1000000;
 		}
+		if (notify && !ready_sent) {
+			int error;
+
+			/* Confirm the first health sample and current registration before
+			 * allowing a service manager to count this candidate as ready.
+			 */
+			if (exit_req || UEI_EXITED(skel, uei))
+				break;
+			if (!read_text(OPS_PATH, ops, sizeof(ops)) || strcmp(ops, "scx_lertick")) {
+				fprintf(stderr, "Scheduler registration disappeared before readiness.\n");
+				status = 1;
+				break;
+			}
+			error = lt_runtime_notify(getenv("NOTIFY_SOCKET"),
+				"READY=1\nSTATUS=Lertick scheduler registered; initial health check passed");
+			if (error) {
+				fprintf(stderr, "Cannot notify service readiness: %s; detaching.\n", strerror(-error));
+				status = 1;
+				break;
+			}
+			ready_sent = true;
+		}
 		__u64 wake = now_ns() + 50000000ULL;
-		__u64 deadline = start + (__u64)duration * 1000000000ULL;
+		__u64 deadline = duration ? start + (__u64)duration * 1000000000ULL : wake;
 		int sleep_error = lt_runtime_sleep_until(wake < deadline ? wake : deadline, &exit_req);
 
 		if (sleep_error) {
@@ -850,6 +909,8 @@ int main(int argc, char **argv)
 			break;
 		}
 	}
+	if (ready_sent)
+		lt_runtime_notify(getenv("NOTIFY_SOCKET"), "STOPPING=1\nSTATUS=Detaching Lertick scheduler");
 	fallback = UEI_EXITED(skel, uei) != 0;
 	if (fallback) {
 		watchdog_observed = expect_watchdog && (__u64)skel->data->uei.kind == stall_kind;
@@ -868,7 +929,7 @@ int main(int argc, char **argv)
 		if (!watchdog_observed) status = 1;
 	}
 	if (expect_watchdog && !watchdog_observed) status = 1;
-	if (emit_snapshot(out, skel, "final", mode_name, cpu_report)) status = 1;
+	if (emit_snapshot(out, skel, "final", mode_name, cpu_report, summary_only)) status = 1;
 	/* Lerwatt sees the demand go stale and falls back to running alone. */
 	exit_code = UEI_REPORT(skel, uei);
 	fprintf(out, "{\"event\":\"exit\",\"unexpected_fallback\":%s,\"watchdog_observed\":%s,\"watchdog_expected\":%s,\"watchdog_triggered\":%s,\"exit_kind\":%d,\"exit_code\":%lld,\"reason\":",

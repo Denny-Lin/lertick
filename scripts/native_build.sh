@@ -3,6 +3,9 @@
 # Native build against the running kernel; no kernel or service changes.
 set -eu
 fail() { printf 'lertick: %s\n' "$*" >&2; exit 1; }
+allow_active=
+case ${1:-} in '') ;; --allow-active) allow_active=--allow-active; shift ;; *) fail 'usage: scripts/native_build.sh [--allow-active]' ;; esac
+[ "$#" -eq 0 ] || fail 'unexpected native-build arguments'
 [ "$(uname -s)" = Linux ] || fail 'native deployment requires Linux'
 [ "$(id -u)" -ne 0 ] || fail 'build as your normal user; dependency downloads/builds never run as root'
 task_root=$(CDPATH= cd -P "$(dirname "$0")/.." && pwd)
@@ -24,7 +27,7 @@ if [ -z "$task_clang" ]; then
 fi
 [ -n "$task_clang" ] && command -v "$task_clang" >/dev/null 2>&1 || fail 'install Clang/LLVM with a BPF backend (tested: clang-18)'
 "$task_clang" -print-targets 2>/dev/null | grep -Eq '^[[:space:]]+bpf' || fail "selected compiler lacks a BPF backend: $task_clang"
-CLANG=$task_clang BPFTOOL=$task_bpftool "$task_root/scripts/preflight.sh" --kernel-only
+CLANG=$task_clang BPFTOOL=$task_bpftool "$task_root/scripts/preflight.sh" --kernel-only ${allow_active:+"$allow_active"}
 "$task_pkg" --exists libelf zlib || fail 'libelf/zlib development files are missing (Ubuntu: libelf-dev zlib1g-dev)'
 mkdir -p "$task_root/build"
 # Retain this lock file: unlinking it could create a second independent lock.
@@ -37,7 +40,7 @@ task_prefix=${LERTICK_LIBBPF_PREFIX:-"$task_deps/install"}
 PKG_CONFIG_PATH="$task_prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 export PKG_CONFIG_PATH
 "$task_pkg" --atleast-version=1.7.0 libbpf || fail 'the isolated libbpf installation is unavailable or too old'
-CLANG=$task_clang BPFTOOL=$task_bpftool PKG_CONFIG=$task_pkg "$task_root/scripts/preflight.sh"
+CLANG=$task_clang BPFTOOL=$task_bpftool PKG_CONFIG=$task_pkg "$task_root/scripts/preflight.sh" ${allow_active:+"$allow_active"}
 task_btf=$(sha256sum /sys/kernel/btf/vmlinux)
 task_btf=${task_btf%% *}
 task_clang_version=$("$task_clang" --version | sed -n '1p')

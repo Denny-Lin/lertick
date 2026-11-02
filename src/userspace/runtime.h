@@ -20,5 +20,9 @@ int lt_runtime_require_idle(const char *state_path, bool allow_missing);
 int lt_runtime_run_locked(int lock_fd, char **argv);
 /* Return clock_nanosleep's errno value, or zero on success/cancellation. */
 int lt_runtime_sleep_until(uint64_t deadline_ns, volatile sig_atomic_t *stop);
+/* Send one systemd-compatible notification, without libsystemd. Filesystem
+ * sockets and Linux @abstract Unix datagram sockets are supported.
+ */
+int lt_runtime_notify(const char *socket_name, const char *message);
 
 #endif
