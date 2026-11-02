@@ -74,5 +74,8 @@ void ltlw_publish(struct lt_demand_rec *slot, const struct lt_demand_rec *val);
  */
 int ltlw_pin_prepare(const char *dir, const char *const *pins, int npins,
 		     char *err, size_t errlen);
+/* Best-effort discovery never unlinks or changes permissions on existing pins. */
+int ltlw_pin_prepare_auto(const char *dir, const char *const *pins, int npins,
+			  char *err, size_t errlen);
 
 #endif /* LERTICK_LERWATT_PLUGIN_H */

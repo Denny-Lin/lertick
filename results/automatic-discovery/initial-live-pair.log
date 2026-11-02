@@ -1,0 +1,19 @@
+test_deploy: plan/check/verify, indefinite/finite defaults, signals, trust paths, maintenance, staging and build fingerprints passed (stubs only)
+Integration ABI 2 golden check passed (56 values); peer compiled ABI matches.
+systemd: install enabled an unlimited ready worker (nominal)
+systemd: stopped worker was recovered and restarted
+systemd: missing sensor restored controls; returning sensor recovered service
+systemd: uninstall stopped, disabled and restored the validation service
+{"result": "passed", "checks": {"installation_prediction_mode": "nominal", "optional_coordination_waits_independently": true, "enabled_unlimited_ready": true, "watchdog_restores_and_restarts": true, "sensor_failure_recovers": true, "uninstall_stops_disables_restores": true}, "hardware": "temporary file fixture"}
+systemd: installed helper enabled an unlimited validated worker; absent peer reports waiting
+systemd: active off/on preserved scheduling and boot intent, and replaced shared maps
+systemd: stop/update/rollback preserved enabled-but-stopped intent and private integration setting
+systemd: uninstall disabled/detached/removed the validation service; configuration retained
+{"result": "passed", "checks": {"install_does_not_start_or_enable": true, "enabled_unlimited_ready_with_optional_peer_absent": true, "active_integration_toggle_restarts_only_owned_service": true, "stop_update_rollback_preserve_configuration_and_intent": true, "uninstall_disables_detaches_removes_and_retains_config": true}, "environment": {"os_release": "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.5 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n", "architecture": "aarch64", "kernel": "7.0.0-38-generic", "systemd": "systemd 255 (255.4-1ubuntu8.18)", "elapsed_seconds": 4.99}, "scope": "real sched_ext attachment and PID 1 lifecycle in an opted-in VM; no physical power controls or long hardware run"}
+integration: Lerwatt-first startup connected; BPF consumed contracts
+integration: online-to-EWMA scheduler change reconnected while Lerwatt stayed running
+integration: frozen demand expired and resumed without stale control
+integration: temporal-to-adaptive predictor change preserved Lertick PID and session
+integration: reverse startup order connected
+{"environment": {"kernel": "7.0.0-38-generic", "architecture": "aarch64", "os_release": "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.5 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n", "systemd": "systemd 255 (255.4-1ubuntu8.18)"}, "hardware": "temporary RK3588 simulated CPU-control files; real sched_ext/BPF", "checks": {"lerwatt_first_continuous_connection": true, "lertick_restart_new_session_reconnects": true, "independent_scheduler_policy_change": true, "frozen_demand_expires_and_recovers": true, "lerwatt_restart_restores_expires_reconnects": true, "independent_power_predictor_change": true, "lertick_first_connection": true, "final_control_restore_scheduler_fallback_pin_cleanup": true}, "result": "passed"}
+integration artifacts: /var/tmp/lertick-power-integration-qkldozcs

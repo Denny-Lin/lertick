@@ -1,0 +1,49 @@
+{
+  "paired_runs": 30,
+  "all_work_completed": true,
+  "pairs_with_regressions": 2,
+  "corrected_queries": 2,
+  "limits": [
+    "One simulated board model; no hardware energy or Linux superiority claim.",
+    "Finite FIFO work is fully drained; historical served percentages are not used.",
+    "Correction queries are evaluations, not distinct decisions or savings.",
+    "Controller CPU time is simulator-harness measurement, not a real-time guarantee.",
+    "Descriptive paired differences, not statistical significance."
+  ],
+  "same_outcomes_as_prior_excluding_cpu_timing": true,
+  "regressions": [
+    {
+      "pattern": 4,
+      "seed": 7,
+      "joint": false,
+      "delta": {
+        "makespan_s": 0.01999999999998181,
+        "simulated_board_j": -0.259262999999919,
+        "job_p99_s": 0.01999999999998181,
+        "point_mae_c": 0.0028409999999999824,
+        "ceiling_moves": 0
+      },
+      "regressions": [
+        "makespan_s",
+        "job_p99_s",
+        "point_mae_c"
+      ]
+    },
+    {
+      "pattern": 4,
+      "seed": 99,
+      "joint": false,
+      "delta": {
+        "makespan_s": 0.06999999999993634,
+        "simulated_board_j": -0.12945599999966362,
+        "job_p99_s": 0.05999999999994543,
+        "point_mae_c": -0.0020789999999999975,
+        "ceiling_moves": 0
+      },
+      "regressions": [
+        "makespan_s",
+        "job_p99_s"
+      ]
+    }
+  ]
+}

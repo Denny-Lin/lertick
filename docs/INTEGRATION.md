@@ -2,7 +2,7 @@
 
 [← Project home](../README.md) · [Lertick](https://github.com/Denny-Lin/lertick) · [Lerwatt](https://github.com/Denny-Lin/lerwatt)
 
-Use each controller on its own, or enable an optional local link. **Lertick owns scheduling; Lerwatt owns CPU power constraints.** They exchange demand and limits while keeping their models, training and service lifecycles separate.
+Each controller works on its own and discovers an optional compatible local peer automatically. **Lertick owns scheduling; Lerwatt owns CPU power constraints.** They exchange demand and limits while keeping their models, training and service lifecycles separate.
 
 ```mermaid
 flowchart LR
@@ -16,34 +16,60 @@ flowchart LR
     linkStyle default stroke:#86868b,stroke-width:1.5px
 ```
 
-## Enable the link
+## Automatic discovery
 
-First satisfy each project's native Linux requirements. Lerwatt needs usable CPUFreq controls and temperature inputs. Lertick additionally needs a compatible running sched_ext kernel, BTF and its BPF toolchain. Installing these services does not install or change the kernel. A compatible running kernel needs no reboot for activation; changing kernels can require one.
+Install each project normally after satisfying its native Linux requirements.
+Lerwatt needs CPUFreq controls, temperature inputs and Linux userspace BPF
+headers. Lertick also needs a supported running sched_ext kernel, BTF and its
+BPF toolchain. Neither installer changes the kernel or installs its peer.
 
-From the **Lerwatt checkout**, as your normal user:
+From the Lerwatt checkout, as your normal user:
 
 ```sh
 ./deploy.sh check
-./deploy.sh install --lertick --period-ms 100
-lerwatt status
+./deploy.sh install
 ```
 
-This builds the BPF-capable daemon locally, then installs, enables and starts Lerwatt. Usable Linux userspace BPF headers are required; Lerwatt's contract uses raw BPF syscalls without libbpf. Its service configuration stores `contract=auto`. Coordination accepts a **10–100 ms** control period; the default is 100 ms. A normal independent installation keeps `contract=off` and the BPF-free build.
-
-From the **Lertick checkout**, as your normal user:
+From the Lertick checkout, as your normal user:
 
 ```sh
 ./deploy.sh install
-lertick integration on
 lertick enable
-lertick status
 ```
 
-Lertick installation adds files without starting or enabling its service. `integration on` saves the optional link setting; `enable` starts now and at boot. Changing integration on an already running managed Lertick service restarts that service with verified settings, preserving its prior active/enabled intent. It does not restart Lerwatt.
+New Lerwatt installations save `contract=auto` and build the BPF-capable daemon;
+new Lertick installations save `lerwatt=auto`. No `--lertick` installation flag
+or `integration on` command is needed. Lertick installation still does not start
+or enable scheduling: `enable` is the user's normal service activation, not a
+peer-specific step. A plain upgrade preserves saved settings, including explicit
+`off` opt-outs from earlier versions. For such a saved opt-out, choose auto once
+with `./deploy.sh install --lertick` or `lertick integration auto` respectively.
 
-**Either project may start first.** An absent or incompatible peer leaves the other operating independently. Neither unit requires the peer through `Requires=` or `BindsTo=`, and neither project starts, stops, upgrades or restarts the peer.
+**Either project may start first.** A service may be installed without running;
+installation files alone do not prove a usable peer. Connection requires the
+real maps plus matching ABI, topology, attachment session and fresh records.
+Missing, stopped, removed, expired or incompatible peers leave local operation
+independent. Running peers reconnect automatically; uninstalling a peer does not
+stop the remaining controller. Neither service has `Requires=` or `BindsTo=` on
+the other, and neither starts, stops, upgrades or retrains its peer.
 
-## Check or turn off coordination
+Discovery is separate from prediction. Lerwatt keeps its own learned thermal
+model and MPC, Lertick keeps its own scheduler model. Peer appearance/disappearance
+never changes the selected prediction algorithm or private weights. New Lerwatt
+installs use nominal MPC; cooperative prediction can be selected separately
+with `--prediction cooperative` and retains all reliability gates. Earlier
+saved cooperative choices are preserved. Installing Lertick does not make
+Lerwatt forecasts more accurate.
+
+Lertick's automatic mode is best effort: inability to discover topology, obtain
+an attachment identity or publish maps leaves ordinary scheduling available.
+It never overwrites foreign pins. Transport unavailable at initial attachment
+requires a later local Lertick restart after the environment is repaired; this
+is distinct from an absent peer, which connects later without restart. Raw
+loader `--lerwatt` retains strict failure behavior for diagnostics. Raw loader
+users can select `--lerwatt-auto`; normal helper/service runs do so automatically.
+
+## Inspect or override discovery
 
 ```sh
 lerwatt status
@@ -53,21 +79,27 @@ lertick status
 sudo systemctl show lerwatt.service lertick.service --property=StatusText
 ```
 
-Configured `auto`/`on` means the link is requested. Inspect current worker status and logs for **connected**, **waiting** or **off**; an enabled service or saved setting alone does not prove a fresh compatible exchange. Waiting can mean the peer has not started, its records expired, or its ABI/topology/session is incompatible. Do not interpret a counter from an older run as proof of a current connection.
+Configured `auto` means discovery is enabled; it does not mean connected.
+Worker status/logs report **connected**, **waiting** or **off**. Waiting includes
+an absent/inactive peer and rejected stale/incompatible records. Do not interpret
+an older counter or an installed executable as current connectivity. Coordination
+uses a 10–100 ms control period, with 100 ms the default.
 
-To keep both controllers but remove their optional link, run this from the Lerwatt checkout:
+Advanced explicit opt-outs remain available:
 
 ```sh
+# From the Lerwatt checkout:
 ./deploy.sh install --no-lertick
-```
-
-Then:
-
-```sh
+# Only the Lertick managed service:
 lertick integration off
 ```
 
-Plain Lerwatt reinstallation and Lertick updates preserve their saved integration settings. Lerwatt stores its setting in `/etc/lerwatt/lerwatt.conf`; Lertick uses `/etc/lertick/integration.conf`. Both are private root-owned data files, parsed without sourcing shell code. Turning off coordination does not disable either controller's own learning.
+These choices affect exchange, not either controller's learning. They do not
+change Lerwatt's selected nominal/cooperative predictor. Lertick changes only
+its own service when a managed integration setting is explicitly changed.
+The strict legacy `lertick integration on` mode remains available. Configuration
+is root-private strict data in `/etc/lerwatt/lerwatt.conf` and
+`/etc/lertick/integration.conf`, never sourced as shell commands.
 
 ## Control ownership
 

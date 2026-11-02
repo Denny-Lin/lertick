@@ -1,0 +1,559 @@
+mkdir -p build
+cc -DLERWATT_VERSION=\"source\" -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -o build/lerwattd src/hal_fs.c src/hal_discover.c src/hal_sample.c src/hal_actuate.c src/controller.c src/learn.c src/forecast.c src/temporal.c src/predict.c src/contract.c src/notify.c src/checkpoint.c src/lerwattd.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -Isim -o build/lerwatt-sim sim/platform_rk3588.c sim/model.c sim/abi.c sim/load.c src/contract.c sim/lerwatt_sim.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -Isim -o build/test_model tests/test_model.c sim/platform_rk3588.c sim/model.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -o build/test_learn tests/test_learn.c src/learn.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -Isim -o build/test_forecast tests/test_forecast.c sim/platform_rk3588.c sim/model.c src/learn.c src/forecast.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -o build/test_forecast_feedback tests/test_forecast_feedback.c src/forecast.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -o build/test_temporal tests/test_temporal.c src/temporal.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -Isim -o build/test_control_forecast tests/test_control_forecast.c sim/platform_rk3588.c sim/model.c src/controller.c src/learn.c src/forecast.c src/temporal.c src/predict.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -o build/test_controller tests/test_controller.c src/controller.c src/learn.c src/forecast.c src/temporal.c src/predict.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -o build/test_predict tests/test_predict.c src/controller.c src/learn.c src/forecast.c src/temporal.c src/predict.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -Isim -o build/test_cooperative_loop tests/test_cooperative_loop.c sim/platform_rk3588.c sim/model.c src/controller.c src/learn.c src/forecast.c src/temporal.c src/predict.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -Isim -o build/test_closed_loop tests/test_closed_loop.c sim/platform_rk3588.c sim/model.c src/controller.c src/learn.c src/forecast.c src/temporal.c src/predict.c -lm -lrt
+build/test_model
+full load, passive cooling, no throttling: die 77.7 C, big 84.9 C, little 81.7 C, CPU heat 6.42 W, board 10.86 W
+bare board, full load, step_wise on: big zone 85.9 C, state 4, 4454 throttle steps
+idle, fan: board 2.93 W, die 25.9 C
+test_model: all checks passed
+build/test_learn
+test_learn: a=0.0199 c=-0.00836 ambient=24.6 after 197 samples
+test_learn: all checks passed
+build/test_forecast
+{"case":"steps-passive-seed7","seed":7,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.4728,"package_persistence_mae_c":0.4346,"hot_mae_c":0.5406,"hot_persistence_mae_c":0.4779,"hot_rmse_c":0.7595,"constant_package_mae_c":0.4728,"constant_hot_mae_c":0.5406,"adaptive_package_mae_c":0.4727,"adaptive_hot_mae_c":0.4686,"adaptive_hot_rmse_c":0.7206,"hot_persistence_rmse_c":0.8249,"all_samples":26853,"all_adaptive_hot_mae_c":0.4686,"all_persistence_hot_mae_c":0.4779,"all_adaptive_hot_rmse_c":0.7206,"selected":[144,2365,0,24344]}
+{"case":"burst2-bare-seed99","seed":99,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.3319,"package_persistence_mae_c":0.3130,"hot_mae_c":1.4259,"hot_persistence_mae_c":1.8220,"hot_rmse_c":1.6772,"constant_package_mae_c":1.5748,"constant_hot_mae_c":3.3919,"adaptive_package_mae_c":0.3677,"adaptive_hot_mae_c":0.9361,"adaptive_hot_rmse_c":1.1324,"hot_persistence_rmse_c":2.1463,"all_samples":26853,"all_adaptive_hot_mae_c":0.9361,"all_persistence_hot_mae_c":1.8220,"all_adaptive_hot_rmse_c":1.1324,"selected":[0,0,0,26853]}
+{"case":"burst03-fan-35C","seed":7,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.2463,"package_persistence_mae_c":0.2492,"hot_mae_c":0.5163,"hot_persistence_mae_c":0.5151,"hot_rmse_c":0.5778,"constant_package_mae_c":0.5311,"constant_hot_mae_c":2.2938,"adaptive_package_mae_c":0.2549,"adaptive_hot_mae_c":0.4514,"adaptive_hot_rmse_c":0.5352,"hot_persistence_rmse_c":0.7082,"all_samples":26853,"all_adaptive_hot_mae_c":0.4514,"all_persistence_hot_mae_c":0.5151,"all_adaptive_hot_rmse_c":0.5352,"selected":[0,0,0,26853]}
+{"case":"steps-bare-15C-seed13579","seed":13579,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.4837,"package_persistence_mae_c":0.6210,"hot_mae_c":0.7202,"hot_persistence_mae_c":0.6895,"hot_rmse_c":1.0453,"constant_package_mae_c":0.4369,"constant_hot_mae_c":0.6020,"adaptive_package_mae_c":0.4313,"adaptive_hot_mae_c":0.5242,"adaptive_hot_rmse_c":0.7347,"hot_persistence_rmse_c":0.9608,"all_samples":26853,"all_adaptive_hot_mae_c":0.5242,"all_persistence_hot_mae_c":0.6895,"all_adaptive_hot_rmse_c":0.7347,"selected":[27,4330,68,22428]}
+{"case":"burst2-passive-35C-seed2026","seed":2026,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.3827,"package_persistence_mae_c":0.3626,"hot_mae_c":1.3909,"hot_persistence_mae_c":1.8265,"hot_rmse_c":1.6349,"constant_package_mae_c":0.6469,"constant_hot_mae_c":2.1709,"adaptive_package_mae_c":0.3923,"adaptive_hot_mae_c":0.9087,"adaptive_hot_rmse_c":1.1156,"hot_persistence_rmse_c":2.1613,"all_samples":26853,"all_adaptive_hot_mae_c":0.9087,"all_persistence_hot_mae_c":1.8265,"all_adaptive_hot_rmse_c":1.1156,"selected":[0,0,0,26853]}
+{"case":"burst03-bare-seed2718","seed":2718,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.3565,"package_persistence_mae_c":0.3453,"hot_mae_c":0.4766,"hot_persistence_mae_c":0.4366,"hot_rmse_c":0.5959,"constant_package_mae_c":1.3834,"constant_hot_mae_c":3.4102,"adaptive_package_mae_c":0.3630,"adaptive_hot_mae_c":0.4160,"adaptive_hot_rmse_c":0.5317,"hot_persistence_rmse_c":0.6725,"all_samples":26853,"all_adaptive_hot_mae_c":0.4160,"all_persistence_hot_mae_c":0.4366,"all_adaptive_hot_rmse_c":0.5317,"selected":[0,0,0,26853]}
+{"case":"ramp-passive-seed424242","seed":424242,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.4322,"package_persistence_mae_c":0.3828,"hot_mae_c":0.4888,"hot_persistence_mae_c":0.4618,"hot_rmse_c":0.6015,"constant_package_mae_c":0.4322,"constant_hot_mae_c":0.4888,"adaptive_package_mae_c":0.4322,"adaptive_hot_mae_c":0.4411,"adaptive_hot_rmse_c":0.5537,"hot_persistence_rmse_c":0.6893,"all_samples":26853,"all_adaptive_hot_mae_c":0.4411,"all_persistence_hot_mae_c":0.4618,"all_adaptive_hot_rmse_c":0.5537,"selected":[0,1111,0,25742]}
+{"case":"alternating-clusters-bare-seed619","seed":619,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.4327,"package_persistence_mae_c":0.3646,"hot_mae_c":0.6787,"hot_persistence_mae_c":0.6369,"hot_rmse_c":1.2525,"constant_package_mae_c":0.4327,"constant_hot_mae_c":0.6787,"adaptive_package_mae_c":0.4325,"adaptive_hot_mae_c":0.6507,"adaptive_hot_rmse_c":1.2485,"hot_persistence_rmse_c":1.3378,"all_samples":26853,"all_adaptive_hot_mae_c":0.6507,"all_persistence_hot_mae_c":0.6369,"all_adaptive_hot_rmse_c":1.2485,"selected":[161,5767,0,20925]}
+{"case":"regime-changes-bare-seed701","seed":701,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.3936,"package_persistence_mae_c":0.3692,"hot_mae_c":0.8939,"hot_persistence_mae_c":0.9262,"hot_rmse_c":1.1863,"constant_package_mae_c":1.2214,"constant_hot_mae_c":2.6325,"adaptive_package_mae_c":0.4009,"adaptive_hot_mae_c":0.6540,"adaptive_hot_rmse_c":0.8674,"hot_persistence_rmse_c":1.3907,"all_samples":26853,"all_adaptive_hot_mae_c":0.6540,"all_persistence_hot_mae_c":0.9262,"all_adaptive_hot_rmse_c":0.8674,"selected":[1639,0,2138,23076]}
+{"case":"duty20-bare-35C-seed883","seed":883,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.6055,"package_persistence_mae_c":0.5665,"hot_mae_c":1.3540,"hot_persistence_mae_c":2.0748,"hot_rmse_c":1.6954,"constant_package_mae_c":1.2501,"constant_hot_mae_c":3.4094,"adaptive_package_mae_c":0.5702,"adaptive_hot_mae_c":1.3540,"adaptive_hot_rmse_c":1.6954,"hot_persistence_rmse_c":2.5945,"all_samples":26853,"all_adaptive_hot_mae_c":1.3540,"all_persistence_hot_mae_c":2.0748,"all_adaptive_hot_rmse_c":1.6954,"selected":[0,0,26853,0]}
+{"case":"random-steps-fan-15C-seed9959","seed":9959,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.4525,"package_persistence_mae_c":0.3864,"hot_mae_c":0.5930,"hot_persistence_mae_c":0.5537,"hot_rmse_c":0.8690,"constant_package_mae_c":0.4525,"constant_hot_mae_c":0.5930,"adaptive_package_mae_c":0.4525,"adaptive_hot_mae_c":0.5475,"adaptive_hot_rmse_c":0.8364,"hot_persistence_rmse_c":0.9289,"all_samples":26853,"all_adaptive_hot_mae_c":0.5475,"all_persistence_hot_mae_c":0.5537,"all_adaptive_hot_rmse_c":0.8364,"selected":[84,854,0,25915]}
+{"case":"burst45-passive-seed1701","seed":1701,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.5226,"package_persistence_mae_c":0.5004,"hot_mae_c":0.9437,"hot_persistence_mae_c":1.0449,"hot_rmse_c":1.7919,"constant_package_mae_c":0.5226,"constant_hot_mae_c":0.9437,"adaptive_package_mae_c":0.5233,"adaptive_hot_mae_c":0.9452,"adaptive_hot_rmse_c":1.7643,"hot_persistence_rmse_c":1.8246,"all_samples":26853,"all_adaptive_hot_mae_c":0.9452,"all_persistence_hot_mae_c":1.0449,"all_adaptive_hot_rmse_c":1.7643,"selected":[1705,1689,0,23459]}
+{"case":"varying-period-passive-30C-seed104729","seed":104729,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.3767,"package_persistence_mae_c":0.3537,"hot_mae_c":1.3838,"hot_persistence_mae_c":1.7906,"hot_rmse_c":1.7003,"constant_package_mae_c":0.5736,"constant_hot_mae_c":3.4865,"adaptive_package_mae_c":0.3800,"adaptive_hot_mae_c":1.1864,"adaptive_hot_rmse_c":1.5538,"hot_persistence_rmse_c":2.4416,"all_samples":26853,"all_adaptive_hot_mae_c":1.1864,"all_persistence_hot_mae_c":1.7906,"all_adaptive_hot_rmse_c":1.5538,"selected":[0,0,7003,19850]}
+{"case":"asymmetric-steps-bare-20C-seed130363","seed":130363,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.5082,"package_persistence_mae_c":0.6260,"hot_mae_c":1.0907,"hot_persistence_mae_c":0.7791,"hot_rmse_c":1.6013,"constant_package_mae_c":0.4712,"constant_hot_mae_c":0.6758,"adaptive_package_mae_c":0.4735,"adaptive_hot_mae_c":0.6159,"adaptive_hot_rmse_c":0.9496,"hot_persistence_rmse_c":1.1528,"all_samples":26853,"all_adaptive_hot_mae_c":0.6159,"all_persistence_hot_mae_c":0.7791,"all_adaptive_hot_rmse_c":0.9496,"selected":[103,4607,133,22010]}
+{"case":"random-fast-bare-35C-seed155921","seed":155921,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.5461,"package_persistence_mae_c":0.5120,"hot_mae_c":1.2352,"hot_persistence_mae_c":0.7033,"hot_rmse_c":1.5878,"constant_package_mae_c":0.4951,"constant_hot_mae_c":0.8580,"adaptive_package_mae_c":0.4958,"adaptive_hot_mae_c":0.6963,"adaptive_hot_rmse_c":1.1118,"hot_persistence_rmse_c":1.1176,"all_samples":26853,"all_adaptive_hot_mae_c":0.6963,"all_persistence_hot_mae_c":0.7033,"all_adaptive_hot_rmse_c":1.1118,"selected":[14217,453,97,12086]}
+{"case":"sparse-bursts-fan-seed196613","seed":196613,"replicate":0,"horizon_s":5,"samples":23424,"package_mae_c":0.3096,"package_persistence_mae_c":0.2773,"hot_mae_c":1.0422,"hot_persistence_mae_c":1.2247,"hot_rmse_c":1.6409,"constant_package_mae_c":0.3575,"constant_hot_mae_c":1.3411,"adaptive_package_mae_c":0.3067,"adaptive_hot_mae_c":1.0425,"adaptive_hot_rmse_c":1.6410,"hot_persistence_rmse_c":1.9114,"all_samples":26853,"all_adaptive_hot_mae_c":1.0603,"all_persistence_hot_mae_c":1.2192,"all_adaptive_hot_rmse_c":1.6710,"selected":[0,0,23353,71]}
+{"case":"sine-passive-15C-seed262147","seed":262147,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.4638,"package_persistence_mae_c":0.4143,"hot_mae_c":0.6726,"hot_persistence_mae_c":0.7397,"hot_rmse_c":0.8534,"constant_package_mae_c":0.4638,"constant_hot_mae_c":0.6726,"adaptive_package_mae_c":0.4640,"adaptive_hot_mae_c":0.6853,"adaptive_hot_rmse_c":0.8690,"hot_persistence_rmse_c":0.9938,"all_samples":26853,"all_adaptive_hot_mae_c":0.6853,"all_persistence_hot_mae_c":0.7397,"all_adaptive_hot_rmse_c":0.8690,"selected":[250,15359,0,11244]}
+{"case":"cooling-change-35C-seed327673","seed":327673,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.4290,"package_persistence_mae_c":0.3782,"hot_mae_c":0.5225,"hot_persistence_mae_c":0.4122,"hot_rmse_c":0.6474,"constant_package_mae_c":0.4290,"constant_hot_mae_c":0.5225,"adaptive_package_mae_c":0.3997,"adaptive_hot_mae_c":0.4438,"adaptive_hot_rmse_c":0.5866,"hot_persistence_rmse_c":0.6427,"all_samples":26853,"all_adaptive_hot_mae_c":0.4438,"all_persistence_hot_mae_c":0.4122,"all_adaptive_hot_rmse_c":0.5866,"selected":[2483,38,0,24332]}
+{"case":"noisy-burst-bare-seed393241","seed":393241,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.6844,"package_persistence_mae_c":0.6813,"hot_mae_c":1.5235,"hot_persistence_mae_c":1.8569,"hot_rmse_c":1.8195,"constant_package_mae_c":1.6232,"constant_hot_mae_c":3.4374,"adaptive_package_mae_c":0.7090,"adaptive_hot_mae_c":1.0777,"adaptive_hot_rmse_c":1.3329,"hot_persistence_rmse_c":2.2316,"all_samples":26853,"all_adaptive_hot_mae_c":1.0777,"all_persistence_hot_mae_c":1.8569,"all_adaptive_hot_rmse_c":1.3329,"selected":[0,0,0,26853]}
+{"case":"duty2of7-bare-seed458879","seed":458879,"replicate":0,"horizon_s":5,"samples":26853,"package_mae_c":0.4752,"package_persistence_mae_c":0.4459,"hot_mae_c":1.2071,"hot_persistence_mae_c":2.0813,"hot_rmse_c":1.5079,"constant_package_mae_c":1.2470,"constant_hot_mae_c":4.2069,"adaptive_package_mae_c":0.4727,"adaptive_hot_mae_c":1.2071,"adaptive_hot_rmse_c":1.5079,"hot_persistence_rmse_c":2.6306,"all_samples":26853,"all_adaptive_hot_mae_c":1.2071,"all_persistence_hot_mae_c":2.0813,"all_adaptive_hot_rmse_c":1.5079,"selected":[0,0,26853,0]}
+build/test_forecast_feedback
+test_forecast_feedback: causality, delayed labels, fallback and clock checks passed
+build/test_temporal
+test_temporal: delayed labels, causal history, reference fallback and bounds passed (7344 bytes/cluster)
+python3 tests/test_runtime_forecast.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.007s
+
+OK
+python3 tests/test_runtime_summary.py
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.002s
+
+OK
+python3 tests/test_cooperative_summary.py
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.000s
+
+OK
+build/test_control_forecast --temporal --integrated --development
+{"case":"steps-passive","replicate":0,"seed":7001,"samples":26853,"persistence_mae_c":0.486501,"current_mae_c":0.484831,"candidate_mae_c":0.484831,"persistence_rmse_c":0.840648,"current_rmse_c":0.741659,"candidate_rmse_c":0.741659,"current_model_ready":26853,"candidate_model_ready":26853,"peak_c":73.0,"throttle_steps":0,"served":0.801200}
+{"case":"burst2-bare","replicate":0,"seed":7003,"samples":26853,"persistence_mae_c":1.680119,"current_mae_c":0.944647,"candidate_mae_c":0.747381,"persistence_rmse_c":2.020321,"current_rmse_c":1.165410,"candidate_rmse_c":0.965414,"current_model_ready":26840,"candidate_model_ready":26853,"peak_c":82.2,"throttle_steps":0,"served":0.663236}
+{"case":"burst03-fan","replicate":0,"seed":7013,"samples":26853,"persistence_mae_c":0.506751,"current_mae_c":0.449531,"candidate_mae_c":0.449531,"persistence_rmse_c":0.701677,"current_rmse_c":0.533216,"candidate_rmse_c":0.533216,"current_model_ready":26853,"candidate_model_ready":26853,"peak_c":47.2,"throttle_steps":0,"served":0.580275}
+{"case":"asymmetric-bare","replicate":0,"seed":7019,"samples":26853,"persistence_mae_c":0.727812,"current_mae_c":0.597914,"candidate_mae_c":0.597914,"persistence_rmse_c":1.097105,"current_rmse_c":0.902890,"candidate_rmse_c":0.902890,"current_model_ready":26853,"candidate_model_ready":26853,"peak_c":82.2,"throttle_steps":0,"served":0.755197}
+{"case":"sine-passive","replicate":0,"seed":7027,"samples":26853,"persistence_mae_c":0.743890,"current_mae_c":0.663892,"candidate_mae_c":0.663892,"persistence_rmse_c":0.999014,"current_rmse_c":0.850244,"candidate_rmse_c":0.850244,"current_model_ready":26853,"candidate_model_ready":26853,"peak_c":55.5,"throttle_steps":0,"served":0.792567}
+{"case":"regime-changes-bare","replicate":0,"seed":7039,"samples":26853,"persistence_mae_c":0.874370,"current_mae_c":0.644139,"candidate_mae_c":0.587251,"persistence_rmse_c":1.316337,"current_rmse_c":0.872167,"candidate_rmse_c":0.801227,"current_model_ready":26849,"candidate_model_ready":26853,"peak_c":82.2,"throttle_steps":0,"served":0.618728}
+build/test_controller
+test_controller: fallback, joint allocation and raw-guard checks passed
+build/test_predict
+control influence: original 2400000, cooperative 1800000, raw guard 1200000 kHz
+test_predict: action support, delayed learning, pure queries, backend replacement and MPC influence passed (14368 bytes/predictor)
+build/test_closed_loop
+| scenario               | controller | peak C | s >85C  | kernel | ceil   | freq     | mean W  | served  |
+|------------------------|------------|--------|---------|--------|--------|----------|---------|---------|
+| full load, passive     | off        |   84.1 |     0.0 |      0 |      0 |       16 |   10.61 |  69.38% |
+| full load, passive     | rule       |   81.3 |     0.0 |      0 |      2 |       18 |   10.48 |  68.43% |
+| full load, passive     | learned    |   81.3 |     0.0 |      0 |      2 |       18 |   10.48 |  68.38% |
+| big-core load, passive | off        |   72.1 |     0.0 |      0 |      0 |       12 |    8.76 |  99.99% |
+| big-core load, passive | rule       |   72.1 |     0.0 |      0 |      0 |       12 |    8.76 |  99.99% |
+| big-core load, passive | learned    |   72.1 |     0.0 |      0 |      0 |       12 |    8.76 |  99.99% |
+| full load, bare board  | off        |   94.8 |  2293.3 |   5228 |      0 |    10462 |    8.17 |  53.44% |
+| full load, bare board  | rule       |   81.3 |     0.0 |      0 |     11 |       27 |    7.49 |  51.04% |
+| full load, bare board  | learned    |   81.3 |     0.0 |      0 |     14 |       30 |    7.48 |  51.08% |
+| burst load, bare board | off        |   85.9 |    11.5 |     93 |      0 |     6381 |    6.88 |  68.85% |
+| burst load, bare board | rule       |   82.2 |     0.0 |      0 |     42 |     5839 |    6.64 |  66.43% |
+| burst load, bare board | learned    |   82.2 |     0.0 |      0 |     34 |     5873 |    6.66 |  66.52% |
+
+| held-out case          | rule: peak / moves / served | learned: peak / moves / served |
+|------------------------|-----------------------------|--------------------------------|
+| full passive, seed 7   |  81.3 /    2 /  68.44%      |  81.3 /    4 /  68.35%         |
+| full bare, seed 7      |  81.3 /   10 /  51.04%      |  81.3 /   16 /  51.09%         |
+| burst bare, seed 7     |  82.2 /   39 /  66.51%      |  82.2 /   27 /  66.68%         |
+| burst bare, seed 99    |  82.2 /   38 /  66.62%      |  82.2 /   34 /  66.49%         |
+| full passive, 35 C     |  82.2 /   41 /  62.60%      |  81.3 /   11 /  62.95%         |
+| full bare, 35 C        |  82.2 /   21 /  44.77%      |  81.3 /   12 /  44.38%         |
+| burst bare, 35 C       |  82.2 /  151 /  59.24%      |  82.2 /   13 /  60.25%         |
+| full bare, 15 C        |  81.3 /   32 /  55.73%      |  79.5 /   10 /  55.22%         |
+| full passive, warm 60  |  81.3 /    2 /  67.18%      |  81.3 /    6 /  67.04%         |
+| full bare, warm 70     |  82.2 /   51 /  48.98%      |  81.3 /   13 /  49.23%         |
+| burst bare, warm 70    |  82.2 /   61 /  65.23%      |  82.2 /   58 /  65.27%         |
+| 10 s bursts, bare      |  82.2 /  110 /  66.05%      |  81.3 /   27 /  65.87%         |
+| 300 ms bursts, bare    |  69.3 /    0 /  58.03%      |  69.3 /    0 /  58.03%         |
+| 10 s bursts, passive   |  60.1 /    0 /  70.46%      |  60.1 /    0 /  70.46%         |
+| load steps, bare       |  82.2 /   31 /  69.42%      |  81.3 /   30 /  69.83%         |
+| load steps, passive    |  69.3 /    0 /  79.25%      |  69.3 /    0 /  79.25%         |
+| one cluster, bare      |  76.7 /    0 /  99.99%      |  76.7 /    0 /  99.99%         |
+| full, fan              |  52.7 /    0 /  69.38%      |  52.7 /    0 /  69.38%         |
+| burst, fan, 35 C       |  52.7 /    0 /  68.92%      |  52.7 /    0 /  68.92%         |
+
+peak C: hottest passive zone after 300 s. kernel: step_wise throttle steps. ceil: Lerwatt ceiling moves. served: share of demanded work done.
+hot start cooling=0 policy=0 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=42 full: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=42 burst: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=42 full: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=42 burst: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=99 burst: peak 83.2 C, 0 throttle steps
+test_closed_loop: all checks passed
+build/test_closed_loop --cross-cluster
+| scenario               | controller | peak C | s >85C  | kernel | ceil   | freq     | mean W  | served  |
+|------------------------|------------|--------|---------|--------|--------|----------|---------|---------|
+| full load, passive     | off        |   84.1 |     0.0 |      0 |      0 |       16 |   10.61 |  69.38% |
+| full load, passive     | rule       |   81.3 |     0.0 |      0 |      2 |       18 |   10.48 |  68.43% |
+| full load, passive     | learned    |   81.3 |     0.0 |      0 |      5 |       21 |   10.43 |  68.44% |
+| big-core load, passive | off        |   72.1 |     0.0 |      0 |      0 |       12 |    8.76 |  99.99% |
+| big-core load, passive | rule       |   72.1 |     0.0 |      0 |      0 |       12 |    8.76 |  99.99% |
+| big-core load, passive | learned    |   72.1 |     0.0 |      0 |      1 |       12 |    8.76 |  99.99% |
+| full load, bare board  | off        |   94.8 |  2293.3 |   5228 |      0 |    10462 |    8.17 |  53.44% |
+| full load, bare board  | rule       |   81.3 |     0.0 |      0 |     11 |       27 |    7.49 |  51.04% |
+| full load, bare board  | learned    |   81.3 |     0.0 |      0 |      8 |       24 |    7.44 |  50.89% |
+| burst load, bare board | off        |   85.9 |    11.5 |     93 |      0 |     6381 |    6.88 |  68.85% |
+| burst load, bare board | rule       |   82.2 |     0.0 |      0 |     42 |     5839 |    6.64 |  66.43% |
+| burst load, bare board | learned    |   79.5 |     0.0 |      0 |      8 |     5702 |    6.54 |  65.56% |
+
+| held-out case          | rule: peak / moves / served | learned: peak / moves / served |
+|------------------------|-----------------------------|--------------------------------|
+| full passive, seed 7   |  81.3 /    2 /  68.44%      |  81.3 /    2 /  68.19%         |
+| full bare, seed 7      |  81.3 /   10 /  51.04%      |  81.3 /   10 /  50.89%         |
+| burst bare, seed 7     |  82.2 /   39 /  66.51%      |  79.5 /    9 /  65.96%         |
+| burst bare, seed 99    |  82.2 /   38 /  66.62%      |  79.5 /    8 /  65.75%         |
+| full passive, 35 C     |  82.2 /   41 /  62.60%      |  81.3 /    7 /  62.97%         |
+| full bare, 35 C        |  82.2 /   21 /  44.77%      |  81.3 /   20 /  44.37%         |
+| burst bare, 35 C       |  82.2 /  151 /  59.24%      |  79.5 /   12 /  58.95%         |
+| full bare, 15 C        |  81.3 /   32 /  55.73%      |  80.4 /    6 /  55.13%         |
+| full passive, warm 60  |  81.3 /    2 /  67.18%      |  81.3 /    6 /  66.85%         |
+| full bare, warm 70     |  82.2 /   51 /  48.98%      |  82.2 /   21 /  47.98%         |
+| burst bare, warm 70    |  82.2 /   61 /  65.23%      |  81.3 /   15 /  64.76%         |
+| 10 s bursts, bare      |  82.2 /  110 /  66.05%      |  77.6 /    8 /  64.50%         |
+| 300 ms bursts, bare    |  69.3 /    0 /  58.03%      |  69.3 /    0 /  58.03%         |
+| 10 s bursts, passive   |  60.1 /    0 /  70.46%      |  60.1 /    0 /  70.46%         |
+| load steps, bare       |  82.2 /   31 /  69.42%      |  81.3 /   15 /  68.30%         |
+| load steps, passive    |  69.3 /    0 /  79.25%      |  61.0 /   18 /  73.56%         |
+| one cluster, bare      |  76.7 /    0 /  99.99%      |  76.7 /    2 /  99.99%         |
+| full, fan              |  52.7 /    0 /  69.38%      |  52.7 /    0 /  69.38%         |
+| burst, fan, 35 C       |  52.7 /    0 /  68.92%      |  52.7 /    0 /  68.92%         |
+
+peak C: hottest passive zone after 300 s. kernel: step_wise throttle steps. ceil: Lerwatt ceiling moves. served: share of demanded work done.
+hot start cooling=0 policy=0 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=42 full: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=42 burst: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=42 full: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=42 burst: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=99 burst: peak 83.2 C, 0 throttle steps
+test_closed_loop: all checks passed
+build/test_closed_loop --cooperative
+| scenario               | controller | peak C | s >85C  | kernel | ceil   | freq     | mean W  | served  |
+|------------------------|------------|--------|---------|--------|--------|----------|---------|---------|
+| full load, passive     | off        |   84.1 |     0.0 |      0 |      0 |       16 |   10.61 |  69.38% |
+| full load, passive     | rule       |   81.3 |     0.0 |      0 |      2 |       18 |   10.48 |  68.43% |
+| full load, passive     | learned    |   81.3 |     0.0 |      0 |      2 |       18 |   10.48 |  68.38% |
+| big-core load, passive | off        |   72.1 |     0.0 |      0 |      0 |       12 |    8.76 |  99.99% |
+| big-core load, passive | rule       |   72.1 |     0.0 |      0 |      0 |       12 |    8.76 |  99.99% |
+| big-core load, passive | learned    |   72.1 |     0.0 |      0 |      0 |       12 |    8.76 |  99.99% |
+| full load, bare board  | off        |   94.8 |  2293.3 |   5228 |      0 |    10462 |    8.17 |  53.44% |
+| full load, bare board  | rule       |   81.3 |     0.0 |      0 |     11 |       27 |    7.49 |  51.04% |
+| full load, bare board  | learned    |   81.3 |     0.0 |      0 |     10 |       26 |    7.49 |  51.19% |
+| burst load, bare board | off        |   85.9 |    11.5 |     93 |      0 |     6381 |    6.88 |  68.85% |
+| burst load, bare board | rule       |   82.2 |     0.0 |      0 |     42 |     5839 |    6.64 |  66.43% |
+| burst load, bare board | learned    |   82.2 |     0.0 |      0 |     34 |     5873 |    6.66 |  66.52% |
+
+| held-out case          | rule: peak / moves / served | learned: peak / moves / served |
+|------------------------|-----------------------------|--------------------------------|
+| full passive, seed 7   |  81.3 /    2 /  68.44%      |  81.3 /    4 /  68.35%         |
+| full bare, seed 7      |  81.3 /   10 /  51.04%      |  81.3 /   10 /  51.20%         |
+| burst bare, seed 7     |  82.2 /   39 /  66.51%      |  82.2 /   27 /  66.68%         |
+| burst bare, seed 99    |  82.2 /   38 /  66.62%      |  82.2 /   34 /  66.49%         |
+| full passive, 35 C     |  82.2 /   41 /  62.60%      |  81.3 /   11 /  62.95%         |
+| full bare, 35 C        |  82.2 /   21 /  44.77%      |  81.3 /   12 /  44.38%         |
+| burst bare, 35 C       |  82.2 /  151 /  59.24%      |  82.2 /   13 /  60.25%         |
+| full bare, 15 C        |  81.3 /   32 /  55.73%      |  79.5 /   10 /  55.22%         |
+| full passive, warm 60  |  81.3 /    2 /  67.18%      |  81.3 /    6 /  67.04%         |
+| full bare, warm 70     |  82.2 /   51 /  48.98%      |  81.3 /   13 /  49.23%         |
+| burst bare, warm 70    |  82.2 /   61 /  65.23%      |  82.2 /   58 /  65.27%         |
+| 10 s bursts, bare      |  82.2 /  110 /  66.05%      |  81.3 /   27 /  65.87%         |
+| 300 ms bursts, bare    |  69.3 /    0 /  58.03%      |  69.3 /    0 /  58.03%         |
+| 10 s bursts, passive   |  60.1 /    0 /  70.46%      |  60.1 /    0 /  70.46%         |
+| load steps, bare       |  82.2 /   31 /  69.42%      |  81.3 /   30 /  69.83%         |
+| load steps, passive    |  69.3 /    0 /  79.25%      |  69.3 /    0 /  79.25%         |
+| one cluster, bare      |  76.7 /    0 /  99.99%      |  76.7 /    0 /  99.99%         |
+| full, fan              |  52.7 /    0 /  69.38%      |  52.7 /    0 /  69.38%         |
+| burst, fan, 35 C       |  52.7 /    0 /  68.92%      |  52.7 /    0 /  68.92%         |
+
+peak C: hottest passive zone after 300 s. kernel: step_wise throttle steps. ceil: Lerwatt ceiling moves. served: share of demanded work done.
+hot start cooling=0 policy=0 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=42 full: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=42 burst: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=42 full: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=42 burst: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=99 burst: peak 83.2 C, 0 throttle steps
+test_closed_loop: all checks passed
+build/test_closed_loop --cooperative --cross-cluster
+| scenario               | controller | peak C | s >85C  | kernel | ceil   | freq     | mean W  | served  |
+|------------------------|------------|--------|---------|--------|--------|----------|---------|---------|
+| full load, passive     | off        |   84.1 |     0.0 |      0 |      0 |       16 |   10.61 |  69.38% |
+| full load, passive     | rule       |   81.3 |     0.0 |      0 |      2 |       18 |   10.48 |  68.43% |
+| full load, passive     | learned    |   81.3 |     0.0 |      0 |      5 |       21 |   10.43 |  68.44% |
+| big-core load, passive | off        |   72.1 |     0.0 |      0 |      0 |       12 |    8.76 |  99.99% |
+| big-core load, passive | rule       |   72.1 |     0.0 |      0 |      0 |       12 |    8.76 |  99.99% |
+| big-core load, passive | learned    |   72.1 |     0.0 |      0 |      1 |       12 |    8.76 |  99.99% |
+| full load, bare board  | off        |   94.8 |  2293.3 |   5228 |      0 |    10462 |    8.17 |  53.44% |
+| full load, bare board  | rule       |   81.3 |     0.0 |      0 |     11 |       27 |    7.49 |  51.04% |
+| full load, bare board  | learned    |   81.3 |     0.0 |      0 |      8 |       24 |    7.44 |  50.89% |
+| burst load, bare board | off        |   85.9 |    11.5 |     93 |      0 |     6381 |    6.88 |  68.85% |
+| burst load, bare board | rule       |   82.2 |     0.0 |      0 |     42 |     5839 |    6.64 |  66.43% |
+| burst load, bare board | learned    |   79.5 |     0.0 |      0 |      8 |     5702 |    6.54 |  65.56% |
+
+| held-out case          | rule: peak / moves / served | learned: peak / moves / served |
+|------------------------|-----------------------------|--------------------------------|
+| full passive, seed 7   |  81.3 /    2 /  68.44%      |  81.3 /    2 /  68.19%         |
+| full bare, seed 7      |  81.3 /   10 /  51.04%      |  81.3 /   10 /  50.89%         |
+| burst bare, seed 7     |  82.2 /   39 /  66.51%      |  79.5 /    9 /  65.96%         |
+| burst bare, seed 99    |  82.2 /   38 /  66.62%      |  79.5 /    8 /  65.75%         |
+| full passive, 35 C     |  82.2 /   41 /  62.60%      |  81.3 /    7 /  62.97%         |
+| full bare, 35 C        |  82.2 /   21 /  44.77%      |  81.3 /   20 /  44.37%         |
+| burst bare, 35 C       |  82.2 /  151 /  59.24%      |  79.5 /   12 /  58.95%         |
+| full bare, 15 C        |  81.3 /   32 /  55.73%      |  80.4 /    6 /  55.13%         |
+| full passive, warm 60  |  81.3 /    2 /  67.18%      |  81.3 /    6 /  66.85%         |
+| full bare, warm 70     |  82.2 /   51 /  48.98%      |  82.2 /   21 /  47.98%         |
+| burst bare, warm 70    |  82.2 /   61 /  65.23%      |  81.3 /   15 /  64.76%         |
+| 10 s bursts, bare      |  82.2 /  110 /  66.05%      |  77.6 /    8 /  64.50%         |
+| 300 ms bursts, bare    |  69.3 /    0 /  58.03%      |  69.3 /    0 /  58.03%         |
+| 10 s bursts, passive   |  60.1 /    0 /  70.46%      |  60.1 /    0 /  70.46%         |
+| load steps, bare       |  82.2 /   31 /  69.42%      |  81.3 /   15 /  68.30%         |
+| load steps, passive    |  69.3 /    0 /  79.25%      |  61.0 /   18 /  73.56%         |
+| one cluster, bare      |  76.7 /    0 /  99.99%      |  76.7 /    2 /  99.99%         |
+| full, fan              |  52.7 /    0 /  69.38%      |  52.7 /    0 /  69.38%         |
+| burst, fan, 35 C       |  52.7 /    0 /  68.92%      |  52.7 /    0 /  68.92%         |
+
+peak C: hottest passive zone after 300 s. kernel: step_wise throttle steps. ceil: Lerwatt ceiling moves. served: share of demanded work done.
+hot start cooling=0 policy=0 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=0 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=0 policy=1 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=42 full: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=42 burst: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=0 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=42 full: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=42 burst: peak 82.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=1 policy=1 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=0 seed=99 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=42 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=42 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=7 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=7 burst: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=99 full: peak 83.2 C, 0 throttle steps
+hot start cooling=2 policy=1 seed=99 burst: peak 83.2 C, 0 throttle steps
+test_closed_loop: all checks passed
+build/test_cooperative_loop --full
+{"pattern":0,"seed":42,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1636992.000000,"throttle_steps":0,"makespan_s":405.220,"simulated_board_j":3064.103829,"peak_c":81.307,"job_p99_s":45.290,"point_mae_c":0.618066,"reference_mae_c":0.934517,"forecast_points":12006,"correction_queries":0,"queries":15565,"ceiling_moves":15,"frequency_transitions":5032,"control_cpu_s":0.003446}
+{"pattern":0,"seed":42,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1636992.000000,"throttle_steps":0,"makespan_s":405.220,"simulated_board_j":3064.103829,"peak_c":81.307,"job_p99_s":45.290,"point_mae_c":0.618066,"reference_mae_c":0.934517,"forecast_points":12006,"correction_queries":0,"queries":15565,"ceiling_moves":15,"frequency_transitions":5032,"control_cpu_s":0.003817}
+{"pattern":0,"seed":7,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1636992.000000,"throttle_steps":0,"makespan_s":419.520,"simulated_board_j":3140.746146,"peak_c":81.307,"job_p99_s":59.980,"point_mae_c":0.608290,"reference_mae_c":0.908556,"forecast_points":12435,"correction_queries":0,"queries":14279,"ceiling_moves":18,"frequency_transitions":5389,"control_cpu_s":0.003588}
+{"pattern":0,"seed":7,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1636992.000000,"throttle_steps":0,"makespan_s":419.520,"simulated_board_j":3140.746146,"peak_c":81.307,"job_p99_s":59.980,"point_mae_c":0.608290,"reference_mae_c":0.908556,"forecast_points":12435,"correction_queries":0,"queries":14279,"ceiling_moves":18,"frequency_transitions":5389,"control_cpu_s":0.003681}
+{"pattern":0,"seed":99,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1636992.000000,"throttle_steps":0,"makespan_s":402.760,"simulated_board_j":3056.050846,"peak_c":81.307,"job_p99_s":42.820,"point_mae_c":0.598512,"reference_mae_c":0.901395,"forecast_points":11931,"correction_queries":0,"queries":15553,"ceiling_moves":15,"frequency_transitions":5019,"control_cpu_s":0.003332}
+{"pattern":0,"seed":99,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1636992.000000,"throttle_steps":0,"makespan_s":402.760,"simulated_board_j":3056.050846,"peak_c":81.307,"job_p99_s":42.820,"point_mae_c":0.598512,"reference_mae_c":0.901395,"forecast_points":11931,"correction_queries":0,"queries":15553,"ceiling_moves":15,"frequency_transitions":5019,"control_cpu_s":0.003601}
+{"pattern":1,"seed":42,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1548288.000000,"throttle_steps":0,"makespan_s":503.040,"simulated_board_j":3412.501516,"peak_c":82.230,"job_p99_s":142.790,"point_mae_c":0.709844,"reference_mae_c":1.032735,"forecast_points":14940,"correction_queries":0,"queries":16479,"ceiling_moves":15,"frequency_transitions":1587,"control_cpu_s":0.004321}
+{"pattern":1,"seed":42,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1548288.000000,"throttle_steps":0,"makespan_s":503.040,"simulated_board_j":3412.501516,"peak_c":82.230,"job_p99_s":142.790,"point_mae_c":0.709844,"reference_mae_c":1.032735,"forecast_points":14940,"correction_queries":0,"queries":16479,"ceiling_moves":15,"frequency_transitions":1587,"control_cpu_s":0.004525}
+{"pattern":1,"seed":7,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1548288.000000,"throttle_steps":0,"makespan_s":500.660,"simulated_board_j":3394.311558,"peak_c":82.230,"job_p99_s":140.410,"point_mae_c":0.719791,"reference_mae_c":1.044086,"forecast_points":14868,"correction_queries":0,"queries":15913,"ceiling_moves":17,"frequency_transitions":1514,"control_cpu_s":0.004368}
+{"pattern":1,"seed":7,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1548288.000000,"throttle_steps":0,"makespan_s":500.660,"simulated_board_j":3394.311558,"peak_c":82.230,"job_p99_s":140.410,"point_mae_c":0.719791,"reference_mae_c":1.044086,"forecast_points":14868,"correction_queries":0,"queries":15913,"ceiling_moves":17,"frequency_transitions":1514,"control_cpu_s":0.004452}
+{"pattern":1,"seed":99,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1548288.000000,"throttle_steps":0,"makespan_s":497.110,"simulated_board_j":3383.829286,"peak_c":82.230,"job_p99_s":136.860,"point_mae_c":0.718125,"reference_mae_c":1.028734,"forecast_points":14763,"correction_queries":0,"queries":15518,"ceiling_moves":16,"frequency_transitions":1443,"control_cpu_s":0.004362}
+{"pattern":1,"seed":99,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1548288.000000,"throttle_steps":0,"makespan_s":497.110,"simulated_board_j":3383.829286,"peak_c":82.230,"job_p99_s":136.860,"point_mae_c":0.718125,"reference_mae_c":1.028734,"forecast_points":14763,"correction_queries":0,"queries":15518,"ceiling_moves":16,"frequency_transitions":1443,"control_cpu_s":0.004480}
+{"pattern":2,"seed":42,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1251792.000000,"throttle_steps":0,"makespan_s":360.640,"simulated_board_j":2638.146268,"peak_c":81.307,"job_p99_s":1.590,"point_mae_c":0.531840,"reference_mae_c":0.859365,"forecast_points":10668,"correction_queries":0,"queries":10209,"ceiling_moves":6,"frequency_transitions":8519,"control_cpu_s":0.003051}
+{"pattern":2,"seed":42,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1251792.000000,"throttle_steps":0,"makespan_s":360.640,"simulated_board_j":2638.146268,"peak_c":81.307,"job_p99_s":1.590,"point_mae_c":0.531840,"reference_mae_c":0.859365,"forecast_points":10668,"correction_queries":0,"queries":10209,"ceiling_moves":6,"frequency_transitions":8519,"control_cpu_s":0.003251}
+{"pattern":2,"seed":7,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1251792.000000,"throttle_steps":0,"makespan_s":360.630,"simulated_board_j":2630.933970,"peak_c":81.307,"job_p99_s":1.580,"point_mae_c":0.519062,"reference_mae_c":0.849117,"forecast_points":10668,"correction_queries":0,"queries":10066,"ceiling_moves":7,"frequency_transitions":8387,"control_cpu_s":0.003041}
+{"pattern":2,"seed":7,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1251792.000000,"throttle_steps":0,"makespan_s":360.630,"simulated_board_j":2630.933970,"peak_c":81.307,"job_p99_s":1.580,"point_mae_c":0.519062,"reference_mae_c":0.849117,"forecast_points":10668,"correction_queries":0,"queries":10066,"ceiling_moves":7,"frequency_transitions":8387,"control_cpu_s":0.003235}
+{"pattern":2,"seed":99,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1251792.000000,"throttle_steps":0,"makespan_s":360.640,"simulated_board_j":2626.024997,"peak_c":81.307,"job_p99_s":1.590,"point_mae_c":0.536754,"reference_mae_c":0.852969,"forecast_points":10668,"correction_queries":0,"queries":9965,"ceiling_moves":9,"frequency_transitions":8378,"control_cpu_s":0.003089}
+{"pattern":2,"seed":99,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1251792.000000,"throttle_steps":0,"makespan_s":360.640,"simulated_board_j":2626.024997,"peak_c":81.307,"job_p99_s":1.590,"point_mae_c":0.536754,"reference_mae_c":0.852969,"forecast_points":10668,"correction_queries":0,"queries":9965,"ceiling_moves":9,"frequency_transitions":8378,"control_cpu_s":0.003234}
+{"pattern":3,"seed":42,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1020321.008000,"throttle_steps":0,"makespan_s":359.870,"simulated_board_j":2372.536090,"peak_c":76.692,"job_p99_s":1.050,"point_mae_c":0.843208,"reference_mae_c":0.929450,"forecast_points":10644,"correction_queries":0,"queries":8067,"ceiling_moves":0,"frequency_transitions":7829,"control_cpu_s":0.002996}
+{"pattern":3,"seed":42,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1020321.008000,"throttle_steps":0,"makespan_s":359.870,"simulated_board_j":2372.536090,"peak_c":76.692,"job_p99_s":1.050,"point_mae_c":0.843208,"reference_mae_c":0.929450,"forecast_points":10644,"correction_queries":0,"queries":8067,"ceiling_moves":0,"frequency_transitions":7829,"control_cpu_s":0.003215}
+{"pattern":3,"seed":7,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1020321.008000,"throttle_steps":0,"makespan_s":359.870,"simulated_board_j":2372.536090,"peak_c":77.615,"job_p99_s":1.050,"point_mae_c":0.850526,"reference_mae_c":0.923730,"forecast_points":10644,"correction_queries":0,"queries":8067,"ceiling_moves":0,"frequency_transitions":7829,"control_cpu_s":0.002960}
+{"pattern":3,"seed":7,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1020321.008000,"throttle_steps":0,"makespan_s":359.870,"simulated_board_j":2372.536090,"peak_c":77.615,"job_p99_s":1.050,"point_mae_c":0.850526,"reference_mae_c":0.923730,"forecast_points":10644,"correction_queries":0,"queries":8067,"ceiling_moves":0,"frequency_transitions":7829,"control_cpu_s":0.003194}
+{"pattern":3,"seed":99,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1020321.008000,"throttle_steps":0,"makespan_s":359.870,"simulated_board_j":2372.536090,"peak_c":77.615,"job_p99_s":1.050,"point_mae_c":0.860971,"reference_mae_c":0.929357,"forecast_points":10644,"correction_queries":0,"queries":8067,"ceiling_moves":0,"frequency_transitions":7829,"control_cpu_s":0.003067}
+{"pattern":3,"seed":99,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1020321.008000,"throttle_steps":0,"makespan_s":359.870,"simulated_board_j":2372.536090,"peak_c":77.615,"job_p99_s":1.050,"point_mae_c":0.860971,"reference_mae_c":0.929357,"forecast_points":10644,"correction_queries":0,"queries":8067,"ceiling_moves":0,"frequency_transitions":7829,"control_cpu_s":0.003214}
+{"pattern":4,"seed":42,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":2919628.800000,"throttle_steps":0,"makespan_s":980.400,"simulated_board_j":6295.971093,"peak_c":81.307,"job_p99_s":610.530,"point_mae_c":0.478139,"reference_mae_c":0.640429,"forecast_points":29259,"correction_queries":0,"queries":35913,"ceiling_moves":36,"frequency_transitions":42,"control_cpu_s":0.008729}
+{"pattern":4,"seed":42,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":2919628.800000,"throttle_steps":0,"makespan_s":980.400,"simulated_board_j":6295.971093,"peak_c":81.307,"job_p99_s":610.530,"point_mae_c":0.478139,"reference_mae_c":0.640429,"forecast_points":29259,"correction_queries":0,"queries":35913,"ceiling_moves":36,"frequency_transitions":42,"control_cpu_s":0.008973}
+{"pattern":4,"seed":7,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":2919628.800000,"throttle_steps":0,"makespan_s":979.530,"simulated_board_j":6294.123159,"peak_c":81.307,"job_p99_s":609.650,"point_mae_c":0.483719,"reference_mae_c":0.643218,"forecast_points":29235,"correction_queries":0,"queries":36274,"ceiling_moves":32,"frequency_transitions":40,"control_cpu_s":0.008612}
+{"pattern":4,"seed":7,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":2919628.800000,"throttle_steps":0,"makespan_s":979.550,"simulated_board_j":6293.863896,"peak_c":81.307,"job_p99_s":609.670,"point_mae_c":0.486560,"reference_mae_c":0.646034,"forecast_points":29235,"correction_queries":1,"queries":36309,"ceiling_moves":32,"frequency_transitions":40,"control_cpu_s":0.008985}
+{"pattern":4,"seed":99,"joint":false,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":2919628.800000,"throttle_steps":0,"makespan_s":981.830,"simulated_board_j":6300.329490,"peak_c":81.307,"job_p99_s":611.960,"point_mae_c":0.484815,"reference_mae_c":0.641113,"forecast_points":29304,"correction_queries":0,"queries":36617,"ceiling_moves":28,"frequency_transitions":38,"control_cpu_s":0.008705}
+{"pattern":4,"seed":99,"joint":false,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":2919628.800000,"throttle_steps":0,"makespan_s":981.900,"simulated_board_j":6300.200034,"peak_c":81.307,"job_p99_s":612.020,"point_mae_c":0.482736,"reference_mae_c":0.639256,"forecast_points":29304,"correction_queries":1,"queries":36652,"ceiling_moves":28,"frequency_transitions":38,"control_cpu_s":0.008887}
+{"pattern":0,"seed":42,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1636992.000000,"throttle_steps":0,"makespan_s":418.790,"simulated_board_j":3046.446255,"peak_c":82.230,"job_p99_s":57.070,"point_mae_c":0.631586,"reference_mae_c":0.926190,"forecast_points":12411,"correction_queries":0,"queries":14238,"ceiling_moves":9,"frequency_transitions":3805,"control_cpu_s":0.003428}
+{"pattern":0,"seed":42,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1636992.000000,"throttle_steps":0,"makespan_s":418.790,"simulated_board_j":3046.446255,"peak_c":82.230,"job_p99_s":57.070,"point_mae_c":0.631586,"reference_mae_c":0.926190,"forecast_points":12411,"correction_queries":0,"queries":14238,"ceiling_moves":9,"frequency_transitions":3805,"control_cpu_s":0.003683}
+{"pattern":0,"seed":7,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1636992.000000,"throttle_steps":0,"makespan_s":418.220,"simulated_board_j":3046.942437,"peak_c":82.230,"job_p99_s":56.500,"point_mae_c":0.614085,"reference_mae_c":0.917913,"forecast_points":12396,"correction_queries":0,"queries":14225,"ceiling_moves":9,"frequency_transitions":3819,"control_cpu_s":0.003401}
+{"pattern":0,"seed":7,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1636992.000000,"throttle_steps":0,"makespan_s":418.220,"simulated_board_j":3046.942437,"peak_c":82.230,"job_p99_s":56.500,"point_mae_c":0.614085,"reference_mae_c":0.917913,"forecast_points":12396,"correction_queries":0,"queries":14225,"ceiling_moves":9,"frequency_transitions":3819,"control_cpu_s":0.003767}
+{"pattern":0,"seed":99,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1636992.000000,"throttle_steps":0,"makespan_s":417.740,"simulated_board_j":3045.880971,"peak_c":82.230,"job_p99_s":56.020,"point_mae_c":0.635798,"reference_mae_c":0.921273,"forecast_points":12381,"correction_queries":0,"queries":14210,"ceiling_moves":9,"frequency_transitions":3821,"control_cpu_s":0.003582}
+{"pattern":0,"seed":99,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1636992.000000,"throttle_steps":0,"makespan_s":417.740,"simulated_board_j":3045.880971,"peak_c":82.230,"job_p99_s":56.020,"point_mae_c":0.635798,"reference_mae_c":0.921273,"forecast_points":12381,"correction_queries":0,"queries":14210,"ceiling_moves":9,"frequency_transitions":3821,"control_cpu_s":0.003655}
+{"pattern":1,"seed":42,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1548288.000000,"throttle_steps":0,"makespan_s":538.750,"simulated_board_j":3492.476423,"peak_c":82.230,"job_p99_s":178.500,"point_mae_c":0.858180,"reference_mae_c":1.035502,"forecast_points":16011,"correction_queries":0,"queries":19311,"ceiling_moves":10,"frequency_transitions":1829,"control_cpu_s":0.004728}
+{"pattern":1,"seed":42,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1548288.000000,"throttle_steps":0,"makespan_s":538.750,"simulated_board_j":3492.476423,"peak_c":82.230,"job_p99_s":178.500,"point_mae_c":0.858180,"reference_mae_c":1.035502,"forecast_points":16011,"correction_queries":0,"queries":19311,"ceiling_moves":10,"frequency_transitions":1829,"control_cpu_s":0.004976}
+{"pattern":1,"seed":7,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1548288.000000,"throttle_steps":0,"makespan_s":538.750,"simulated_board_j":3497.103330,"peak_c":82.230,"job_p99_s":178.500,"point_mae_c":0.727766,"reference_mae_c":1.009315,"forecast_points":16011,"correction_queries":0,"queries":19312,"ceiling_moves":10,"frequency_transitions":1854,"control_cpu_s":0.004852}
+{"pattern":1,"seed":7,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1548288.000000,"throttle_steps":0,"makespan_s":538.750,"simulated_board_j":3497.103330,"peak_c":82.230,"job_p99_s":178.500,"point_mae_c":0.727766,"reference_mae_c":1.009315,"forecast_points":16011,"correction_queries":0,"queries":19312,"ceiling_moves":10,"frequency_transitions":1854,"control_cpu_s":0.004843}
+{"pattern":1,"seed":99,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1548288.000000,"throttle_steps":0,"makespan_s":538.750,"simulated_board_j":3492.806164,"peak_c":82.230,"job_p99_s":178.500,"point_mae_c":0.739498,"reference_mae_c":1.012688,"forecast_points":16011,"correction_queries":0,"queries":19312,"ceiling_moves":10,"frequency_transitions":1829,"control_cpu_s":0.004624}
+{"pattern":1,"seed":99,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1548288.000000,"throttle_steps":0,"makespan_s":538.750,"simulated_board_j":3492.806164,"peak_c":82.230,"job_p99_s":178.500,"point_mae_c":0.739498,"reference_mae_c":1.012688,"forecast_points":16011,"correction_queries":0,"queries":19312,"ceiling_moves":10,"frequency_transitions":1829,"control_cpu_s":0.004845}
+{"pattern":2,"seed":42,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1251792.000000,"throttle_steps":0,"makespan_s":381.490,"simulated_board_j":2672.639652,"peak_c":79.461,"job_p99_s":21.480,"point_mae_c":0.591575,"reference_mae_c":0.884357,"forecast_points":11292,"correction_queries":0,"queries":13125,"ceiling_moves":5,"frequency_transitions":8114,"control_cpu_s":0.003232}
+{"pattern":2,"seed":42,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1251792.000000,"throttle_steps":0,"makespan_s":381.490,"simulated_board_j":2672.639652,"peak_c":79.461,"job_p99_s":21.480,"point_mae_c":0.591575,"reference_mae_c":0.884357,"forecast_points":11292,"correction_queries":0,"queries":13125,"ceiling_moves":5,"frequency_transitions":8114,"control_cpu_s":0.003394}
+{"pattern":2,"seed":7,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1251792.000000,"throttle_steps":0,"makespan_s":365.220,"simulated_board_j":2633.845193,"peak_c":81.307,"job_p99_s":5.210,"point_mae_c":0.552913,"reference_mae_c":0.857648,"forecast_points":10806,"correction_queries":0,"queries":12639,"ceiling_moves":5,"frequency_transitions":7936,"control_cpu_s":0.003106}
+{"pattern":2,"seed":7,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1251792.000000,"throttle_steps":0,"makespan_s":365.220,"simulated_board_j":2633.845193,"peak_c":81.307,"job_p99_s":5.210,"point_mae_c":0.552913,"reference_mae_c":0.857648,"forecast_points":10806,"correction_queries":0,"queries":12639,"ceiling_moves":5,"frequency_transitions":7936,"control_cpu_s":0.003325}
+{"pattern":2,"seed":99,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1251792.000000,"throttle_steps":0,"makespan_s":382.510,"simulated_board_j":2645.604875,"peak_c":78.538,"job_p99_s":22.500,"point_mae_c":0.587389,"reference_mae_c":0.843609,"forecast_points":11325,"correction_queries":0,"queries":13158,"ceiling_moves":4,"frequency_transitions":7514,"control_cpu_s":0.003341}
+{"pattern":2,"seed":99,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1251792.000000,"throttle_steps":0,"makespan_s":382.510,"simulated_board_j":2645.604875,"peak_c":78.538,"job_p99_s":22.500,"point_mae_c":0.587389,"reference_mae_c":0.843609,"forecast_points":11325,"correction_queries":0,"queries":13158,"ceiling_moves":4,"frequency_transitions":7514,"control_cpu_s":0.003442}
+{"pattern":3,"seed":42,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1020321.008000,"throttle_steps":0,"makespan_s":359.920,"simulated_board_j":2372.551126,"peak_c":76.692,"job_p99_s":1.050,"point_mae_c":0.843901,"reference_mae_c":0.930119,"forecast_points":10647,"correction_queries":0,"queries":12480,"ceiling_moves":1,"frequency_transitions":7779,"control_cpu_s":0.003024}
+{"pattern":3,"seed":42,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1020321.008000,"throttle_steps":0,"makespan_s":359.920,"simulated_board_j":2372.551126,"peak_c":76.692,"job_p99_s":1.050,"point_mae_c":0.843901,"reference_mae_c":0.930119,"forecast_points":10647,"correction_queries":0,"queries":12480,"ceiling_moves":1,"frequency_transitions":7779,"control_cpu_s":0.003225}
+{"pattern":3,"seed":7,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1020321.008000,"throttle_steps":0,"makespan_s":359.920,"simulated_board_j":2372.551126,"peak_c":77.615,"job_p99_s":1.050,"point_mae_c":0.850204,"reference_mae_c":0.923388,"forecast_points":10647,"correction_queries":0,"queries":12480,"ceiling_moves":1,"frequency_transitions":7779,"control_cpu_s":0.002987}
+{"pattern":3,"seed":7,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1020321.008000,"throttle_steps":0,"makespan_s":359.920,"simulated_board_j":2372.551126,"peak_c":77.615,"job_p99_s":1.050,"point_mae_c":0.850204,"reference_mae_c":0.923388,"forecast_points":10647,"correction_queries":0,"queries":12480,"ceiling_moves":1,"frequency_transitions":7779,"control_cpu_s":0.003229}
+{"pattern":3,"seed":99,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":1020321.008000,"throttle_steps":0,"makespan_s":359.920,"simulated_board_j":2372.551126,"peak_c":76.692,"job_p99_s":1.050,"point_mae_c":0.859807,"reference_mae_c":0.928173,"forecast_points":10647,"correction_queries":0,"queries":12480,"ceiling_moves":1,"frequency_transitions":7779,"control_cpu_s":0.003079}
+{"pattern":3,"seed":99,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":1020321.008000,"throttle_steps":0,"makespan_s":359.920,"simulated_board_j":2372.551126,"peak_c":76.692,"job_p99_s":1.050,"point_mae_c":0.859807,"reference_mae_c":0.928173,"forecast_points":10647,"correction_queries":0,"queries":12480,"ceiling_moves":1,"frequency_transitions":7779,"control_cpu_s":0.003307}
+{"pattern":4,"seed":42,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":2919628.800000,"throttle_steps":0,"makespan_s":1009.870,"simulated_board_j":6372.262955,"peak_c":82.230,"job_p99_s":639.990,"point_mae_c":0.515443,"reference_mae_c":0.640917,"forecast_points":30144,"correction_queries":0,"queries":39322,"ceiling_moves":11,"frequency_transitions":30,"control_cpu_s":0.009039}
+{"pattern":4,"seed":42,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":2919628.800000,"throttle_steps":0,"makespan_s":1009.870,"simulated_board_j":6372.262955,"peak_c":82.230,"job_p99_s":639.990,"point_mae_c":0.515443,"reference_mae_c":0.640917,"forecast_points":30144,"correction_queries":0,"queries":39322,"ceiling_moves":11,"frequency_transitions":30,"control_cpu_s":0.009519}
+{"pattern":4,"seed":7,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":2919628.800000,"throttle_steps":0,"makespan_s":1008.940,"simulated_board_j":6348.257503,"peak_c":82.230,"job_p99_s":639.060,"point_mae_c":0.503787,"reference_mae_c":0.630852,"forecast_points":30117,"correction_queries":0,"queries":39294,"ceiling_moves":15,"frequency_transitions":31,"control_cpu_s":0.008985}
+{"pattern":4,"seed":7,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":2919628.800000,"throttle_steps":0,"makespan_s":1008.940,"simulated_board_j":6348.257503,"peak_c":82.230,"job_p99_s":639.060,"point_mae_c":0.503787,"reference_mae_c":0.630852,"forecast_points":30117,"correction_queries":0,"queries":39294,"ceiling_moves":15,"frequency_transitions":31,"control_cpu_s":0.009440}
+{"pattern":4,"seed":99,"joint":true,"mode":"nominal","jobs_completed":2880,"backlog":0,"offered_work":2919628.800000,"throttle_steps":0,"makespan_s":988.270,"simulated_board_j":6315.551787,"peak_c":82.230,"job_p99_s":618.390,"point_mae_c":0.515453,"reference_mae_c":0.644973,"forecast_points":29496,"correction_queries":0,"queries":38676,"ceiling_moves":10,"frequency_transitions":27,"control_cpu_s":0.008785}
+{"pattern":4,"seed":99,"joint":true,"mode":"cooperative","jobs_completed":2880,"backlog":0,"offered_work":2919628.800000,"throttle_steps":0,"makespan_s":988.270,"simulated_board_j":6315.551787,"peak_c":82.230,"job_p99_s":618.390,"point_mae_c":0.515453,"reference_mae_c":0.644973,"forecast_points":29496,"correction_queries":0,"queries":38676,"ceiling_moves":10,"frequency_transitions":27,"control_cpu_s":0.009106}
+cc -DLERWATT_VERSION=\"source\" -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -DLW_NO_BPF -o build/lerwattd-standalone src/hal_fs.c src/hal_discover.c src/hal_sample.c src/hal_actuate.c src/controller.c src/learn.c src/forecast.c src/temporal.c src/predict.c src/contract.c src/notify.c src/checkpoint.c src/lerwattd.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -o build/test_runtime_fs tests/test_runtime_fs.c src/hal_fs.c src/hal_actuate.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -o build/test_discovery tests/test_discovery.c src/hal_discover.c src/hal_sample.c src/hal_fs.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -o build/test_notify tests/test_notify.c src/notify.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -o build/test_checkpoint tests/test_checkpoint.c src/checkpoint.c -lm -lrt
+cc -O2 -g -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wshadow -Werror -Iinclude -Isrc -DLW_NO_BPF -o build/test_contract tests/test_contract.c src/contract.c -lm -lrt
+python3 tests/check_integration_abi.py
+Integration ABI 2 golden check passed (56 values).
+build/test_runtime_fs
+lerwatt: cannot journal /tmp/lerwatt-runtime-WTCNkb/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq (Is a directory); not writing it
+lerwatt: write /tmp/lerwatt-runtime-WTCNkb/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq <- 1500 failed: Is a directory
+lerwatt: restore failed: /tmp/lerwatt-runtime-WTCNkb/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq <- 2000
+test_runtime_fs: ok (strict reads, lock lifetime, journal faults, restore validation)
+build/test_discovery
+test_discovery: topology, frequency, sensor and read-only capability fixtures passed
+build/test_notify
+test_notify: environment validation, readiness, progress heartbeats and socket failure passed
+build/test_checkpoint
+test_checkpoint: learned-only roundtrip, identity/schema/age validation and private atomic files passed
+build/test_contract
+test_contract: ABI2 identity, independent peer versions, bounded freshness and recovery passed
+python3 tests/test_daemon_deployment.py build/lerwattd-standalone
+daemon deployment: CLI, read-only checks, 16-policy range control, locking, recovery and sensor loss passed
+sh tests/test_deploy.sh
+test_deploy: all checks passed (fixtures only; no host service or CPU changes)
+tests/e2e.sh build
+e2e: ok - joint planning requires the learned policy
+e2e: ok - unknown point forecaster is rejected before touching a system
+e2e: ok - prediction mode and unsupported combinations are rejected before discovery
+e2e: ok - no hardware and no simulator -> clear error
+e2e: ok - simulator up, policy4 scaling_max_freq = 2400000
+e2e: ok - live root rejects a second simulator, including --force
+e2e: ok - auto-detected the simulator
+e2e: ok - lerwattd capped big0 down to 1200 MHz while the board ran hot
+e2e: ok - clean exit restored every knob and removed the journal
+e2e: ok - joint-policy startup falls back before training and restores knobs
+e2e: ok - cooperative cold start keeps fallback, valid telemetry and restoration
+e2e: ok - kill -9 then --restore recovered scaling_max_freq = 2400000
+e2e: ok - simulator removed its marker on exit
+e2e: ok - same root restarts after SIGTERM, duration expiry and SIGINT; data preserved
+e2e: ok - unidentified non-empty roots remain protected
+e2e: all checks passed
+mkdir -p build
+bpftool btf dump file /sys/kernel/btf/vmlinux format c > build/vmlinux.h.tmp
+mv build/vmlinux.h.tmp build/vmlinux.h
+clang-18 -Ivendor -Isrc -Isrc/shared -Ibuild -I/home/ubuntu/lertick-pr/build/deps/install/include  -DLERTICK_VERSION=\"source\" -O2 -g -target bpf -mcpu=v3 -Wall -Wno-compare-distinct-pointer-types -D__TARGET_ARCH_arm64 -Ivendor/bpf-compat -I/usr/include/aarch64-linux-gnu -c src/bpf/scx_lertick.bpf.c -o build/scx_lertick.bpf.o
+In file included from src/bpf/scx_lertick.bpf.c:23:
+In file included from vendor/scx/common.bpf.h:21:
+build/vmlinux.h:69147:2: warning: declaration does not declare anything [-Wmissing-declarations]
+ 69147 |         struct aes_enckey;
+       |         ^
+build/vmlinux.h:85401:3: warning: declaration does not declare anything [-Wmissing-declarations]
+ 85401 |                 struct ns_tree;
+       |                 ^
+build/vmlinux.h:108771:2: warning: declaration does not declare anything [-Wmissing-declarations]
+ 108771 |         struct __filename_head;
+        |         ^
+build/vmlinux.h:152894:2: warning: declaration does not declare anything [-Wmissing-declarations]
+ 152894 |         union pipe_index;
+        |         ^
+build/vmlinux.h:171167:4: warning: declaration does not declare anything [-Wmissing-declarations]
+ 171167 |                         struct freelist_counters;
+        |                         ^
+5 warnings generated.
+bpftool gen skeleton build/scx_lertick.bpf.o name scx_lertick > build/scx_lertick.bpf.skel.h.tmp
+mv build/scx_lertick.bpf.skel.h.tmp build/scx_lertick.bpf.skel.h
+cc -Ivendor -Isrc -Isrc/shared -Ibuild -I/home/ubuntu/lertick-pr/build/deps/install/include  -DLERTICK_VERSION=\"source\" -Isrc/userspace -O2 -g -std=gnu11 -Wall -Wextra src/userspace/scx_lertick.c src/userspace/lerwatt_plugin.c src/userspace/runtime.c -o build/scx_lertick -L/home/ubuntu/lertick-pr/build/deps/install/lib -lbpf -lelf -lzstd -pthread -lz  -lelf -lz
+In file included from vendor/scx/common.h:74,
+                 from src/userspace/scx_lertick.c:28:
+vendor/scx/compat.h: In function ‘__COMPAT_read_enum’:
+vendor/scx/compat.h:44:31: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__u32’ {aka ‘unsigned int’} [-Wsign-compare]
+   44 |                 for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
+      |                               ^
+vendor/scx/compat.h:55:31: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__u32’ {aka ‘unsigned int’} [-Wsign-compare]
+   55 |                 for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
+      |                               ^
+vendor/scx/compat.h: In function ‘__COMPAT_struct_has_field’:
+vendor/scx/compat.h:99:23: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__u32’ {aka ‘unsigned int’} [-Wsign-compare]
+   99 |         for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
+      |                       ^
+cc -O2 -g -std=gnu11 -Wall -Wextra benchmarks/burst_workload.c -o build/burst_workload -pthread -lm
+cc -O2 -g -std=gnu11 -Wall -Wextra benchmarks/phase2_workload.c -o build/phase2_workload -pthread -lm
+cc -O2 -g -std=gnu11 -Wall -Wextra tests/lifecycle_workload.c -o build/lifecycle_workload -pthread -lm
+cc -Isrc/userspace -O2 -std=gnu11 -Wall -Wextra -Werror tests/test_loader_runtime.c src/userspace/runtime.c -o build/test_loader_runtime
+python3 tests/check_integration_abi.py
+Integration ABI 2 golden check passed (56 values).
+build/test_loader_runtime
+loader runtime: private output, lock ownership, idle-state guard, readiness notify and maintenance lifetime passed
+sh tests/test_deploy.sh
+test_deploy: plan/check/verify, indefinite/finite defaults, signals, trust paths, maintenance, staging and build fingerprints passed (stubs only)
+sh tests/test_service.sh
+test_service: notify readiness, long-running intent, immutable bundles, active verification, atomic update/rollback, foreign refusal and default fallback passed (fixtures only)
+python3 tests/test_report.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.111s
+
+OK
+cc -Isrc/shared -O2 -std=c11 -Wall -Wextra -Werror tests/test_model.c -o build/test_model
+build/test_model
+{"test":"synthetic_holdout","samples":1000,"model_squared_error":563987,"fixed_squared_error":156938088319}
+{"test":"fractional_carry","oracle_trials":100000,"model_bytes":48}
+{"test":"model","status":"passed","oracle_trials":200121}
+cc -Isrc/shared -O2 -std=c11 -Wall -Wextra -Werror tests/test_accounting.c -o build/test_accounting
+build/test_accounting
+accounting: 202000 oracle cases and callback-order traces passed
+cc -Ibenchmarks -O2 -std=c11 -Wall -Wextra -Werror tests/test_burst_profiles.c -o build/test_burst_profiles
+build/test_burst_profiles
+burst profiles: phase boundaries, deterministic seeds, groups and u64 bounds passed
+cc -Isrc/shared -O2 -std=c11 -Wall -Wextra -Werror tests/test_cpuperf.c -o build/test_cpuperf -lm
+build/test_cpuperf
+{"test":"cpuperf","status":"passed"}
+cc -Ivendor -Isrc/shared -Isrc/userspace -O2 -std=gnu11 -Wall -Wextra -Werror tests/test_lerwatt_plugin.c src/userspace/lerwatt_plugin.c -o build/test_lerwatt_plugin
+build/test_lerwatt_plugin
+{"test":"lerwatt_plugin","status":"passed"}
+python3 tests/check_integration_abi.py
+Integration ABI 2 golden check passed (56 values).
+Integration ABI 2 golden check passed (56 values); peer compiled ABI matches.

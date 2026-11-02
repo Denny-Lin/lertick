@@ -1,0 +1,8 @@
+integration: Lerwatt-first startup connected; BPF consumed contracts
+integration: online-to-EWMA scheduler change reconnected while Lerwatt stayed running
+integration: frozen demand expired and resumed without stale control
+integration: temporal-to-adaptive predictor change preserved Lertick PID and session
+integration: reverse startup order connected
+integration: conflicting pin preserved; auto mode scheduled independently
+{"environment": {"kernel": "7.0.0-38-generic", "architecture": "aarch64", "os_release": "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.5 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n", "systemd": "systemd 255 (255.4-1ubuntu8.18)"}, "hardware": "temporary RK3588 simulated CPU-control files; real sched_ext/BPF", "checks": {"lerwatt_first_continuous_connection": true, "lertick_restart_new_session_reconnects": true, "independent_scheduler_policy_change": true, "frozen_demand_expires_and_recovers": true, "lerwatt_restart_restores_expires_reconnects": true, "independent_power_predictor_change": true, "lertick_first_connection": true, "final_control_restore_scheduler_fallback_pin_cleanup": true, "foreign_pin_preserved_auto_falls_back_without_advice": true}, "result": "passed"}
+integration artifacts: /var/tmp/lertick-power-integration-s07845od

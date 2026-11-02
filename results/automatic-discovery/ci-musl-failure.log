@@ -1,0 +1,50 @@
+2026-11-02T17:34:53.3529830Z (62/72) Installing cfdisk (2.41.6-r1)
+2026-11-02T17:34:53.3598514Z (63/72) Installing umount (2.41.6-r1)
+2026-11-02T17:34:53.3663964Z (64/72) Installing flock (2.41.6-r1)
+2026-11-02T17:34:53.3735985Z (65/72) Installing lsblk (2.41.6-r1)
+2026-11-02T17:34:53.3830577Z (66/72) Installing libcap-ng (0.8.5-r0)
+2026-11-02T17:34:53.3904490Z (67/72) Installing setpriv (2.41.6-r1)
+2026-11-02T17:34:53.3969703Z (68/72) Installing lscpu (2.41.6-r1)
+2026-11-02T17:34:53.4064862Z (69/72) Installing logger (2.41.6-r1)
+2026-11-02T17:34:53.4142784Z (70/72) Installing partx (2.41.6-r1)
+2026-11-02T17:34:53.4218291Z (71/72) Installing fstrim (2.41.6-r1)
+2026-11-02T17:34:53.4299460Z (72/72) Installing findmnt (2.41.6-r1)
+2026-11-02T17:34:53.4381436Z Executing busybox-1.37.0-r20.trigger
+2026-11-02T17:34:53.4464693Z OK: 293 MiB in 88 packages
+2026-11-02T17:34:53.5459397Z mkdir -p build
+2026-11-02T17:34:53.5482540Z cc -Isrc/userspace -O2 -std=gnu11 -Wall -Wextra -Werror tests/test_loader_runtime.c src/userspace/runtime.c -o build/test_loader_runtime
+2026-11-02T17:34:53.8562611Z python3 tests/check_integration_abi.py
+2026-11-02T17:34:53.9594018Z Integration ABI 2 golden check passed (56 values).
+2026-11-02T17:34:53.9684474Z build/test_loader_runtime
+2026-11-02T17:34:53.9818330Z loader runtime: private output, lock ownership, idle-state guard, readiness notify and maintenance lifetime passed
+2026-11-02T17:34:53.9821555Z sh tests/test_deploy.sh
+2026-11-02T17:35:46.4816372Z test_deploy: plan/check/verify, indefinite/finite defaults, signals, trust paths, maintenance, staging and build fingerprints passed (stubs only)
+2026-11-02T17:35:46.4896827Z sh tests/test_service.sh
+2026-11-02T17:37:51.4804581Z Traceback (most recent call last):
+2026-11-02T17:37:51.4806631Z   File "<stdin>", line 162, in <module>
+2026-11-02T17:37:51.4807536Z   File "<stdin>", line 96, in run
+2026-11-02T17:37:51.4808300Z   File "/usr/lib/python3.12/subprocess.py", line 550, in run
+2026-11-02T17:37:51.4809244Z     stdout, stderr = process.communicate(input, timeout=timeout)
+2026-11-02T17:37:51.4810045Z                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-11-02T17:37:51.4810884Z   File "/usr/lib/python3.12/subprocess.py", line 1209, in communicate
+2026-11-02T17:37:51.4814888Z     stdout, stderr = self._communicate(input, endtime, timeout)
+2026-11-02T17:37:51.4816335Z                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-11-02T17:37:51.4817202Z   File "/usr/lib/python3.12/subprocess.py", line 2116, in _communicate
+2026-11-02T17:37:51.4826043Z     self._check_timeout(endtime, orig_timeout, stdout, stderr)
+2026-11-02T17:37:51.4828508Z   File "/usr/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+2026-11-02T17:37:51.4833472Z     raise TimeoutExpired(
+2026-11-02T17:37:51.4835818Z subprocess.TimeoutExpired: Command '['/tmp/lertick-service-fixtures-z46ppmz6/source/scripts/service_manager.sh', '/tmp/lertick-service-fixtures-z46ppmz6/prefix', 'update', '/tmp/lertick-service-fixtures-z46ppmz6/source']' timed out after 15 seconds
+2026-11-02T17:37:51.4921639Z make: *** [Makefile:61: test-deployment] Error 1
+2026-11-02T17:37:51.9770854Z ##[error]Process completed with exit code 2.
+2026-11-02T17:37:51.9919922Z Post job cleanup.
+2026-11-02T17:37:52.0831988Z [command]/usr/bin/git version
+2026-11-02T17:37:52.0882111Z git version 2.56.0
+2026-11-02T17:37:52.0927350Z Temporarily overriding HOME='/home/runner/work/_temp/2e16060e-2014-4a7c-82d8-cb90e20e31cb' before making global git config changes
+2026-11-02T17:37:52.0928753Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-02T17:37:52.0933421Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/lertick/lertick
+2026-11-02T17:37:52.0983900Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-02T17:37:52.1025441Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-02T17:37:52.1350502Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-02T17:37:52.1399332Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-02T17:37:52.1828243Z Cleaning up orphan processes
+2026-11-02T17:37:52.2310638Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

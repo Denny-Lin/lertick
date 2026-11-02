@@ -98,7 +98,12 @@ with tempfile.TemporaryDirectory(prefix='lertick-service-fixtures-') as td:
  def calls():return [json.loads(x) for x in log.read_text().splitlines()]
  def clear():log.write_text('')
  def run(cmd,ok=True,extra=None,bundle=None):
-  p=subprocess.run([str(tree/'scripts/service_manager.sh'),str(prefix),cmd,str(bundle or tree)],env=dict(env,**(extra or {})),capture_output=True,text=True,timeout=15)
+  # Transactions launch many trust/hash stub processes. Slow musl/container
+  # runners need a fixture budget, not the worker's production watchdog budget.
+  try:
+   p=subprocess.run([str(tree/'scripts/service_manager.sh'),str(prefix),cmd,str(bundle or tree)],env=dict(env,**(extra or {})),capture_output=True,text=True,timeout=45)
+  except subprocess.TimeoutExpired as error:
+   raise AssertionError(('fixture transaction timed out',cmd,calls()[-12:])) from error
   assert (p.returncode==0)==ok,(cmd,p.returncode,p.stdout,p.stderr)
   return p
  def marker(name):return (prefix/'lib/lertick'/name).read_text().strip()
@@ -111,11 +116,16 @@ with tempfile.TemporaryDirectory(prefix='lertick-service-fixtures-') as td:
  for part in ['Type=notify','NotifyAccess=main','Restart=no',str(prefix)+'/libexec/lertick/service_manager.sh '+str(prefix)+' service-run','NoNewPrivileges=yes','LogRateLimitBurst=100']:
   assert part in unittext,part
  for file in (prefix/'lib/lertick/releases'/first).iterdir():assert not file.is_symlink() and not(file.stat().st_mode&0o222)
- assert config.read_text()=='lerwatt=off\n' and config.stat().st_mode&0o777==0o600 and configdir.stat().st_mode&0o777==0o700
- assert 'configured: off' in integration('status').stdout
+ assert config.read_text()=='lerwatt=auto\n' and config.stat().st_mode&0o777==0o600 and configdir.stat().st_mode&0o777==0o700
+ assert 'configured: auto' in integration('status').stdout
  # Public installed helper preserves arguments across its normal sudo path.
  clear();query=subprocess.run([str(prefix/'bin/lertick'),'integration'],env=dict(env,STUB_UID='1000',PREFIX=str(prefix),DESTDIR=''),capture_output=True,text=True,timeout=15)
- assert query.returncode==0 and 'configured: off' in query.stdout and any(c['tool']=='sudo' for c in calls()),(query.returncode,query.stdout,query.stderr)
+ assert query.returncode==0 and 'configured: auto' in query.stdout and any(c['tool']=='sudo' for c in calls()),(query.returncode,query.stdout,query.stderr)
+ # First enable uses automatic discovery without a separate integration command.
+ clear();run('enable')
+ automatic=[c for c in calls() if c['tool']=='loader' and '--notify' in c['args']][-1]
+ assert '--lerwatt-auto' in automatic['args'] and '--lerwatt' not in automatic['args']
+ run('disable');assert config.read_text()=='lerwatt=auto\n'
  # A stopped service stays stopped; on/off is exact data and never a sourced script.
  clear();integration('on');assert config.read_text()=='lerwatt=on\n' and not json.loads(service.read_text())['active']
  assert not any(c['tool']=='systemctl' and c['args'][0] in ['start','stop','enable','restart'] for c in calls())

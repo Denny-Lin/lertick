@@ -2,6 +2,11 @@
 
 <p align="center">CPU scheduling that learns inside the Linux kernel.</p>
 
+Lertick always owns its scheduling model. New installations automatically exchange
+compatible, fresh advice with a running Lerwatt; no peer-specific install flag is
+required. Missing or removed peers leave scheduling independent. Neither project
+starts, replaces or retrains the other. [Automatic coordination](docs/INTEGRATION.md).
+
 ## Performance at a glance
 
 **Lertick online mode recorded 50.34% lower short-burst completion p99 than Linux EEVDF in our VM benchmark.** Mixed-contention tests also expose clear regressions:

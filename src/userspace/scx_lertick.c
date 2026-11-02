@@ -459,7 +459,8 @@ static void usage(FILE *out, const char *argv0)
 		"  --cpuperf auto|util|max CPU frequency requests to schedutil (default auto:\n"
 		"                          util when a policy uses schedutil or with --lerwatt;\n"
 		"                          max keeps the kernel default, every CPU at 1024)\n"
-		"  --lerwatt               Attach the optional Lerwatt plug-in: pin contract\n"
+		"  --lerwatt-auto          Discover optional power advice; failures keep scheduling\n"
+		"  --lerwatt               Strict optional Lerwatt plug-in: pin contract\n"
 		"                          maps under " LW_CONTRACT_PIN_DIR ", publish demand\n"
 		"  --fault-stall --stall-tgid PID --partial --dangerous-vm-test --duration SEC\n"
 		"                          QEMU-only opted-task watchdog injection\n"
@@ -530,7 +531,7 @@ int main(int argc, char **argv)
 	/* CPU frequency requests and the optional Lerwatt plug-in. */
 	const char *cpuperf_arg = "auto", *cpuperf_reason = "explicit";
 	unsigned cpuperf = LERTICK_CPUPERF_MAX;
-	bool lerwatt = false, cpu_report;
+	bool lerwatt = false, lerwatt_auto = false, cpu_report;
 	unsigned pin_mask = 0;
 	bool model_init_ewma = false;
 	bool model_update_carry = false;
@@ -543,7 +544,7 @@ int main(int argc, char **argv)
 	int ncpus;
 	enum { OPT_CHECK = 1000, OPT_SAMPLE, OPT_TRACK, OPT_FIXED, OPT_MIN, OPT_MAX,
 	       OPT_PARTIAL, OPT_FAULT, OPT_STALL, OPT_DANGER, OPT_EXPECT, OPT_PROFILE, OPT_ALL,
-	       OPT_CPUPERF, OPT_LERWATT, OPT_MODEL_INIT, OPT_MODEL_UPDATE,
+	       OPT_CPUPERF, OPT_LERWATT, OPT_LERWATT_AUTO, OPT_MODEL_INIT, OPT_MODEL_UPDATE,
 	       OPT_VERIFY, OPT_MAINTENANCE, OPT_VERSION, OPT_SUMMARY, OPT_FULL_STATS, OPT_NOTIFY };
 	static const struct option opts[] = {
 		{ "mode", required_argument, NULL, 'm' }, { "duration", required_argument, NULL, 'd' },
@@ -563,6 +564,7 @@ int main(int argc, char **argv)
 		{ "fault-stall", no_argument, NULL, OPT_FAULT }, { "stall-tgid", required_argument, NULL, OPT_STALL },
 		{ "dangerous-vm-test", no_argument, NULL, OPT_DANGER }, { "expect-watchdog", no_argument, NULL, OPT_EXPECT },
 		{ "cpuperf", required_argument, NULL, OPT_CPUPERF }, { "lerwatt", no_argument, NULL, OPT_LERWATT },
+		{ "lerwatt-auto", no_argument, NULL, OPT_LERWATT_AUTO },
 		{ "model-init", required_argument, NULL, OPT_MODEL_INIT },
 		{ "model-update", required_argument, NULL, OPT_MODEL_UPDATE },
 		{ NULL, 0, NULL, 0 },
@@ -610,7 +612,8 @@ int main(int argc, char **argv)
 				return 2;
 			}
 			break;
-		case OPT_LERWATT: lerwatt = true; break;
+		case OPT_LERWATT: lerwatt = true; lerwatt_auto = false; break;
+		case OPT_LERWATT_AUTO: lerwatt = true; lerwatt_auto = true; break;
 		case OPT_MODEL_INIT:
 			if (strcmp(optarg, "bias") && strcmp(optarg, "ewma")) {
 				usage(stderr, argv[0]);
@@ -707,7 +710,7 @@ int main(int argc, char **argv)
 		cpuperf = LERTICK_CPUPERF_UTIL;
 	} else if (!strcmp(cpuperf_arg, "max")) {
 		cpuperf = LERTICK_CPUPERF_MAX;
-	} else if (lerwatt) {
+	} else if (lerwatt && !lerwatt_auto) {
 		cpuperf = LERTICK_CPUPERF_UTIL;
 		cpuperf_reason = "lerwatt";
 	} else if (ltlw_schedutil_in_use("")) {
@@ -719,13 +722,13 @@ int main(int argc, char **argv)
 	cpu_report = cpuperf == LERTICK_CPUPERF_UTIL || lerwatt;
 	if (lerwatt && ltlw_discover(&topo, ncpus, "", NULL)) {
 		fprintf(stderr, "Lerwatt plug-in: cannot discover CPU clusters.\n");
-		status = 1;
-		goto cleanup;
+		if (!lerwatt_auto) { status = 1; goto cleanup; }
+		lerwatt = false;
 	}
 	if (lerwatt && new_power_session(&topo.session_id)) {
 		fprintf(stderr, "Lerwatt plug-in: cannot obtain a fresh attachment identity.\n");
-		status = 1;
-		goto cleanup;
+		if (!lerwatt_auto) { status = 1; goto cleanup; }
+		lerwatt = false;
 	}
 	if (lerwatt && topo.npolicies > LW_CONTRACT_MAX_CLUSTERS)
 		fprintf(stderr, "Lerwatt plug-in: %d cpufreq policies; CPUs past the first %d have no contract.\n",
@@ -833,7 +836,9 @@ int main(int argc, char **argv)
 		cpu_buf = calloc((size_t)ncpus, sizeof(*cpu_buf));
 		demand_len = (sizeof(struct lt_demand_rec) * LW_CONTRACT_MAX_CLUSTERS +
 			      (size_t)page - 1) / (size_t)page * (size_t)page;
-		ok = cpu_buf && !ltlw_pin_prepare(LW_CONTRACT_PIN_DIR, pins, 2, err, sizeof(err));
+		ok = cpu_buf && !(lerwatt_auto ?
+			ltlw_pin_prepare_auto(LW_CONTRACT_PIN_DIR, pins, 2, err, sizeof(err)) :
+			ltlw_pin_prepare(LW_CONTRACT_PIN_DIR, pins, 2, err, sizeof(err)));
 		if (ok) {
 			if (bpf_map__pin(skel->maps.lw_contract, LW_CONTRACT_PIN_LW)) {
 				snprintf(err, sizeof(err), "cannot pin contract maps: %s", strerror(errno));
@@ -858,8 +863,14 @@ int main(int argc, char **argv)
 		}
 		if (!ok) {
 			fprintf(stderr, "Lerwatt plug-in: %s\n", err);
-			status = 1;
-			goto cleanup;
+			if (!lerwatt_auto) { status = 1; goto cleanup; }
+			/* Disable BPF consumption too: even a briefly exposed partial
+			 * mapping must not affect independent scheduling after failure. */
+			skel->bss->lerwatt_runtime_disabled = true;
+			lerwatt_detach(skel, pin_mask, demand_mem, demand_len);
+			pin_mask = 0; demand_mem = NULL; demand_len = 0;
+			lerwatt = false;
+			fprintf(stderr, "Lerwatt auto discovery unavailable; scheduling independently.\n");
 		}
 	}
 	if (exit_req)

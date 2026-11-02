@@ -46,6 +46,9 @@ const volatile bool model_update_carry;
 const volatile u32 cpuperf_mode = LERTICK_CPUPERF_MAX;
 /* Optional Lerwatt plug-in: read lw_contract, keep demand counters. */
 const volatile bool lerwatt_enabled;
+/* Loader can disable advice after a best-effort publication failure, before
+ * attach. Keep this writable: rodata is frozen when BPF is loaded. */
+bool lerwatt_runtime_disabled;
 const volatile u64 lerwatt_session_id;
 const volatile u64 cluster_topology_id[LW_CONTRACT_MAX_CLUSTERS];
 const volatile u32 nr_cpus = 1;
@@ -214,7 +217,7 @@ static __always_inline bool contract_get(s32 cpu, u64 now, struct lertick_contra
 	out->price_milli = 0;
 	out->floor_cap = 0;
 	out->ceiling_cap = 0;
-	if (!lerwatt_enabled || idx >= LERTICK_MAX_CPUS)
+	if (!lerwatt_enabled || READ_ONCE(lerwatt_runtime_disabled) || idx >= LERTICK_MAX_CPUS)
 		return false;
 	cluster = cpu_cluster[idx];
 	if (cluster >= LW_CONTRACT_MAX_CLUSTERS)

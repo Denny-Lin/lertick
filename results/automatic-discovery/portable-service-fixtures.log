@@ -1,0 +1,1 @@
+test_service: notify readiness, long-running intent, immutable bundles, active verification, atomic update/rollback, foreign refusal and default fallback passed (fixtures only)
