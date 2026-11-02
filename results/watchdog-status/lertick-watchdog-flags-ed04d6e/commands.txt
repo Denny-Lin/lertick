@@ -1,0 +1,5 @@
+/home/ubuntu/lertick-burst-init/build/scx_lertick --mode fixed --duration 2 --sample-ms 250 --stats-json /var/tmp/lertick-watchdog-flags-ed04d6e/normal.jsonl
+/bin/bash -c 'kill -STOP $$; exec /home/ubuntu/lertick-burst-init/build/burst_workload --role burst --duration 1 --policy-ext --cpu 0 --burst-us 1000 --sleep-us 2000'
+/home/ubuntu/lertick-burst-init/build/scx_lertick --mode fixed --duration 10 --sample-ms 250 --stats-json /var/tmp/lertick-watchdog-flags-ed04d6e/expected.jsonl --partial --fault-stall --stall-tgid 107889 --dangerous-vm-test --expect-watchdog
+/bin/bash -c 'kill -STOP $$; exec /home/ubuntu/lertick-burst-init/build/burst_workload --role burst --duration 1 --policy-ext --cpu 0 --burst-us 1000 --sleep-us 2000'
+/home/ubuntu/lertick-burst-init/build/scx_lertick --mode fixed --duration 10 --sample-ms 250 --stats-json /var/tmp/lertick-watchdog-flags-ed04d6e/unexpected.jsonl --partial --fault-stall --stall-tgid 107892 --dangerous-vm-test

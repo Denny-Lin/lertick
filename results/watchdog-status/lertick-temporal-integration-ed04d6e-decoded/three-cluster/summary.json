@@ -1,0 +1,189 @@
+{
+  "completed": true,
+  "duration_s": 250,
+  "scope": "One simulated board and real BPF/daemon integration; no accuracy or throughput claim.",
+  "restored_knobs": true,
+  "journal_removed": true,
+  "topology": {
+    "source": "sim",
+    "root": "/var/tmp/lertick-temporal-integration-ed04d6e-decoded/three-cluster/root",
+    "policies": 3,
+    "clusters": [
+      [
+        0,
+        1,
+        2,
+        3
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        6,
+        7
+      ]
+    ],
+    "capacity_override": [
+      397,
+      397,
+      397,
+      397,
+      1024,
+      1024,
+      1024,
+      1024
+    ]
+  },
+  "cpu_util_max": {
+    "0": 1024,
+    "1": 1023,
+    "2": 1023,
+    "3": 1023,
+    "4": 1022,
+    "5": 1024,
+    "6": 1023,
+    "7": 1023
+  },
+  "simultaneous_busy_periods": 1470,
+  "joint_periods": 1595,
+  "temporal_points": 152,
+  "maps": {
+    "lw_contract": [
+      {
+        "key": 0,
+        "value": {
+          "seq": 4592,
+          "version": 1,
+          "ceiling_cap": 397,
+          "floor_cap": 0,
+          "energy_price_milli": 0,
+          "thermal_headroom_mc": 33770,
+          "valid_until_ns": 32190149211615
+        }
+      },
+      {
+        "key": 1,
+        "value": {
+          "seq": 4592,
+          "version": 1,
+          "ceiling_cap": 1024,
+          "floor_cap": 0,
+          "energy_price_milli": 0,
+          "thermal_headroom_mc": 31924,
+          "valid_until_ns": 32190149211615
+        }
+      },
+      {
+        "key": 2,
+        "value": {
+          "seq": 4592,
+          "version": 1,
+          "ceiling_cap": 1024,
+          "floor_cap": 0,
+          "energy_price_milli": 0,
+          "thermal_headroom_mc": 31000,
+          "valid_until_ns": 32190149211615
+        }
+      }
+    ],
+    "lt_demand": [
+      {
+        "key": 0,
+        "value": {
+          "seq": 4402,
+          "version": 1,
+          "pred_util": 395,
+          "cpuperf_max": 395,
+          "cpuperf_mean": 395,
+          "lat_crit_milli": 3,
+          "p99_wake_ns": 1048576,
+          "updated_ns": 32189859605860,
+          "reserved": 0
+        }
+      },
+      {
+        "key": 1,
+        "value": {
+          "seq": 4402,
+          "version": 1,
+          "pred_util": 1021,
+          "cpuperf_max": 1021,
+          "cpuperf_mean": 1021,
+          "lat_crit_milli": 4,
+          "p99_wake_ns": 1048576,
+          "updated_ns": 32189859605860,
+          "reserved": 0
+        }
+      },
+      {
+        "key": 2,
+        "value": {
+          "seq": 4402,
+          "version": 1,
+          "pred_util": 1021,
+          "cpuperf_max": 1021,
+          "cpuperf_mean": 1021,
+          "lat_crit_milli": 7,
+          "p99_wake_ns": 1048576,
+          "updated_ns": 32189859605860,
+          "reserved": 0
+        }
+      }
+    ]
+  },
+  "exit": {
+    "event": "exit",
+    "unexpected_fallback": false,
+    "watchdog_observed": false,
+    "watchdog_expected": false,
+    "watchdog_triggered": false,
+    "exit_kind": 64,
+    "exit_code": 0,
+    "reason": "unregistered from user space",
+    "message": "",
+    "default_restored": true,
+    "signal": 0,
+    "status": 0
+  },
+  "final_stats": {
+    "local_enqueue": 522550,
+    "global_enqueue": 146102,
+    "runs": 313742,
+    "runtime_ns": 1167310086584,
+    "completed_bursts": 252195,
+    "censored_bursts": 79,
+    "training_updates": 252195,
+    "inferences": 252199,
+    "adaptive_slices": 251614,
+    "slice_changes": 22817,
+    "fault_stalls": 0,
+    "counter_errors": 0,
+    "alloc_failures": 0,
+    "snapshot_failures": 0,
+    "prediction_ns_sum": 42730485339,
+    "selected_slice_ns_sum": 982957956863,
+    "matching_dispatch_slices": 313396,
+    "continuation_slices": 355255,
+    "continuation_pending_ns": 6567611156723,
+    "init_tasks": 198,
+    "exit_tasks": 198,
+    "training_time_ns": 0,
+    "inference_time_ns": 0,
+    "prediction_samples": 251786,
+    "linear_abs_error_ns": 7654161662,
+    "ewma_abs_error_ns": 7715026562,
+    "wake_samples": 252199,
+    "wake_to_run_ns": 36079760558,
+    "wake_to_run_max_ns": 7171180,
+    "cpuperf_sets": 1196781,
+    "cpuperf_idle_sets": 35497,
+    "contract_applied": 1545310,
+    "contract_stale": 4129,
+    "live_tasks": 0
+  },
+  "simulator_summary": "lerwatt-sim: 250.1 s simulated in 250.1 s: energy 1743.1 J (mean 6.97 W), work served 65.8%, 0 throttle steps, peak 49.9 / 49.9 / 48.1 C (big0 / big1 / little), 0 bad writes",
+  "daemon_exit": 0,
+  "scx_exit": 0,
+  "simulator_exit": 0
+}

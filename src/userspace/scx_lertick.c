@@ -450,7 +450,7 @@ int main(int argc, char **argv)
 	unsigned fixed_us = 2000, min_us = 500, max_us = 5000, tracked_tgid = 0, stall_tgid = 0;
 	bool check = false, partial = false, fault = false, danger = false, expect_watchdog = false, profile = false;
 	bool track_all = false;
-	bool fallback, restored, watchdog_observed = false;
+	bool fallback, restored, watchdog_observed = false, stall_kind_known;
 	__u64 start, next_sample, exit_code;
 	u64 stall_kind = 0, unreg_kind = 0;
 	int opt, status = 0, final_kind;
@@ -622,7 +622,8 @@ int main(int argc, char **argv)
 		if (!flag) { fprintf(stderr, "BLOCKER: kernel lacks partial switch flag.\n"); scx_lertick__destroy(skel); return 1; }
 		skel->struct_ops.lertick_ops->flags |= flag;
 	}
-	if (expect_watchdog && !__COMPAT_read_enum("scx_exit_kind", "SCX_EXIT_ERROR_STALL", &stall_kind)) {
+	stall_kind_known = __COMPAT_read_enum("scx_exit_kind", "SCX_EXIT_ERROR_STALL", &stall_kind);
+	if (expect_watchdog && !stall_kind_known) {
 		fprintf(stderr, "BLOCKER: cannot identify watchdog exit kind in running kernel BTF.\n");
 		scx_lertick__destroy(skel);
 		return 1;
@@ -729,8 +730,10 @@ int main(int argc, char **argv)
 	lerwatt_detach(skel, pinned, demand_mem, demand_len);
 	free(cpu_buf);
 	exit_code = UEI_REPORT(skel, uei);
-	fprintf(out, "{\"event\":\"exit\",\"unexpected_fallback\":%s,\"watchdog_observed\":%s,\"exit_kind\":%d,\"exit_code\":%lld,\"reason\":",
+	fprintf(out, "{\"event\":\"exit\",\"unexpected_fallback\":%s,\"watchdog_observed\":%s,\"watchdog_expected\":%s,\"watchdog_triggered\":%s,\"exit_kind\":%d,\"exit_code\":%lld,\"reason\":",
 		fallback && !watchdog_observed ? "true" : "false", watchdog_observed ? "true" : "false",
+		expect_watchdog ? "true" : "false",
+		!stall_kind_known ? "null" : (__u64)final_kind == stall_kind ? "true" : "false",
 		skel->data->uei.kind, (long long)exit_code);
 	json_string(out, skel->data->uei.reason);
 	fprintf(out, ",\"message\":"); json_string(out, skel->data->uei.msg);

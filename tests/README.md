@@ -42,6 +42,23 @@ QEMU guests with an independent host control path. Map capacity, extended
 affinity/migration stress, fairness and starvation require broader validation
 beyond the small Phase 1 deployment check.
 
+Exit telemetry reports `watchdog_triggered` whenever the kernel reports a
+runnable-task stall, and `watchdog_expected` when the loader was explicitly
+started with `--expect-watchdog`. The legacy `watchdog_observed` field means
+that an **expected** watchdog was observed. An unexpected stall therefore
+has `watchdog_triggered: true`, `watchdog_observed: false`,
+`unexpected_fallback: true`, and a nonzero loader status. Existing status,
+recovery and legacy-field behavior are preserved.
+`watchdog_triggered` is null if the running kernel does not expose the stall
+exit enum; this optional classification does not prevent an ordinary run.
+
+In an isolated QEMU/KVM guest, `sudo python3 tests/validate_watchdog_flags.py
+--output results/local/watchdog-flags-new` checks normal shutdown and both
+expected/unexpected intentional stalls, including their distinct loader
+statuses. It refuses an existing scheduler and retains every log.
+See the [recorded exit and eight-vCPU plug-in checks](../results/watchdog-status/README.md)
+for actual results, including the failed collector attempt and complete rerun.
+
 Phase 2 adds independent service arithmetic and actual Linux lifecycle tests:
 
 ```sh

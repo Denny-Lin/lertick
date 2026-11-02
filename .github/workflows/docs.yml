@@ -39,4 +39,4 @@ jobs:
       - name: Check script syntax
         run: |
           bash -n scripts/preflight.sh scripts/fetch_reference.sh scripts/build_libbpf.sh
-          python3 -m py_compile tests/validate_linux.py tests/validate_phase2.py benchmarks/run_phase2.py benchmarks/run_model_confirmation.py benchmarks/compact_confirmation.py benchmarks/analyze_phase2.py benchmarks/analyze_model_init.py benchmarks/analyze_online_utility.py scripts/qemu_vm.py
+          python3 -m py_compile tests/validate_linux.py tests/validate_phase2.py tests/validate_watchdog_flags.py benchmarks/run_phase2.py benchmarks/run_model_confirmation.py benchmarks/compact_confirmation.py benchmarks/analyze_phase2.py benchmarks/analyze_model_init.py benchmarks/analyze_online_utility.py scripts/qemu_vm.py

@@ -1,0 +1,65 @@
+{
+  "kernel": "7.0.0-38-generic",
+  "architecture": "aarch64",
+  "tests": {
+    "normal": {
+      "passed": true,
+      "exit": {
+        "event": "exit",
+        "unexpected_fallback": false,
+        "watchdog_observed": false,
+        "watchdog_expected": false,
+        "watchdog_triggered": false,
+        "exit_kind": 64,
+        "exit_code": 0,
+        "reason": "unregistered from user space",
+        "message": "",
+        "default_restored": true,
+        "signal": 0,
+        "status": 0
+      }
+    },
+    "expected": {
+      "passed": true,
+      "intentional_fault": true,
+      "exit": {
+        "event": "exit",
+        "unexpected_fallback": false,
+        "watchdog_observed": true,
+        "watchdog_expected": true,
+        "watchdog_triggered": true,
+        "exit_kind": 1026,
+        "exit_code": 0,
+        "reason": "runnable task stall",
+        "message": "lertick_burst[107889] failed to run for 1.505s",
+        "default_restored": true,
+        "signal": 0,
+        "status": 0
+      }
+    },
+    "unexpected": {
+      "passed": true,
+      "intentional_fault": true,
+      "exit": {
+        "event": "exit",
+        "unexpected_fallback": true,
+        "watchdog_observed": false,
+        "watchdog_expected": false,
+        "watchdog_triggered": true,
+        "exit_kind": 1026,
+        "exit_code": 0,
+        "reason": "runnable task stall",
+        "message": "lertick_burst[107892] failed to run for 1.489s",
+        "default_restored": true,
+        "signal": 0,
+        "status": 1
+      }
+    }
+  },
+  "comparison": [],
+  "performance_claim": false,
+  "model_init": "bias",
+  "model_update": "trunc",
+  "completed": true,
+  "final_state": "disabled"
+}
