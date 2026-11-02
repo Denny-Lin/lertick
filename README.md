@@ -2,6 +2,21 @@
 
 <p align="center">CPU scheduling that learns inside the Linux kernel.</p>
 
+## Performance at a glance
+
+**Lertick online mode recorded 50.34% lower short-burst completion p99 than Linux EEVDF in our VM benchmark.** Mixed-contention tests also expose clear regressions:
+
+| Workload | Compared with | Metric | Measured change |
+| --- | --- | --- | --- |
+| Short CPU bursts (`shortburst`) | Linux EEVDF | Burst completion p99 | **50.34% lower** |
+| Frequent wakeups (`wakeheavy`) | Linux EEVDF | Burst completion p99 | **27.88% lower** |
+| Mixed CPU contention (`mixed`) | Linux EEVDF | Kernel wake p99 | **157.54% higher** |
+| Mixed CPU contention (`mixed`) | `scx_bpfland` v1.0.16 | Burst completion p99 | **155.40% higher** |
+
+These are median paired trial changes from **five repetitions** on **ARM64 QEMU/HVF, Linux `7.0.0-38-generic`, four vCPUs**, using implementation `109ce71`, 10-second measured windows and two-second warm-up. Completion includes the burst's CPU service; wake latency measures wakeup to running. The intervals and every policy are in the [Phase 2 results](docs/PHASE2_RESULTS.md#selected-gains-and-regressions--measured-tradeoffs), with [raw evidence and reproduction commands](results/phase2/README.md). These results do not establish a learning benefit over fixed slices or performance on current kernels and physical hardware.
+
+**Latest model work: better predictions do not yet mean faster scheduling.** In the separate [240-trial confirmation](results/model-confirmation/README.md), optional EWMA initialization and fractional updates reduced online prediction MAE by **61–82%** across four custom workloads versus the original online model. There was no reliable throughput gain; shortburst wake p99 **increased 35.65%** versus original online, and full-preemption held-out alternating-burst MAE **increased 17.82%**. Model defaults remain `bias` / `trunc`. A [natural watchdog fallback remains unresolved](results/model-confirmation/README.md#unresolved-fallback-and-omissions); a successful retry did not erase it.
+
 <p align="center">
   <a href="#get-started-on-linux">Get started →</a> &nbsp;&nbsp;
   <a href="docs/DAILY_USE.md">Daily use →</a> &nbsp;&nbsp;
@@ -126,10 +141,9 @@ Let [Lerwatt](https://github.com/Denny-Lin/lerwatt) manage CPU power constraints
 | Daily service lifecycle in that VM | 65-second continuous session; enable/start/stop/restart/disable, update, injected startup failure with old-bundle recovery, manual rollback, inactive update, local reports and uninstall |
 | Historical correctness and recovery | 19 correctness cases, 15 recovery tests, churn and concurrent fork checks |
 | Historical benchmarks | 360 completed scheduler/control trials with retained results and uncertainty |
+| Optional model confirmation | 240 valid long-window trials; prediction gains, latency regressions and a separate failed session remain documented |
 
 Ubuntu release numbers alone do not determine support. Stock Ubuntu 22.04/24.04 GA kernels are not the tested sched_ext target; HWE/OEM kernels can differ. Other kernels require their own build, verifier and runtime checks. Short loader checks do not establish days of service uptime, physical-hardware performance or cross-kernel compatibility. [Exact requirements and deployment evidence →](docs/INSTALL.md)
-
-**Learning works in the kernel. A scheduling advantage is not established.** Current comparisons found no reliable throughput gain over fixed slices, and some wake-latency cases regressed. Model variants and their unresolved outcomes remain documented. [Results and limitations →](docs/PHASE2_RESULTS.md) · [Model confirmation →](results/model-confirmation/README.md)
 
 ## Go further
 
