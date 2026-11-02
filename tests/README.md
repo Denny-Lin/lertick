@@ -52,6 +52,11 @@ recovery and legacy-field behavior are preserved.
 `watchdog_triggered` is null if the running kernel does not expose the stall
 exit enum; this optional classification does not prevent an ordinary run.
 
+In an isolated QEMU/KVM guest, `sudo python3 tests/validate_watchdog_flags.py
+--output results/local/watchdog-flags-new` checks normal shutdown and both
+expected/unexpected intentional stalls, including their distinct loader
+statuses. It refuses an existing scheduler and retains every log.
+
 Phase 2 adds independent service arithmetic and actual Linux lifecycle tests:
 
 ```sh
