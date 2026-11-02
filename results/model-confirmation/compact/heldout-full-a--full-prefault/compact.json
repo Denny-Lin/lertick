@@ -1,0 +1,12 @@
+{
+  "source_name": "heldout-full-a/full-prefault",
+  "complete_trials": 20,
+  "performance_claim": false,
+  "all_planned_trials_retained": true,
+  "limits": "Full raw logs retained separately; per-job percentile recomputation needs those logs.",
+  "raw_archive": {
+    "name": "heldout-full-a.tgz",
+    "bytes": 67913366,
+    "sha256": "6844a43f3f79794b42053eae44e0d4bed7e7f24ff8a6b623ed7f457fe1ed7f6e"
+  }
+}

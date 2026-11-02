@@ -1,0 +1,12 @@
+{
+  "source_name": "stable-lazy-repeat/lazy-prefault",
+  "complete_trials": 40,
+  "performance_claim": false,
+  "all_planned_trials_retained": true,
+  "limits": "Full raw logs retained separately; per-job percentile recomputation needs those logs.",
+  "raw_archive": {
+    "name": "stable-lazy-repeat.tgz",
+    "bytes": 77836646,
+    "sha256": "1bbfcb6e1fd9efc756454ebee5d8bb005f8b9b27c8d53f1ee0c52f0333b8b4bb"
+  }
+}
