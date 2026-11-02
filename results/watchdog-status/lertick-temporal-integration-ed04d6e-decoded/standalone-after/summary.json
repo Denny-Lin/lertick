@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "exit": {
+    "event": "exit",
+    "unexpected_fallback": false,
+    "watchdog_observed": false,
+    "watchdog_expected": false,
+    "watchdog_triggered": false,
+    "exit_kind": 64,
+    "exit_code": 0,
+    "reason": "unregistered from user space",
+    "message": "",
+    "default_restored": true,
+    "signal": 0,
+    "status": 0
+  },
+  "defaults_used": true
+}

@@ -56,6 +56,8 @@ In an isolated QEMU/KVM guest, `sudo python3 tests/validate_watchdog_flags.py
 --output results/local/watchdog-flags-new` checks normal shutdown and both
 expected/unexpected intentional stalls, including their distinct loader
 statuses. It refuses an existing scheduler and retains every log.
+See the [recorded exit and eight-vCPU plug-in checks](../results/watchdog-status/README.md)
+for actual results, including the failed collector attempt and complete rerun.
 
 Phase 2 adds independent service arithmetic and actual Linux lifecycle tests:
 

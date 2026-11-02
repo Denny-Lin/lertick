@@ -1,0 +1,54 @@
+
+DEBUG DUMP
+================================================================================
+
+kworker/u32:2[104334] triggered exit kind 1026:
+  runnable task stall (lertick_burst[107889] failed to run for 1.505s)
+
+Backtrace:
+  scx_exit+0x64/0xc8
+  scx_watchdog_workfn+0x178/0x280
+  process_one_work+0x1a0/0x578
+  worker_thread+0x19c/0x350
+  kthread+0x114/0x130
+  ret_from_fork+0x10/0x20
+
+CPU states
+----------
+
+CPU 0   : nr_run=1 flags=0x1 cpu_rel=0 ops_qseq=12748482 ksync=26571153
+          curr=swapper/0[0] class=idle_sched_class
+
+  R lertick_burst[107889] -1505ms
+      scx_state/flags=3/0x9 dsq_flags=0x0 ops_state/qseq=2/12748481
+      sticky/holding_cpu=-1/-1 dsq_id=(n/a)
+      dsq_vtime=2029625 slice=2970375 weight=100
+      cpus=01 no_mig=0
+
+    common_nsleep_timens+0x58/0xc0
+    __arm64_sys_clock_nanosleep+0xf0/0x1b0
+    invoke_syscall+0x64/0xf8
+    el0_svc_common.constprop.0+0x4c/0x140
+    do_el0_svc+0x28/0x58
+    el0_svc+0x40/0x1d8
+    el0t_64_sync_handler+0xc0/0x108
+    el0t_64_sync+0x1b8/0x1c0
+
+CPU 7   : nr_run=0 flags=0x1 cpu_rel=0 ops_qseq=83443 ksync=927374
+          curr=kworker/u32:2[104334] class=fair_sched_class
+
+Event counters
+--------------
+              SCX_EV_SELECT_CPU_FALLBACK:                0
+       SCX_EV_DISPATCH_LOCAL_DSQ_OFFLINE:                0
+               SCX_EV_DISPATCH_KEEP_LAST:                0
+                 SCX_EV_ENQ_SKIP_EXITING:                0
+      SCX_EV_ENQ_SKIP_MIGRATION_DISABLED:                0
+                 SCX_EV_REFILL_SLICE_DFL:                0
+                  SCX_EV_BYPASS_DURATION:         18125881
+                  SCX_EV_BYPASS_DISPATCH:                0
+                  SCX_EV_BYPASS_ACTIVATE:                1
+
+================================================================================
+
+EXIT: runnable task stall (lertick_burst[107889] failed to run for 1.505s)

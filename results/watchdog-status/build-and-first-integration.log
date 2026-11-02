@@ -1,0 +1,233 @@
+Linux build and three exit-classification cases
+From /var/tmp/lertick-watchdog-status-source.bundle
+ * branch            HEAD       -> FETCH_HEAD
+Switched to a new branch 'verify-watchdog-ed04d6e'
+Updating 0b23633..ed04d6e
+Fast-forward
+ .github/workflows/docs.yml                         |    4 +-
+ benchmarks/analyze_online_utility.py               |   89 +
+ results/model-confirmation/README.md               |   55 +
+ .../analysis/stable-full--full-prefault.json       | 1587 +++++++++++++++
+ .../stable-full--full-prefault/compact.json        |   12 +
+ .../stable-full--full-prefault/environment.json    |   48 +
+ .../compact/stable-full--full-prefault/plan.json   |  202 ++
+ .../counter-boundaries.json                        |  107 +
+ .../r00-mixed-shadow-ewma-carry/trial.json         |  401 ++++
+ .../r00-mixed-shadow/counter-boundaries.json       |  107 +
+ .../r00-mixed-shadow/trial.json                    |  401 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r00-multicore-shadow-ewma-carry/trial.json     |  540 +++++
+ .../r00-multicore-shadow/counter-boundaries.json   |  107 +
+ .../r00-multicore-shadow/trial.json                |  540 +++++
+ .../counter-boundaries.json                        |  107 +
+ .../r00-shortburst-shadow-ewma-carry/trial.json    |  351 ++++
+ .../r00-shortburst-shadow/counter-boundaries.json  |  107 +
+ .../r00-shortburst-shadow/trial.json               |  351 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r00-wakeheavy-shadow-ewma-carry/trial.json     |  401 ++++
+ .../r00-wakeheavy-shadow/counter-boundaries.json   |  107 +
+ .../r00-wakeheavy-shadow/trial.json                |  401 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r01-mixed-shadow-ewma-carry/trial.json         |  401 ++++
+ .../r01-mixed-shadow/counter-boundaries.json       |  107 +
+ .../r01-mixed-shadow/trial.json                    |  401 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r01-multicore-shadow-ewma-carry/trial.json     |  540 +++++
+ .../r01-multicore-shadow/counter-boundaries.json   |  107 +
+ .../r01-multicore-shadow/trial.json                |  540 +++++
+ .../counter-boundaries.json                        |  107 +
+ .../r01-shortburst-shadow-ewma-carry/trial.json    |  351 ++++
+ .../r01-shortburst-shadow/counter-boundaries.json  |  107 +
+ .../r01-shortburst-shadow/trial.json               |  351 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r01-wakeheavy-shadow-ewma-carry/trial.json     |  401 ++++
+ .../r01-wakeheavy-shadow/counter-boundaries.json   |  107 +
+ .../r01-wakeheavy-shadow/trial.json                |  401 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r02-mixed-shadow-ewma-carry/trial.json         |  401 ++++
+ .../r02-mixed-shadow/counter-boundaries.json       |  107 +
+ .../r02-mixed-shadow/trial.json                    |  401 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r02-multicore-shadow-ewma-carry/trial.json     |  540 +++++
+ .../r02-multicore-shadow/counter-boundaries.json   |  107 +
+ .../r02-multicore-shadow/trial.json                |  540 +++++
+ .../counter-boundaries.json                        |  107 +
+ .../r02-shortburst-shadow-ewma-carry/trial.json    |  351 ++++
+ .../r02-shortburst-shadow/counter-boundaries.json  |  107 +
+ .../r02-shortburst-shadow/trial.json               |  351 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r02-wakeheavy-shadow-ewma-carry/trial.json     |  401 ++++
+ .../r02-wakeheavy-shadow/counter-boundaries.json   |  107 +
+ .../r02-wakeheavy-shadow/trial.json                |  401 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r03-mixed-shadow-ewma-carry/trial.json         |  401 ++++
+ .../r03-mixed-shadow/counter-boundaries.json       |  107 +
+ .../r03-mixed-shadow/trial.json                    |  401 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r03-multicore-shadow-ewma-carry/trial.json     |  540 +++++
+ .../r03-multicore-shadow/counter-boundaries.json   |  107 +
+ .../r03-multicore-shadow/trial.json                |  540 +++++
+ .../counter-boundaries.json                        |  107 +
+ .../r03-shortburst-shadow-ewma-carry/trial.json    |  351 ++++
+ .../r03-shortburst-shadow/counter-boundaries.json  |  107 +
+ .../r03-shortburst-shadow/trial.json               |  351 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r03-wakeheavy-shadow-ewma-carry/trial.json     |  401 ++++
+ .../r03-wakeheavy-shadow/counter-boundaries.json   |  107 +
+ .../r03-wakeheavy-shadow/trial.json                |  401 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r04-mixed-shadow-ewma-carry/trial.json         |  401 ++++
+ .../r04-mixed-shadow/counter-boundaries.json       |  107 +
+ .../r04-mixed-shadow/trial.json                    |  401 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r04-multicore-shadow-ewma-carry/trial.json     |  540 +++++
+ .../r04-multicore-shadow/counter-boundaries.json   |  107 +
+ .../r04-multicore-shadow/trial.json                |  540 +++++
+ .../counter-boundaries.json                        |  107 +
+ .../r04-shortburst-shadow-ewma-carry/trial.json    |  351 ++++
+ .../r04-shortburst-shadow/counter-boundaries.json  |  107 +
+ .../r04-shortburst-shadow/trial.json               |  351 ++++
+ .../counter-boundaries.json                        |  107 +
+ .../r04-wakeheavy-shadow-ewma-carry/trial.json     |  401 ++++
+ .../r04-wakeheavy-shadow/counter-boundaries.json   |  107 +
+ .../r04-wakeheavy-shadow/trial.json                |  401 ++++
+ .../stable-full--full-prefault/summary.json        | 2083 ++++++++++++++++++++
+ .../failures/stable-lazy-initial/archive.json      |    8 +
+ .../failures/stable-lazy-initial/confirmation.json |   44 +
+ .../failures/stable-lazy-initial/diagnosis.json    |   15 +
+ .../failures/stable-lazy-initial/failure.json      |    6 +
+ .../failures/stable-lazy-initial/scheduler.log     |  134 ++
+ src/userspace/scx_lertick.c                        |    9 +-
+ tests/README.md                                    |   15 +
+ tests/test_online_utility.py                       |   66 +
+ tests/validate_watchdog_flags.py                   |   76 +
+ 97 files changed, 25659 insertions(+), 4 deletions(-)
+ create mode 100644 benchmarks/analyze_online_utility.py
+ create mode 100644 results/model-confirmation/README.md
+ create mode 100644 results/model-confirmation/analysis/stable-full--full-prefault.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/compact.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/environment.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/plan.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-mixed-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-mixed-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-mixed-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-mixed-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-multicore-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-multicore-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-multicore-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-multicore-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-shortburst-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-shortburst-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-shortburst-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-shortburst-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-wakeheavy-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-wakeheavy-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-wakeheavy-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r00-wakeheavy-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-mixed-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-mixed-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-mixed-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-mixed-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-multicore-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-multicore-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-multicore-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-multicore-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-shortburst-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-shortburst-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-shortburst-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-shortburst-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-wakeheavy-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-wakeheavy-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-wakeheavy-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r01-wakeheavy-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-mixed-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-mixed-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-mixed-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-mixed-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-multicore-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-multicore-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-multicore-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-multicore-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-shortburst-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-shortburst-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-shortburst-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-shortburst-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-wakeheavy-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-wakeheavy-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-wakeheavy-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r02-wakeheavy-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-mixed-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-mixed-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-mixed-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-mixed-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-multicore-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-multicore-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-multicore-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-multicore-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-shortburst-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-shortburst-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-shortburst-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-shortburst-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-wakeheavy-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-wakeheavy-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-wakeheavy-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r03-wakeheavy-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-mixed-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-mixed-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-mixed-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-mixed-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-multicore-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-multicore-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-multicore-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-multicore-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-shortburst-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-shortburst-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-shortburst-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-shortburst-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-wakeheavy-shadow-ewma-carry/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-wakeheavy-shadow-ewma-carry/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-wakeheavy-shadow/counter-boundaries.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/r04-wakeheavy-shadow/trial.json
+ create mode 100644 results/model-confirmation/compact/stable-full--full-prefault/summary.json
+ create mode 100644 results/model-confirmation/failures/stable-lazy-initial/archive.json
+ create mode 100644 results/model-confirmation/failures/stable-lazy-initial/confirmation.json
+ create mode 100644 results/model-confirmation/failures/stable-lazy-initial/diagnosis.json
+ create mode 100644 results/model-confirmation/failures/stable-lazy-initial/failure.json
+ create mode 100644 results/model-confirmation/failures/stable-lazy-initial/scheduler.log
+ create mode 100644 tests/test_online_utility.py
+ create mode 100644 tests/validate_watchdog_flags.py
+cc -Ivendor -Isrc -Isrc/shared -Ibuild -I/home/ubuntu/lertick-pr/build/deps/install/include  -Isrc/userspace -O2 -g -std=gnu11 -Wall -Wextra src/userspace/scx_lertick.c src/userspace/lerwatt_plugin.c -o build/scx_lertick -L/home/ubuntu/lertick-pr/build/deps/install/lib -lbpf -lelf -lzstd -pthread -lz  -lelf -lz
+make: 'build/burst_workload' is up to date.
+In file included from vendor/scx/common.h:74,
+                 from src/userspace/scx_lertick.c:27:
+vendor/scx/compat.h: In function ‘__COMPAT_read_enum’:
+vendor/scx/compat.h:44:31: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__u32’ {aka ‘unsigned int’} [-Wsign-compare]
+   44 |                 for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
+      |                               ^
+vendor/scx/compat.h:55:31: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__u32’ {aka ‘unsigned int’} [-Wsign-compare]
+   55 |                 for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
+      |                               ^
+vendor/scx/compat.h: In function ‘__COMPAT_struct_has_field’:
+vendor/scx/compat.h:99:23: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__u32’ {aka ‘unsigned int’} [-Wsign-compare]
+   99 |         for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
+      |                       ^
+PASS normal/expected/unexpected watchdog flags and unchanged statuses
+Traceback (most recent call last):
+  File "/var/tmp/verify-new-model-plugin.py", line 121, in <module>
+    if __name__=='__main__':main()
+                            ^^^^^^
+  File "/var/tmp/verify-new-model-plugin.py", line 120, in main
+    standalone(a.output,'standalone-before');r=integration(a.output);standalone(a.output,'standalone-after');save(a.output/'summary.json',{'passed':True,'integration':r,'standalone_before_and_after':True});print('PASS three-cluster model/plugin integration and both default standalone runs',flush=True)
+                                               ^^^^^^^^^^^^^^^^^^^^^
+  File "/var/tmp/verify-new-model-plugin.py", line 67, in integration
+    records={r['key']:r['value'] for r in json.loads(result)}
+             ^^^^^^^^^^^^^^^^^^^
+TypeError: unhashable type: 'list'
+Traceback (most recent call last):
+  File "/private/tmp/lertick-postbenchmark-validation.py", line 50, in <module>
+    subprocess.run(SSH+['bash -s'],input=script,text=True,check=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['ssh', '-i', '/Users/hungyu_lin/Desktop/Github/lertick/build/vm/id_ed25519', '-p', '22222', '-o', 'BatchMode=yes', '-o', 'UserKnownHostsFile=/Users/hungyu_lin/Desktop/Github/lertick/build/vm/known_hosts', 'ubuntu@127.0.0.1', 'bash -s']' returned non-zero exit status 1.

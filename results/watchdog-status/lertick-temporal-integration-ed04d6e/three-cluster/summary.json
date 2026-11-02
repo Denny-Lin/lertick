@@ -1,0 +1,11 @@
+{
+  "completed": false,
+  "duration_s": 250,
+  "scope": "One simulated board and real BPF/daemon integration; no accuracy or throughput claim.",
+  "failure": "TypeError(\"unhashable type: 'list'\")",
+  "restored_knobs": true,
+  "journal_removed": true,
+  "daemon_exit": 0,
+  "scx_exit": 0,
+  "simulator_exit": 0
+}

@@ -1,0 +1,16 @@
+{
+  "linux_tested_source": "ed04d6ef98a6a390ad1f9862585dfcfac363da17",
+  "kernel_model_reference": "6beaba2",
+  "sources": {
+    "src/userspace/scx_lertick.c": "a54e77488434a240c9daa4470edc43ed43563967f4005fb5c5be25fd619ee602",
+    "src/shared/model.h": "9ce54cb889d29d2532c4ea465c728143e2cb44dfd43dd27c32b24d3641a3c639",
+    "src/bpf/scx_lertick.bpf.c": "9a2ae2499edf4c2bb891ea51607f823f1960755f0aaa42b08e8a7984c9abda9b",
+    "tests/validate_watchdog_flags.py": "3d874d394eee6ae8273285e96546dbc902a937b8bc1371eea3f2c9fd95737797"
+  },
+  "raw_archive": {
+    "file": "lertick-watchdog-integration-ed04d6e.tgz",
+    "bytes": 20272308,
+    "sha256": "84bed19679efb78dab7c79b787a1318f625d441cb021e212d632696bc4426b1b"
+  },
+  "note": "Raw archive is retained in results/local/watchdog-status-ed04d6e in the main checkout and this worktree. Three output roots include the original failed collector attempt. This is a telemetry and integration check, not a performance comparison."
+}

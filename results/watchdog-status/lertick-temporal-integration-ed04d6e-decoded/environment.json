@@ -1,0 +1,10 @@
+{
+  "kernel": "7.0.0-38-generic",
+  "cpus": 8,
+  "sha256": {
+    "/home/ubuntu/lertick-burst-init/build/scx_lertick": "a49bc8af07226b8f7782b9c161546ad07914fd1f92fc3b1277c6db1ff6fcc36a",
+    "/home/ubuntu/lerwatt-temporal-forecast/build/lerwattd": "00bbd2b6161ae9070e6bd4bfb2362df257370cd6f4e70c232e44dbb0b4727ad9",
+    "/home/ubuntu/lerwatt-temporal-forecast/build/lerwatt-sim": "ddb14f5de44f961d2a4dca46d961581c9e01448bdbf29eef3c85896a61d8b9a8",
+    "/var/tmp/verify-new-model-plugin.py": "bf6116dcdb1ba1ed5866c8be86c58e59ce43a476122015f62667a20a0dd510d3"
+  }
+}
