@@ -1,0 +1,20 @@
+test                    default      bpfland       rel-fx       rel-on
+msg-proc s                0.532        0.691        0.543        0.562
+msg-thread s              0.432        0.628         0.41        0.473
+pipe us/op                21.96        2.858        3.544        2.347
+sb-m4t2 wake p99            171          498          275          217
+sb-m4t2 req p99       3.706e+04    4.166e+04    3.974e+04     3.59e+04
+sb-m4t2 rps                 354          375          366          373
+sb-m1t1 wake p99            104           89           76           71
+sb-m1t1 req p99        1.31e+04    1.221e+04    1.086e+04    1.026e+04
+hb-thread s               1.178         0.94        0.875        0.835
+hb-g16 s                  1.535        2.057        1.489        1.271
+kbuild s                  2.815        2.772        2.903        2.853
+
+change vs EEVDF (negative = better), verdict at 5%
+bpfland    win 5 tie 1 loss 5  fallbacks 0  n=5
+   msg-proc s=+30%L  msg-thread s=+45%L  pipe us/op=-87%W  sb-m4t2 wake p99=+191%L  sb-m4t2 req p99=+12%L  sb-m4t2 rps=-6%W  sb-m1t1 wake p99=-14%W  sb-m1t1 req p99=-7%W  hb-thread s=-20%W  hb-g16 s=+34%L  kbuild s=-2%T
+rel-fx     win 5 tie 4 loss 2  fallbacks 0  n=5
+   msg-proc s=+2%T  msg-thread s=-5%W  pipe us/op=-84%W  sb-m4t2 wake p99=+61%L  sb-m4t2 req p99=+7%L  sb-m4t2 rps=-3%T  sb-m1t1 wake p99=-27%W  sb-m1t1 req p99=-17%W  hb-thread s=-26%W  hb-g16 s=-3%T  kbuild s=+3%T
+rel-on     win 6 tie 2 loss 3  fallbacks 0  n=5
+   msg-proc s=+6%L  msg-thread s=+9%L  pipe us/op=-89%W  sb-m4t2 wake p99=+27%L  sb-m4t2 req p99=-3%T  sb-m4t2 rps=-5%W  sb-m1t1 wake p99=-32%W  sb-m1t1 req p99=-22%W  hb-thread s=-29%W  hb-g16 s=-17%W  kbuild s=+1%T
