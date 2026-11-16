@@ -383,3 +383,32 @@ scx_lavd 1.1.2 and 1.1.4 failed to load when built with the guest's clang 18: th
 - `keepC`: the 5 ms cap alone.
 
 **Screening** (`kick-run.sh`): the 11 held-out measures on 4 and on 8 CPUs, 3 repetitions, with EEVDF. A candidate goes on to a 5-repetition confirmation if it lowers schbench `-m 4 -t 2` wakeup p99 against `base` by more than 10% on both CPU counts, and is not worse than `base` by more than 5% on any other measure. It replaces `base` only if the confirmation shows it no worse than `base` on any measure on either CPU count, and the kernel compile (`kbuild-long.sh`) is no worse by more than 3%.
+
+### Screening result: wakeup preemption rejected, 2026-11-16
+
+`kick-sets.tar.gz` holds both sets (`heldout/kick-cpu4`, `heldout/kick-cpu8`, 3 repetitions, 5 arms). All four builds passed a 10-second load test; there were no fallbacks in 30 Lertick runs. schbench `-m 4 -t 2` wakeup p99, the target measure:
+
+| Arm | 4 CPUs | 8 CPUs |
+| --- | ---: | ---: |
+| EEVDF | 3,788 µs | 142 µs |
+| base | 5,064 µs | 200 µs |
+| kickA | 5,368 µs (+6%) | 346 µs (+73%) |
+| kickB | 5,336 µs (+5%) | 314 µs (+57%) |
+| keepC | 5,224 µs (+3%) | 202 µs (+1%) |
+
+- **No candidate meets the screening rule** (more than 10% lower than `base` on both CPU counts). Wakeup preemption makes the 8-CPU tail worse and also slows `perf messaging` processes on 8 CPUs by 14–16%. The 5 ms continuation cap changes nothing measurable.
+- **The switches were removed** (revert of the experiment commit), as with earlier rejected switches.
+- **Interpretation.** lavd's low tail does not come from preemption alone. Its deadline puts frequently waking, short-running tasks (here the message threads) far ahead of the workers, so they run almost at once; Lertick's fair vtime order treats both kinds of thread alike. Trying that would change the ordering rule itself and needs its own hypothesis.
+
+## Runnable-task stalls in the p2dq and flash sessions, 2026-11-16
+
+In `heldout/cpu4-more`, Lertick (release build) fell back to EEVDF in 2 of 5 repetitions. Both times the kernel watchdog reported a runnable hackbench task that had not run for over 1 s (1.108 s and 1.150 s); the loader sets a 1,000 ms watchdog timeout. The 20 earlier 4-CPU held-out runs, the 15 lavd runs and the 30 runs above had no fallback, so the stall is intermittent.
+
+**Likely mechanism.** `hackbench -g 16` keeps hundreds of tasks runnable on 4 CPUs. The clock advances by service over the runnable weight, so with about 640 runnable tasks it moves about 6 ms per second. A task requeued after a 5 ms slice sits about 5 ms ahead of the clock, and every woken task is placed up to 2 ms behind it, so the requeued task waits until the clock advances about 7 ms: 640 × 7 ms / 4 CPUs ≈ 1.1 s, which matches the watchdog reports. Fair order alone does not bound the wait when the runnable count is large.
+
+The p2dq and flash comparison from these sessions is kept here but not added to the README until the stall is fixed and the comparison is rerun with the fixed build. Lertick against each, from the same sessions, with the two fallback repetitions removed (4 CPUs: 3 repetitions):
+
+| Lertick against | 4 CPUs | 8 CPUs |
+| --- | --- | --- |
+| scx_p2dq 1.1.4 | 7 better, 2 same, 2 worse | 3 better, 5 same, 3 worse |
+| scx_flash 1.1.4 | 8 better, 2 same, 1 worse | 6 better, 3 same, 2 worse |
