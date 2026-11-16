@@ -75,6 +75,7 @@ static const char *const stat_names[LERTICK_STAT_COUNT] = {
 	[LERTICK_STAT_CPUPERF_IDLE_SETS] = "cpuperf_idle_sets",
 	[LERTICK_STAT_CONTRACT_APPLIED] = "contract_applied",
 	[LERTICK_STAT_CONTRACT_STALE] = "contract_stale",
+	[LERTICK_STAT_STALL_RESCUES] = "stall_rescues",
 };
 
 static int print_libbpf(enum libbpf_print_level level, const char *fmt, va_list args)
