@@ -81,21 +81,7 @@ static u64 runnable_weight;
 #define LERTICK_SYNC_WINDOW_NS 2000000ULL
 /* Queued tasks examined, and the longest unbroken run, when prev may keep its CPU. */
 #define LERTICK_HEAD_SCAN 16
-#ifndef LERTICK_KEEP_MAX_NS
 #define LERTICK_KEEP_MAX_NS 20000000ULL
-#endif
-/*
- * Experimental wakeup preemption (off by default). A woken task that has not
- * used more than its share asks one CPU to yield: among its previous CPU and
- * two random CPUs, the one whose current task is furthest behind in vtime,
- * provided that task has run at least LERTICK_KICK_MIN_RUN_NS and trails the
- * woken task by more than LERTICK_KICK_GAP_NS.
- */
-#ifndef LERTICK_WAKE_KICK
-#define LERTICK_WAKE_KICK 0
-#endif
-#define LERTICK_KICK_MIN_RUN_NS 500000ULL
-#define LERTICK_KICK_GAP_NS 1000000ULL
 
 UEI_DEFINE(uei);
 
@@ -186,23 +172,6 @@ struct {
 	__type(key, u32);
 	__type(value, struct lt_demand_rec);
 } lt_demand SEC(".maps");
-
-#if LERTICK_WAKE_KICK
-/* What each CPU is running, for wakeup preemption. Read remotely without locks. */
-struct lertick_cpu_run {
-	u64 vtime;
-	u64 start_ns;
-	u32 weight;
-	u32 busy;
-};
-
-struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__uint(max_entries, LERTICK_MAX_CPUS);
-	__type(key, u32);
-	__type(value, struct lertick_cpu_run);
-} cpu_run SEC(".maps");
-#endif
 
 static __always_inline void stat_add(u32 idx, u64 amount)
 {
@@ -852,53 +821,6 @@ static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx, u
 	return eff;
 }
 
-#if LERTICK_WAKE_KICK
-/* How far ahead in vtime the task on @cpu is, including its current run; 0 if not a victim. */
-static __always_inline u64 kick_score(s32 cpu, u64 vtime, u64 now)
-{
-	u32 key = cpu;
-	struct lertick_cpu_run *r = bpf_map_lookup_elem(&cpu_run, &key);
-	u64 ran, cur;
-
-	if (!r || !r->busy || !r->weight || time_before(now, r->start_ns))
-		return 0;
-	ran = now - r->start_ns;
-	if (ran < LERTICK_KICK_MIN_RUN_NS)
-		return 0;
-	cur = r->vtime + ran * 100 / r->weight;
-	if (!time_before(vtime + LERTICK_KICK_GAP_NS, cur))
-		return 0;
-	return cur - vtime;
-}
-
-static __always_inline void wake_kick(struct task_struct *p, u64 vtime)
-{
-	u32 nr = scx_bpf_nr_cpu_ids();
-	u64 now = bpf_ktime_get_ns(), best = 0, score;
-	s32 cand[3], victim = -1;
-	int i;
-
-	if (!nr)
-		return;
-	cand[0] = scx_bpf_task_cpu(p);
-	cand[1] = bpf_get_prandom_u32() % nr;
-	cand[2] = bpf_get_prandom_u32() % nr;
-	for (i = 0; i < 3; i++) {
-		s32 cpu = cand[i];
-
-		if (cpu < 0 || cpu >= LERTICK_MAX_CPUS || !bpf_cpumask_test_cpu(cpu, p->cpus_ptr))
-			continue;
-		score = kick_score(cpu, vtime, now);
-		if (score > best) {
-			best = score;
-			victim = cpu;
-		}
-	}
-	if (victim >= 0)
-		scx_bpf_kick_cpu(victim, SCX_KICK_PREEMPT);
-}
-#endif
-
 void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 {
 	struct task_ctx *tctx = task_ctx(p);
@@ -922,10 +844,6 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 		vtime = vtime_now - LERTICK_LAG_NS;
 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
 	scx_bpf_dsq_insert_vtime(p, SHARED_DSQ, slice, vtime, enq_flags);
-#if LERTICK_WAKE_KICK
-	if ((enq_flags & SCX_ENQ_WAKEUP) && !time_before(vtime_now, vtime))
-		wake_kick(p, vtime);
-#endif
 	if (tctx)
 		publish(tctx);
 }
@@ -1089,20 +1007,6 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 	if (time_before(vtime_now, p->scx.dsq_vtime))
 		vtime_now = p->scx.dsq_vtime;
 	stat_add(LERTICK_STAT_RUNS, 1);
-#if LERTICK_WAKE_KICK
-	{
-		u32 key = bpf_get_smp_processor_id();
-		struct lertick_cpu_run *r = bpf_map_lookup_elem(&cpu_run, &key);
-
-		if (r) {
-			r->vtime = p->scx.dsq_vtime;
-			r->start_ns = bpf_ktime_get_ns();
-			r->weight = tctx && tctx->eff_weight ? tctx->eff_weight :
-				    p->scx.weight ? p->scx.weight : 1;
-			r->busy = 1;
-		}
-	}
-#endif
 	cpu_on_running(p, tctx);
 	if (!tctx)
 		return;
@@ -1149,15 +1053,6 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	u32 weight = p->scx.weight;
 
 	cpu_on_stopping();
-#if LERTICK_WAKE_KICK
-	{
-		u32 key = bpf_get_smp_processor_id();
-		struct lertick_cpu_run *r = bpf_map_lookup_elem(&cpu_run, &key);
-
-		if (r)
-			r->busy = 0;
-	}
-#endif
 	if (!tctx || !tctx->running)
 		return;
 	/* comm can change while a task continues without a running callback. */
