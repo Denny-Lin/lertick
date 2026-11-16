@@ -347,3 +347,16 @@ scx_lavd 1.1.2 and 1.1.4 failed to load when built with the guest's clang 18: th
 - **Arms:** EEVDF, Lertick online (release build), scx_p2dq 1.1.4 (Meta, server-oriented) and scx_flash 1.1.4 (latency-oriented), both built with LLVM 20.1.8 and run with default options.
 - **Sets and verdicts:** the same as for scx_lavd: `heldout.sh` and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions each, 5% and 3% thresholds. `more-run.sh` starts them after the lavd sets finish and stops if either scheduler fails a 10-second load test.
 - **README comparison:** each scheduler is compared with Lertick within the same session.
+
+## Wakeup preemption and a shorter continuation cap, hypothesis fixed 2026-11-16 before the run
+
+**Why.** schbench with 4 message threads (`-m 4 -t 2`) has 12 threads on 4 CPUs. Its wakeup p99 is 42% (4 CPUs) and 27% (8 CPUs) above EEVDF. scx_lavd 1.1.4 reaches 66 µs against EEVDF's 3,748 µs on 4 CPUs. Reading its source, it orders by a latency-criticality deadline and, on a wakeup, preempts the least critical of the preferred CPU and two random CPUs. Lertick queues a woken task in fair order and never preempts, so it waits for a slice to end (up to 5 ms), and `keep_prev` can let the running task continue for up to 20 ms. Earlier wakeup preemption (r1, r6) only kicked the target CPU and was judged on the tuned benchmarks, which do not include this case. lavd pays elsewhere (request p99 +213%, `hackbench -g 16` +28% on 4 CPUs), so only the preemption idea is tried, inside Lertick's fair order.
+
+**Arms** (all built from the same source, `BPF_DEFS` selects the change):
+
+- `base`: the current algorithm.
+- `kickA`: `LERTICK_WAKE_KICK=1`. A woken task that is not ahead of the clock asks one CPU to yield: among its previous CPU and two random CPUs, the one whose current task is furthest ahead in vtime, if that task has run at least 0.5 ms and is more than 1 ms ahead.
+- `kickB`: kickA plus `LERTICK_KEEP_MAX_NS=5 ms` (instead of 20 ms).
+- `keepC`: the 5 ms cap alone.
+
+**Screening** (`kick-run.sh`): the 11 held-out measures on 4 and on 8 CPUs, 3 repetitions, with EEVDF. A candidate goes on to a 5-repetition confirmation if it lowers schbench `-m 4 -t 2` wakeup p99 against `base` by more than 10% on both CPU counts, and is not worse than `base` by more than 5% on any other measure. It replaces `base` only if the confirmation shows it no worse than `base` on any measure on either CPU count, and the kernel compile (`kbuild-long.sh`) is no worse by more than 3%.
