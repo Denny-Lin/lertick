@@ -80,18 +80,6 @@ static u64 runnable_weight;
 /* Queued tasks examined, and the longest unbroken run, when prev may keep its CPU. */
 #define LERTICK_HEAD_SCAN 16
 #define LERTICK_KEEP_MAX_NS 20000000ULL
-/*
- * Screening switch: 1 queues each task on its last CPU's own queue; a CPU
- * runs its own queue's head unless that is more than LERTICK_HOME_WINDOW_NS
- * behind the earliest head on any queue, which it then takes instead.
- */
-#ifndef LERTICK_HOME
-#define LERTICK_HOME 0
-#endif
-#ifndef LERTICK_HOME_WINDOW_NS
-#define LERTICK_HOME_WINDOW_NS 2000000ULL
-#endif
-#define HOME_DSQ(cpu) ((u64)(cpu) + 1)
 
 UEI_DEFINE(uei);
 
@@ -577,59 +565,6 @@ static __always_inline u64 choose_slice(struct task_ctx *tctx, u64 consumed_ns)
 	return slice;
 }
 
-static __always_inline bool dsq_head_vtime(u64 dsq, u64 *vtime)
-{
-	struct bpf_iter_scx_dsq it;
-	struct task_struct *head;
-	bool found = false;
-
-	if (bpf_iter_scx_dsq_new(&it, dsq, 0) == 0) {
-		head = bpf_iter_scx_dsq_next(&it);
-		if (head) {
-			*vtime = head->scx.dsq_vtime;
-			found = true;
-		}
-	}
-	bpf_iter_scx_dsq_destroy(&it);
-	return found;
-}
-
-/*
- * The queue this CPU should take from next and its head vtime: its own
- * queue, unless another queue's head is more than the window ahead.
- */
-static __always_inline bool home_pick(s32 cpu, u64 *dsq, u64 *vtime)
-{
-	u64 own_v = 0, min_v = 0, min_dsq = SHARED_DSQ, v;
-	bool own = dsq_head_vtime(HOME_DSQ(cpu), &own_v), any = false;
-	u32 nr = scx_bpf_nr_cpu_ids();
-	s32 i;
-
-	if (dsq_head_vtime(SHARED_DSQ, &v)) {
-		min_v = v;
-		any = true;
-	}
-	bpf_for(i, 0, nr) {
-		if (i >= LERTICK_MAX_CPUS)
-			break;
-		if (dsq_head_vtime(HOME_DSQ(i), &v) && (!any || time_before(v, min_v))) {
-			min_v = v;
-			min_dsq = HOME_DSQ(i);
-			any = true;
-		}
-	}
-	if (!any)
-		return false;
-	if (own && !time_before(min_v + LERTICK_HOME_WINDOW_NS, own_v)) {
-		*dsq = HOME_DSQ(cpu);
-		*vtime = own_v;
-	} else {
-		*dsq = min_dsq;
-		*vtime = min_v;
-	}
-	return true;
-}
-
 /*
  * A sync waker is about to sleep, so its CPU is the next free one and its
  * cache holds what the wakee will read. Queue the wakee there, unless that
@@ -647,17 +582,11 @@ static __always_inline bool sync_local(struct task_struct *p, s32 *cpu)
 		return false;
 	if (time_before(vtime, vtime_now - LERTICK_LAG_NS))
 		vtime = vtime_now - LERTICK_LAG_NS;
-	if (LERTICK_HOME) {
-		u64 dsq, hv;
-
-		ok = !home_pick(this, &dsq, &hv) || !time_before(hv + LERTICK_SYNC_WINDOW_NS, vtime);
-	} else {
-		if (bpf_iter_scx_dsq_new(&it, SHARED_DSQ, 0) == 0) {
-			head = bpf_iter_scx_dsq_next(&it);
-			ok = !head || !time_before(head->scx.dsq_vtime + LERTICK_SYNC_WINDOW_NS, vtime);
-		}
-		bpf_iter_scx_dsq_destroy(&it);
+	if (bpf_iter_scx_dsq_new(&it, SHARED_DSQ, 0) == 0) {
+		head = bpf_iter_scx_dsq_next(&it);
+		ok = !head || !time_before(head->scx.dsq_vtime + LERTICK_SYNC_WINDOW_NS, vtime);
 	}
+	bpf_iter_scx_dsq_destroy(&it);
 	if (!ok)
 		return false;
 	p->scx.dsq_vtime = vtime;
@@ -912,20 +841,6 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	if ((enq_flags & SCX_ENQ_WAKEUP) && time_before(vtime, vtime_now - LERTICK_LAG_NS))
 		vtime = vtime_now - LERTICK_LAG_NS;
 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
-	if (LERTICK_HOME) {
-		s32 home = scx_bpf_task_cpu(p), idle;
-
-		if (home >= 0 && home < LERTICK_MAX_CPUS && home < scx_bpf_nr_cpu_ids()) {
-			scx_bpf_dsq_insert_vtime(p, HOME_DSQ(home), slice, vtime, enq_flags);
-			/* Nothing tells an idle CPU about another CPU's queue: wake one to look. */
-			idle = scx_bpf_pick_idle_cpu(p->cpus_ptr, 0);
-			if (idle >= 0)
-				scx_bpf_kick_cpu(idle, SCX_KICK_IDLE);
-			if (tctx)
-				publish(tctx);
-			return;
-		}
-	}
 	scx_bpf_dsq_insert_vtime(p, SHARED_DSQ, slice, vtime, enq_flags);
 	if (tctx)
 		publish(tctx);
@@ -953,11 +868,6 @@ static __always_inline bool keep_prev(struct task_struct *prev, struct task_ctx 
 	if (ran >= LERTICK_KEEP_MAX_NS)
 		return false;
 	vtime += ran * 100 / weight;
-	if (LERTICK_HOME) {
-		u64 dsq, hv;
-
-		return !home_pick(cpu, &dsq, &hv) || !time_before(hv, vtime);
-	}
 	bpf_for_each(scx_dsq, q, SHARED_DSQ, 0) {
 		if (n++ >= LERTICK_HEAD_SCAN)
 			return false;
@@ -977,12 +887,6 @@ static __always_inline bool take_next(s32 cpu)
 	struct task_struct *q;
 	u64 head = 0;
 	int n = 0;
-
-	if (LERTICK_HOME) {
-		u64 dsq, v;
-
-		return home_pick(cpu, &dsq, &v) && scx_bpf_dsq_move_to_local(dsq);
-	}
 
 	bpf_for_each(scx_dsq, q, SHARED_DSQ, 0) {
 		if (!n)
@@ -1359,20 +1263,8 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 	s32 ret;
 
 	ret = scx_bpf_create_dsq(SHARED_DSQ, -1);
-	if (ret)
+	if (ret || cpuperf_mode != LERTICK_CPUPERF_UTIL)
 		return ret;
-	if (LERTICK_HOME) {
-		u32 nr = scx_bpf_nr_cpu_ids();
-		s32 i;
-
-		bpf_for(i, 0, nr) {
-			ret = scx_bpf_create_dsq(HOME_DSQ(i), -1);
-			if (ret)
-				return ret;
-		}
-	}
-	if (cpuperf_mode != LERTICK_CPUPERF_UTIL)
-		return 0;
 	t = bpf_map_lookup_elem(&idle_timer_map, &zero);
 	if (!t)
 		return -ESRCH;
