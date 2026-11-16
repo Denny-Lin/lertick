@@ -49,68 +49,33 @@ starts, replaces or retrains the other. [Automatic coordination](docs/INTEGRATIO
 
 ## Get started on Linux
 
-**A compatible running sched_ext kernel is required.** Loading and unloading Lertick on that kernel needs no reboot. Installing or booting a different kernel may require one; the helper never changes your kernel or boot configuration.
+You need a Linux kernel with sched_ext: `cat /sys/kernel/sched_ext/state` should print `disabled`. Switching schedulers needs no reboot.
 
-### 1. Check your running kernel
-
-```sh
-cat /sys/kernel/sched_ext/state
-```
-
-Continue when it reports `disabled`. If the file is missing, your running kernel is not ready for this installation path. If another scheduler is enabled, stop it through its own manager first. [Kernel requirements →](docs/INSTALL.md#1-check-the-running-kernel)
-
-### 2. Build and install
-
-On **Ubuntu 24.04**, install the build tools and matching kernel tools, then use your normal account to build:
+**Install and turn on** (Ubuntu 24.04)
 
 ```sh
-sudo apt-get update
-sudo apt-get install --no-install-recommends \
-  git ca-certificates build-essential clang-18 llvm-18 pkg-config python3 \
-  libelf-dev zlib1g-dev libzstd-dev util-linux linux-tools-common "linux-tools-$(uname -r)"
-git clone https://github.com/Denny-Lin/lertick.git
-cd lertick
-./deploy.sh install
+sudo apt-get update && sudo apt-get install -y git build-essential clang-18 llvm-18 pkg-config python3 libelf-dev zlib1g-dev libzstd-dev linux-tools-common "linux-tools-$(uname -r)"
+git clone https://github.com/Denny-Lin/lertick.git && cd lertick && ./deploy.sh install && lertick enable
 ```
 
-The first build downloads pinned libbpf source and builds it locally. No distribution library is replaced. If `bpftool version` fails or your distribution packages it differently, use the [toolchain guide](docs/INSTALL.md#2-install-build-prerequisites).
-
-### 3. Enable your daily scheduler
+**Remove**
 
 ```sh
-lertick check
-lertick verify
-lertick enable
-lertick status
+lertick uninstall
 ```
 
-`verify` loads the BPF programs **without attaching the scheduler**. `enable` starts Lertick now and at boot. Installation alone leaves it stopped. The service uses online mode, all-task learning and compact aggregate health summaries every 60 seconds. No per-task names or PIDs appear in those summaries.
+Linux's default scheduler takes over immediately.
 
-```mermaid
-flowchart LR
-    A[Install] --> B[Verify]
-    B --> C[Enable]
-    C --> D[Continuous scheduling]
-    D --> E[Stop or fallback]
-    E --> F[Kernel default scheduler]
-    classDef default fill:#f5f5f7,stroke:#d2d2d7,color:#1d1d1f
-    linkStyle default stroke:#86868b,stroke-width:1.5px
-```
-
-The service reports ready only after actual scheduler registration and its first health check. If it fails or the kernel falls back, `Restart=no` leaves the default scheduler running instead of retrying in a loop. Daily operation remains experimental. [Service behavior and recovery →](docs/DAILY_USE.md#service-readiness-and-fallback)
-
-### Keep control
+**Everyday commands**
 
 | Command | What it does |
 | --- | --- |
-| `lertick update` | Build and verify a candidate before replacing the managed service; retain a complete previous bundle. |
-| `lertick rollback` | Restore the retained previous bundle, preserving enabled/active intent. |
-| `lertick report` | Print a local JSON report for review and manual sharing; no upload or raw logs by default. |
-| `lertick stop` | Stop the service now. `lertick disable` also turns off boot startup. |
-| `lertick run` | Run continuously in the foreground until Ctrl-C; no boot-time enablement. |
-| `lertick trial` | Run an explicit 30-second foreground trial. |
+| `lertick status` | Show whether Lertick is running |
+| `lertick stop` / `lertick start` | Pause it, or start it again |
+| `lertick update` | Update to the latest version |
+| `lertick help` | All other commands |
 
-`run` and the raw loader default to `--duration 0`, meaning until stopped. Use `trial` or `run --duration 30` for a finite session. Stop the service before a foreground run; Lertick refuses a second active scheduler. `lertick plan` prints a command without building, loading or attaching anything. [Daily use, updates and reporting →](docs/DAILY_USE.md)
+If anything fails, Lertick stops and Linux's default scheduler keeps running. [Other distributions and details →](docs/INSTALL.md)
 
 ## How it works
 
