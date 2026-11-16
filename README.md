@@ -55,14 +55,24 @@ starts, replaces or retrains the other. [Automatic coordination](docs/INTEGRATIO
 
 You need a Linux kernel with sched_ext: `cat /sys/kernel/sched_ext/state` should print `disabled`. Switching schedulers needs no reboot.
 
-**Install and turn on** (Ubuntu 24.04)
+**1. Download**
 
 ```sh
-sudo apt-get update && sudo apt-get install -y git build-essential clang-18 llvm-18 pkg-config python3 libelf-dev zlib1g-dev libzstd-dev linux-tools-common "linux-tools-$(uname -r)"
-git clone https://github.com/Denny-Lin/lertick.git && cd lertick && ./deploy.sh install && lertick enable
+git clone https://github.com/Denny-Lin/lertick.git
+cd lertick
 ```
 
-**Remove**
+**2. Install and turn on** (Ubuntu 24.04)
+
+```sh
+sudo apt-get update
+sudo apt-get install -y build-essential clang-18 llvm-18 pkg-config python3 \
+  libelf-dev zlib1g-dev libzstd-dev linux-tools-common "linux-tools-$(uname -r)"
+./deploy.sh install
+lertick enable
+```
+
+**3. Remove**
 
 ```sh
 lertick uninstall
