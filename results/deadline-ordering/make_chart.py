@@ -20,6 +20,14 @@ BPFLAND = {
     4: [0.735, 0.601, 1.854, 0.908, 2.381, 11280, 71, 385500, 5336, 155, 28.95],
     8: [0.691, 0.628, 2.858, 0.940, 2.057, 12208, 89, 41664, 498, 375, 26.44],
 }
+# scx_lavd 1.1.4 (LLVM 20 build) ran in its own sessions with its own Lertick arm
+# (heldout cpu4-lavd/cpu8-lavd, kbuild-long cpu4-lavd/cpu8-lavd): (Lertick, lavd) in ROWS order.
+LAVD = {
+    4: list(zip([0.617, 0.429, 1.450, 0.727, 1.733, 9648, 59, 130432, 5544, 199, 28.24],
+                [0.668, 0.516, 20.774, 0.884, 2.015, 9936, 95, 177920, 66, 197, 28.06])),
+    8: list(zip([0.466, 0.392, 2.647, 0.801, 1.274, 11824, 68, 27104, 119, 422, 22.91],
+                [0.504, 0.375, 20.091, 0.732, 1.385, 9808, 103, 32160, 151, 419, 23.33])),
+}
 SAME = 5.0  # percent; matches the held-out verdict
 CAP = 40.0  # bars longer than this are clipped and marked with an arrow
 LABEL_END = 400  # right edge of the longest benchmark label
@@ -75,7 +83,7 @@ def draw(column, cpus, path):
             out.append(f'<text x="{x + 16:.1f}" y="{y + 19}" font-family="{FONT}" font-size="16" font-weight="700" fill="#ffffff">{txt}</text>')
         else:
             out.append(f'<text x="{x - 10:.1f}" y="{y + 19}" text-anchor="end" font-family="{FONT}" font-size="16" font-weight="{weight}" fill="{fill}">{txt}</text>')
-    out.append(f'<text x="48" y="{H - 28}" font-family="{FONT}" font-size="14" fill="#86868b">*Likely a VM artefact. perf bench sched, hackbench rt-tests 2.5, schbench 6300b8f; Linux 7.0 on an ARM64 VM. Bars past 40% are clipped.</text>')
+    out.append(f'<text x="48" y="{H - 28}" font-family="{FONT}" font-size="14" fill="#86868b">*In this VM, EEVDF and scx_lavd take about 20 µs per pipe round trip. perf bench sched, hackbench rt-tests 2.5, schbench 6300b8f; Linux 7.0 on an ARM64 VM. Bars past 40% are clipped.</text>')
     out.append('</svg>')
     open(path, "w").write("\n".join(out) + "\n")
 
@@ -92,6 +100,7 @@ def scoreboard(cpus, path):
     column = 1 if cpus == 4 else 2
     rows = [("Linux EEVDF", "default scheduler", tally([(r[column][0], r[column][1], r[3], r[4]) for r in ROWS]))]
     rows.append(("scx_bpfland", "sched_ext 1.1.2", tally([(b, r[column][1], r[3], r[4]) for r, b in zip(ROWS, BPFLAND[cpus])])))
+    rows.append(("scx_lavd", "sched_ext 1.1.4", tally([(o, lt, r[3], r[4]) for r, (lt, o) in zip(ROWS, LAVD[cpus])])))
     W, top, rh, bh = 1120, 150, 84, 40
     x0, bar_w = 330, 520
     H = top + rh * len(rows) + 40

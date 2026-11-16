@@ -8,14 +8,14 @@
 
 ## Performance
 
-**Lertick beats Linux's default scheduler (EEVDF) on 5 of 11 standard kernel scheduler benchmarks with 4 CPUs and on 6 with 8 CPUs, and the community scheduler scx_bpfland on 6 and 9.** It loses to EEVDF on 2 and 3, mostly when many message threads wake groups of workers.
+**Lertick beats Linux's default scheduler (EEVDF) on 5 of 11 standard kernel scheduler benchmarks with 4 CPUs and on 6 with 8 CPUs.** Against the community sched_ext schedulers it wins far more than it loses: 6 to 1 and 9 to 0 against scx_bpfland, 7 to 1 and 6 to 2 against scx_lavd. Its losses to EEVDF come mostly when many message threads wake groups of workers.
 
 <p align="center">
-  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 5, the same on 4 and worse on 2; against scx_bpfland, better on 6, the same on 4 and worse on 1." width="1120" />
+  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 5, the same on 4 and worse on 2; against scx_bpfland, better on 6, the same on 4 and worse on 1; against scx_lavd, better on 7, the same on 3 and worse on 1." width="1120" />
 </p>
 
 <p align="center">
-  <img src="docs/assets/lertick-scoreboard-cpu8.svg" alt="8 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 6, the same on 2 and worse on 3; against scx_bpfland, better on 9, the same on 2 and worse on 0." width="1120" />
+  <img src="docs/assets/lertick-scoreboard-cpu8.svg" alt="8 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 6, the same on 2 and worse on 3; against scx_bpfland, better on 9, the same on 2 and worse on 0; against scx_lavd, better on 6, the same on 3 and worse on 2." width="1120" />
 </p>
 
 <details>
@@ -31,7 +31,7 @@
 
 </details>
 
-<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode. Median of 5 runs on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#held-out-result-on-8-cpus-2026-11-16)</sub>
+<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode. Median of 5 runs on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Each scheduler is compared with Lertick runs from the same sessions. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#held-out-result-on-8-cpus-2026-11-16)</sub>
 
 ## Get started
 
