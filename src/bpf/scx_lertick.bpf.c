@@ -89,11 +89,11 @@ static u64 runnable_weight;
  * while woken tasks keep being placed before it. Every LERTICK_STALL_SCAN_NS,
  * a timer moves up to LERTICK_STALL_MOVES tasks queued for longer than
  * LERTICK_STALL_AGE_NS straight to their CPU, well inside the 1 s watchdog.
+ * The queue iterator visits each task queued when it starts at most once.
  */
 #define LERTICK_STALL_SCAN_NS 50000000ULL
 #define LERTICK_STALL_AGE_NS 200000000ULL
 #define LERTICK_STALL_MOVES 8
-#define LERTICK_STALL_SCAN_MAX 8192
 
 UEI_DEFINE(uei);
 
@@ -1285,13 +1285,13 @@ static int stall_timer_fn(void *map, int *key, struct bpf_timer *timer)
 {
 	u64 now = bpf_ktime_get_ns();
 	struct task_struct *q;
-	int seen = 0, moved = 0;
+	int moved = 0;
 
 	bpf_for_each(scx_dsq, q, SHARED_DSQ, 0) {
 		struct task_ctx *tctx;
 		s32 cpu;
 
-		if (++seen > LERTICK_STALL_SCAN_MAX || moved >= LERTICK_STALL_MOVES)
+		if (moved >= LERTICK_STALL_MOVES)
 			break;
 		tctx = bpf_task_storage_get(&task_ctx_stor, q, 0, 0);
 		if (!tctx || !tctx->enq_ns || now - tctx->enq_ns < LERTICK_STALL_AGE_NS)
