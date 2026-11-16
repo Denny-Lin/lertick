@@ -61,6 +61,14 @@ const volatile u16 cpu_cap_override[LERTICK_MAX_CPUS];
 #define LERTICK_QUEUE_REFERENCE 16U
 
 static u64 vtime_now;
+
+/* Screening switches for the dispatch-order experiment; removed once decided. */
+#ifndef LERTICK_ORDER_BY_REQUEST
+#define LERTICK_ORDER_BY_REQUEST 1
+#endif
+#ifndef LERTICK_CAP_ADAPTIVE_SLICE
+#define LERTICK_CAP_ADAPTIVE_SLICE 1
+#endif
 UEI_DEFINE(uei);
 
 struct task_ctx {
@@ -85,6 +93,8 @@ struct task_ctx {
 	/* Lerwatt plug-in only: classification of the current episode. */
 	bool latcrit;
 	u64 lc_last_burst_ns;
+	/* Charged CPU service; dsq_vtime carries the dispatch deadline instead. */
+	u64 vtime;
 	struct lertick_task_snapshot snapshot;
 };
 
@@ -510,6 +520,13 @@ static __always_inline u64 choose_slice(struct task_ctx *tctx, u64 consumed_ns)
 		slice = min_slice_ns;
 	if (slice > max_slice_ns)
 		slice = max_slice_ns;
+	/*
+	 * A slice longer than the fixed one only matters while others wait:
+	 * dispatch() renews an uncontended task anyway. Prediction orders the
+	 * queue instead (request_ns()).
+	 */
+	if (LERTICK_CAP_ADAPTIVE_SLICE && slice > fixed_slice_ns)
+		slice = fixed_slice_ns;
 	if (!tctx)
 		return slice;
 	tctx->slice_was_adaptive = adaptive;
@@ -568,11 +585,28 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 	return cpu;
 }
 
+/*
+ * Service the task asks for before it next sleeps: the predicted remainder
+ * of its burst, bounded to the slice range, or the fixed slice without one.
+ * As in EEVDF, the deadline is vtime plus the request, so a short predicted
+ * burst runs before long work with the same charged service.
+ */
+static __always_inline u64 request_ns(struct task_ctx *tctx, u64 slice)
+{
+	return tctx && tctx->slice_was_adaptive ? slice : fixed_slice_ns;
+}
+
 void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 {
 	struct task_ctx *tctx = task_ctx(p);
 	u64 vtime = p->scx.dsq_vtime;
+	u32 weight = p->scx.weight ? p->scx.weight : 1;
 	u64 slice;
+
+	/* Keep two loads: the verifier rejects one load through either pointer. */
+	barrier_var(vtime);
+	if (tctx)
+		vtime = tctx->vtime;
 
 	if (is_fault_target(p)) {
 		stat_add(LERTICK_STAT_FAULT_STALLS, 1);
@@ -584,6 +618,11 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	/* Sleeper credit is bounded independently of model output. */
 	if (time_before(vtime, vtime_now - max_slice_ns))
 		vtime = vtime_now - max_slice_ns;
+	if (tctx) {
+		tctx->vtime = vtime;
+		if (LERTICK_ORDER_BY_REQUEST)
+			vtime += request_ns(tctx, slice) * 100 / weight;
+	}
 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
 	scx_bpf_dsq_insert_vtime(p, SHARED_DSQ, slice, vtime, enq_flags);
 	if (tctx)
@@ -683,10 +722,14 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 {
 	struct task_ctx *tctx = task_ctx(p);
 	u64 observed_slice = p->scx.slice;
+	u64 vtime = p->scx.dsq_vtime;
 
+	barrier_var(vtime);
+	if (tctx)
+		vtime = tctx->vtime;
 	/* As in scx_simple, this cross-CPU monotonic update tolerates small races. */
-	if (time_before(vtime_now, p->scx.dsq_vtime))
-		vtime_now = p->scx.dsq_vtime;
+	if (time_before(vtime_now, vtime))
+		vtime_now = vtime;
 	stat_add(LERTICK_STAT_RUNS, 1);
 	cpu_on_running(p, tctx);
 	if (!tctx)
@@ -751,7 +794,7 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	/* No bounded slice is treated as executed service for accounting. */
 	if (!weight)
 		weight = 1;
-	p->scx.dsq_vtime += delta * 100 / weight;
+	tctx->vtime += delta * 100 / weight;
 	tctx->episode_runtime_ns = service.consumed_ns;
 	stat_add(LERTICK_STAT_RUNTIME_NS, delta);
 	cpu_account_run(delta, tctx->latcrit);
@@ -866,7 +909,11 @@ s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 
 void BPF_STRUCT_OPS(lertick_enable, struct task_struct *p)
 {
+	struct task_ctx *tctx = task_ctx(p);
+
 	p->scx.dsq_vtime = vtime_now;
+	if (tctx)
+		tctx->vtime = vtime_now;
 }
 
 void BPF_STRUCT_OPS(lertick_disable, struct task_struct *p)
