@@ -135,3 +135,69 @@ This was not the hypothesis under test. Applying the same criteria to the other 
 | base online | no: 3 ms wake +74% | no: 3 ms wake +8% | win | win |
 
 Fixed mode also met the criteria in all four workloads in the first run. In both runs, then, Lertick's dispatch with a fixed 2 ms slice beats EEVDF on these four workloads, and online's adaptive slices are what lose `mixed` and `multicore`. `cpu`, `affinity`, `memory` and `kernelcompile` have not been rerun against EEVDF.
+
+## Fixed mode on the other four workloads, criteria fixed 2026-11-16 before the run
+
+Base fixed is now the candidate. This run tests the four Phase 2 workloads not yet rerun, with EEVDF, base fixed and base online as arms. There are 10 repetitions per arm, in two blocks of 5 with seeds 20261118 and 20261119: the arms are shuffled in the first block and reversed in the second. The options are `--cpus 0,1,2,3 --bpf-runtime`, and for `kernelcompile` also `--kernel-source ~/reference/linux-7.0 --kernel-build ~/reference/linux7 --perf /usr/bin/perf`.
+
+**Difference from Phase 2:** `memory` uses `--memory-mib 3000` instead of 3600. The guest has 3.9 GiB and no swap now (the Phase 2 swap file was removed to free disk space), so 3600 MiB risks the OOM killer. This workload is therefore lighter memory pressure than in Phase 2.
+
+Against EEVDF, using medians over 10 repetitions:
+
+| Workload | Win | No loss |
+| --- | --- | --- |
+| `cpu`, `affinity` (no sleeping bursts) | Throughput +2% or more, and worker gap ≤ 1.5× | Throughput within ±2%, and worker gap ≤ 1.5× |
+| `memory` | Criteria 1–3 above, with the 300 µs burst class | — |
+| `kernelcompile` | Build completion p99 and compiler wake p99 each no more than 5% worse, one of them 10% or more better, and rebuilds/s no more than 2% worse | Both p99 within ±5%, and rebuilds/s within ±2% |
+
+Anything else is a loss. "No loss" is reported separately and is not counted as a win.
+
+## schbench and hackbench, criteria fixed 2026-11-16 before the run
+
+These are community benchmarks rather than this project's own fixtures. The arms are EEVDF, base fixed and base online. Both Lertick arms run with `--track-all`, as the service does. There are 10 repetitions; the arm order is shuffled per repetition, and each arm runs every configuration under one attach. Benchmarks are pinned to CPUs 0–3 with `taskset`. The driver is `bench.sh`.
+
+- **schbench** is pinned to kernel.org commit `6300b8f`, with 30 s runs after a 5 s warm-up, in three configurations:
+  - light: `-m 1 -t 2`
+  - full: `-m 1 -t 4`
+  - overload: `-m 2 -t 6`
+- **hackbench** is built from the rt-tests source at tag `v2.5`, the same version as Ubuntu's `rt-tests` 2.5-1 package. The package could not be installed because the guest's apt is blocked by a half-installed `linux-image-6.8.0-149-generic`, which was left alone. hackbench runs in two configurations: `-g 8 -l 2000` (sockets) and `-p -g 8 -l 2000` (pipes).
+
+Against EEVDF, using medians over 10 repetitions, per configuration:
+
+| Benchmark | Win | No loss |
+| --- | --- | --- |
+| schbench | Wakeup p99 10% or more better, request p99 no more than 5% worse, and RPS p50 no more than 2% worse | Wakeup and request p99 within ±5%, and RPS within ±2% |
+| hackbench | Time 10% or more lower | Time within ±2% |
+
+Anything else is a loss.
+
+## Result: fixed mode on the other four workloads, 2026-11-16
+
+There are 120 trials, all of which passed the runner's checks. `rest-summary.jsonl` holds one row per trial. `rest-kernelcompile-memory.jsonl` holds the build completion and compiler wake p99 values, which are nested in `trial.json`. Values are medians over 10 repetitions.
+
+| Workload | EEVDF | base fixed | base online | fixed against EEVDF |
+| --- | --- | --- | --- | --- |
+| `cpu`: throughput (M/s), worker gap (ms) | 613.3, 110.5 | 666.5, 45.7 | 654.8, 51.4 | **win**: +8.7%, gap 0.41× |
+| `affinity`: throughput, worker gap | 1561.7, 71.8 | 2222.8, 30.0 | 2135.8, 45.8 | **win**: +42.3%, gap 0.42× |
+| `memory`: 300 µs completion and wake p99 (ms), worker gap, throughput | 3.82, 2.91, 27.1, 1554.5 | 2.19, 1.33, 12.9, 1563.5 | 2.46, 1.21, 17.7, 1635.3 | **win**: -43%, -54%, gap 0.48×, +0.6% |
+| `kernelcompile`: build p99 (s), compiler wake p99 (ms), rebuilds/s | 3.433, 0.548, 0.321 | 3.042, 0.763, 0.382 | 2.799, 0.691, 0.390 | **loss**: build -11.4%, rebuilds/s +19.0%, but wake p99 **+39.1%** |
+
+Combined with the confirmation run, fixed mode beats EEVDF in seven of the eight Phase 2 workloads. It loses `kernelcompile` on the compiler's wake p99, 0.55 ms against 0.76 ms, even though the builds finish faster. Online loses the same way, at +26%.
+
+**Next target:** compiler wake latency. Lertick has no wakeup preemption, so a woken compiler waits for the current 2 ms slice to end, whereas EEVDF can preempt on wakeup. This explanation has not been measured.
+
+## Result: schbench and hackbench, 2026-11-16
+
+There are 30 runs (3 arms × 10 repetitions), each covering all five configurations. `bench.tar.gz` holds the raw outputs and `bench_judge.py bench` reproduces the table. Values are medians over 10 repetitions: schbench wakeup and request p99 in µs and RPS p50, and hackbench time in seconds.
+
+| Configuration | EEVDF | base fixed | base online | fixed against EEVDF |
+| --- | --- | --- | --- | --- |
+| schbench light | 189.5 / 19744 / 187.5 | 170.5 / 16800 / 188.0 | 175.0 / 17536 / 188.0 | **win**: wake -10.0%, request -14.9% |
+| schbench full | 240.5 / 27552 / 269.5 | 72.0 / 30560 / 262.5 | 73.0 / 27840 / 261.5 | **loss**: wake -70.1%, but request +10.9% and RPS -2.6% |
+| schbench overload | 7560 / 408576 / 110.5 | 7136 / 538624 / 94.5 | 7632 / 564224 / 95.5 | **loss**: request +31.8%, RPS -14.5% |
+| hackbench socket | 2.137 | 2.797 | 3.173 | **loss**: +30.9% |
+| hackbench pipe | 1.047 | 1.286 | 1.370 | **loss**: +22.9% |
+
+- **The Phase 2 wins do not carry over to throughput under heavy load.** Fixed wins only schbench light. Wakeup latency is much lower with a full machine, but requests take longer and throughput falls. Under overload and in both hackbench modes, Lertick is 15–31% slower than EEVDF.
+- **Reliability:** in repetition 8, online fell back to EEVDF during hackbench with `runnable task stall (hackbench[405314] failed to run for 1.364s)`. The kernel restored its default scheduler. The fixed arm had no fallback. That online repetition ran partly under EEVDF; its values remain in the medians, and its loader log is in the archive.
+- **Likely cause, not yet measured:** Lertick dispatches every task from one global vtime queue (`SHARED_DSQ`). It has no per-CPU queues and no wake-affine placement, so tasks that wake each other at a high rate lose cache locality and contend on one queue. EEVDF keeps per-CPU run queues. Before changing the policy, the next step is to measure where hackbench loses time: queue contention, migrations or wake-to-run.
