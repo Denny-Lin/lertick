@@ -5,7 +5,9 @@ The Lertick scheduler and loader are derived from the official
 pinned at commit `370b1cea95c6bb668d5b9261f069d433142b9986`.
 `scx_simple.c` and `scx_simple.bpf.c` supply the struct_ops loading, weighted
 virtual-time dispatch, and user-exit-info patterns; `scx_qmap.bpf.c` supplies the
-task-storage allocation pattern. The implementation files retain attribution and are
+task-storage allocation pattern. The hierarchical cgroup-weight calculation in
+`scx_lertick.bpf.c` follows `scx_flatcg.bpf.c` (Tejun Heo) from the same
+examples, as noted in the source. The implementation files retain attribution and are
 licensed under GPL-2.0-only, with the full text in
 [LICENSES/GPL-2.0-only.txt](../../LICENSES/GPL-2.0-only.txt).
 

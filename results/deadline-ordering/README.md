@@ -220,3 +220,44 @@ The measurement uses `hackbench -g 8 -l 2000` (sockets, 321 tasks on CPUs 0–3)
 ### Hypothesis for the next change
 
 `vtime_now` only moves when a task with a higher vtime starts running. A woken task is placed at `vtime_now − max_slice` or later. Short sleepers that keep waking therefore stay near `vtime_now` and keep sorting ahead of tasks that have already run, while `vtime_now` itself barely advances. A task that has run waits until the stream of wakers pauses, which matches the hundreds of milliseconds observed and the stalls of 1 s or more. Advancing the queue's virtual clock with the service actually delivered, as EEVDF does with its average vruntime, should bound these waits. A wakeup preemption bound would address the second gap. The change goes into the shared dispatch path, so both online and fixed modes get it, and online must still beat fixed.
+
+## Held-out and scaling check, criteria fixed 2026-11-16 before the run
+
+Every configuration in the screening rounds came from the same schbench and hackbench settings, so a win there may be fitted to them. This check uses only tests and settings that no screening round used. It adds two sched_ext schedulers from the community repository as references, and repeats everything on 8 CPUs to see how the single shared queue scales.
+
+- **Arms:** EEVDF, release online (AI), release fixed, `scx_bpfland` and `scx_lavd` (sched-ext/scx 1.1.2 builds, default options).
+- **Tests:**
+  - `perf bench sched messaging`, processes and threads
+  - `perf bench sched pipe`
+  - schbench `-m 4 -t 2` and `-m 1 -t 1`
+  - hackbench threads `-T -g 4 -l 2000` and processes `-g 16 -l 1000`
+  - kernel compile: rebuilding `kernel/sched/` objects with `make -j<CPUs>` in a private copy of the build tree
+- **Repetitions:** 5 per arm. Arm order is shuffled per repetition. Runs on CPUs 0–3, then on 0–7.
+- **Per test against EEVDF:** a win is the median better by 5% or more (lower time or latency p99, higher RPS), a tie within ±5%, and a loss anything worse. Results are reported per test and CPU count, wins and losses alike.
+
+## Release confirmation, 2026-11-16
+
+This run fixes the README numbers. It compares the release candidate (`69a67ff`, plus a later change to comments only) with EEVDF and the previous release (`ccfe5b3`), using `SBTIME=30 SBWARM=5 eval.sh release 10 default main-on=base:online rel-on=release:online rel-fx=release:fixed`. There are 40 runs, each covering all five configurations. `release-confirmation.tar.gz` holds every raw output; `eval_judge.py eval/release main-on` reproduces the ratios.
+
+Values are medians of 10 repetitions:
+
+| Configuration | EEVDF | rel-on | rel-fx | main-on |
+| --- | ---: | ---: | ---: | ---: |
+| hackbench pipe (s) | 0.8255 | 0.6990 | 0.6845 | 1.0885 |
+| hackbench socket (s) | 1.6250 | 1.4990 | 1.5425 | 2.1040 |
+| schbench full wakeup p99 (µs) | 120.5 | 47 | 47 | 47 |
+| schbench full request p99 (µs) | 18,240 | 17,152 | 17,408 | 17,280 |
+| schbench full RPS | 302 | 303 | 303 | 301.5 |
+| schbench light wakeup p99 (µs) | 90.5 | 91 | 96 | 97.5 |
+| schbench light request p99 (µs) | 11,760 | 11,712 | 11,904 | 12,352 |
+| schbench light RPS | 214.5 | 215 | 214.5 | 214 |
+| schbench overload wakeup p99 (µs) | 8,944 | 8,128 | 8,008 | 7,752 |
+| schbench overload request p99 (µs) | 379,392 | 371,712 | 347,648 | 482,816 |
+| schbench overload RPS | 124.5 | 119 | 118.5 | 106 |
+
+- **Against EEVDF, the geometric mean of the ratios is 0.887 for rel-on and 0.888 for rel-fx** (below 1 is better). The only metric worse than EEVDF by more than 2% is overload RPS, at 4.4% fewer requests per second for rel-on. Online and fixed are equal within noise.
+- **Fallbacks:** main-on fell back once in repetition 6, with `runnable task stall (kworker/7:1[752044] failed to run for 1.001s)`. rel-on and rel-fx had none.
+- **Correctness of the release build** (see the commit history):
+  - The model, accounting, concurrent-fork, fairness and recovery checks pass.
+  - Cgroup weight 200:100 gives a 2.00 CPU-time ratio, equal-weight groups with 2:1 tasks give 1.00, and `nice` 0 against 5 gives 3.07; EEVDF gives 2.00, 1.00 and 3.05.
+  - The setup-label check in the lifecycle suite fails intermittently on this 8-vCPU guest, for `ccfe5b3` as well.

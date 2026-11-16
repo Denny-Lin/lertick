@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Lertick: global weighted-vtime scheduling with bounded slices.
  *
@@ -46,8 +46,10 @@ const volatile bool model_update_carry;
 const volatile u32 cpuperf_mode = LERTICK_CPUPERF_MAX;
 /* Optional Lerwatt plug-in: read lw_contract, keep demand counters. */
 const volatile bool lerwatt_enabled;
-/* Loader can disable advice after a best-effort publication failure, before
- * attach. Keep this writable: rodata is frozen when BPF is loaded. */
+/*
+ * Loader can disable advice after a best-effort publication failure, before
+ * attach. Keep this writable: rodata is frozen when BPF is loaded.
+ */
 bool lerwatt_runtime_disabled;
 const volatile u64 lerwatt_session_id;
 const volatile u64 cluster_topology_id[LW_CONTRACT_MAX_CLUSTERS];

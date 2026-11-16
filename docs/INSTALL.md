@@ -108,7 +108,7 @@ lertick trial --duration 30
 
 `run` defaults to **continuous online mode**, all-task model tracking and automatic CPU-performance targets. It runs until stopped; `--duration 0` makes that choice explicit. `trial` defaults to 30 seconds, and `run --duration 30` is also finite. Both schedule the machine's eligible fair-class tasks through sched_ext while active. Daily use remains experimental, and enabling a service does not establish production stability. Keep an independent administrator terminal or VM console for a new-kernel run.
 
-Lertick currently implements no cgroup scheduling callbacks. Per-task weighted CPU-service accounting does not establish cgroup bandwidth or hierarchical isolation. Do not assume `cpu.max`, hierarchical `cpu.weight` or `cpu.idle` retain the default scheduler's behavior during a trial; the kernel documents these as [scheduler-dependent controls](https://docs.kernel.org/scheduler/sched-ext.html#scheduler-dependent-knobs).
+Lertick implements hierarchical cgroup `cpu.weight` and task `nice` weights. It does not implement `cpu.max` bandwidth limits or `cpu.idle`, so those controls have no effect during a trial; the kernel documents them as [scheduler-dependent controls](https://docs.kernel.org/scheduler/sched-ext.html#scheduler-dependent-knobs).
 
 Keep the machine awake during an initial trial. Finite duration uses monotonic running time, so time suspended is not counted. Suspend/resume and CPU hotplug are not established by the short deployment checks below; inspect status and re-verify before resuming use after such changes.
 
