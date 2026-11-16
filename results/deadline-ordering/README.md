@@ -287,3 +287,35 @@ There are 20 runs (4 arms × 5 repetitions) with no fallbacks. `heldout-cpu4.tar
 - **Kernel compilation is 9% slower in online mode.**
 - **Online against fixed:** online has fewer losses (3 against 4) but fewer wins. Neither mode dominates.
 - **perf bench pipe takes 20 µs per round trip under EEVDF in this guest, against about 1.6 µs for all three sched_ext schedulers.** This is probably an artefact of the guest that has not been investigated, for example EEVDF placing the two ends on different vCPUs and paying a cross-vCPU wakeup. It should not be read as a general result.
+
+### Held-out result on 8 CPUs, 2026-11-16
+
+The same 11 measures, rerun with all 8 vCPUs (`heldout.sh cpu8 0,1,2,3,4,5,6,7 5 …`). There are 20 runs with no fallbacks. `heldout-cpu8.tar.gz` holds the raw outputs; `heldout_judge.py heldout/cpu8` reproduces the verdicts, and `heldout-cpu8-judge.txt` is its output. Values are medians; the percentage is the change against EEVDF, where negative is better for times and latencies and positive is better for RPS.
+
+| Test | EEVDF | Lertick online | Lertick fixed | scx_bpfland |
+| --- | ---: | ---: | ---: | ---: |
+| perf bench messaging, processes (s) | 0.532 | 0.562 (+6%, loss) | 0.543 (+2%, same) | 0.691 (+30%, loss) |
+| perf bench messaging, threads (s) | 0.432 | 0.473 (+9%, loss) | 0.410 (−5%, win) | 0.628 (+45%, loss) |
+| perf bench pipe (µs/op) | 21.96 | 2.347 (−89%, win) | 3.544 (−84%, win) | 2.858 (−87%, win) |
+| schbench `-m 4 -t 2` wakeup p99 (µs) | 171 | 217 (+27%, loss) | 275 (+61%, loss) | 498 (+191%, loss) |
+| schbench `-m 4 -t 2` request p99 (µs) | 37,056 | 35,904 (−3%, same) | 39,744 (+7%, loss) | 41,664 (+12%, loss) |
+| schbench `-m 4 -t 2` RPS | 354 | 373 (+5%, win) | 366 (+3%, same) | 375 (+6%, win) |
+| schbench `-m 1 -t 1` wakeup p99 (µs) | 104 | 71 (−32%, win) | 76 (−27%, win) | 89 (−14%, win) |
+| schbench `-m 1 -t 1` request p99 (µs) | 13,104 | 10,256 (−22%, win) | 10,864 (−17%, win) | 12,208 (−7%, win) |
+| hackbench threads `-T -g 4` (s) | 1.178 | 0.835 (−29%, win) | 0.875 (−26%, win) | 0.940 (−20%, win) |
+| hackbench `-g 16` (s) | 1.535 | 1.271 (−17%, win) | 1.489 (−3%, same) | 2.057 (+34%, loss) |
+| kernel/sched rebuild (s) | 2.815 | 2.853 (+1%, same) | 2.903 (+3%, same) | 2.772 (−2%, same) |
+
+- **Lertick online wins 6, ties 2 and loses 3.** Fixed wins 5, ties 4 and loses 2. scx_bpfland wins 5, ties 1 and loses 5.
+- **The online mode scales better than it did on 4 CPUs.** `hackbench -g 16` turns from a tie into a 17% win, the schbench `-m 4 -t 2` request p99 loss (2.3× on 4 CPUs) disappears, and the kernel/sched rebuild is a tie.
+- **The remaining losses are wakeup-heavy.** schbench `-m 4 -t 2` wakeup p99 is still 27% higher, and both `perf bench messaging` cases lose (6% and 9%) where they tied on 4 CPUs. Fixed mode ties or wins messaging, so the learned slice is the likely cause there and is the next thing to look at.
+- **EEVDF's pipe time is again about 22 µs per round trip in this guest,** so the pipe win is still treated as a likely VM artefact.
+
+## Longer kernel compile, criteria fixed 2026-11-16 before the run
+
+The held-out kernel/sched rebuild takes under 3 s and its spread across runs (2.2 to 3.2 s) is larger than the differences between schedulers. This test rebuilds every object under `kernel/` from a clean state instead.
+
+- **Script:** `kbuild-long.sh LABEL CPUS REPS ARM…`. Each run deletes the `.o` and `.a` files under the private build tree's `kernel/`, then times `make -j<CPUs> kernel/` pinned to the CPU set. One untimed warm-up build fills the page cache first. Arm order is shuffled per repetition with a fixed seed.
+- **Arms:** EEVDF (sched_ext off), Lertick online (release build) and scx_bpfland 1.1.2.
+- **Sets:** 4 CPUs (0–3) and 8 CPUs (0–7), 5 repetitions each.
+- **Verdict:** the median wall time of each arm against EEVDF. Better or worse if the median differs by more than 3%, otherwise the same. The min and max of every arm are reported next to the median. Any fallback or failed build voids that run.

@@ -32,22 +32,28 @@ starts, replaces or retrains the other. [Automatic coordination](docs/INTEGRATIO
 
 These tests were never used to choose settings. The community sched_ext scheduler [scx_bpfland](https://github.com/sched-ext/scx) is included as a reference.
 
-| Test | Lertick vs Linux | scx_bpfland vs Linux |
-| --- | :--- | :--- |
-| perf bench sched messaging, processes | Same | 19% slower |
-| perf bench sched messaging, threads | Same | 25% slower |
-| perf bench sched pipe | **92% faster**\* | **91% faster**\* |
-| hackbench, threads | **33% faster** | **21% faster** |
-| hackbench, 16 groups | Same | 38% slower |
-| schbench, 1 thread, request latency | **25% lower** | **26% lower** |
-| schbench, 1 thread, wakeup latency | **7% lower** | **23% lower** |
-| schbench, 4 message threads, request latency | 2.3× higher | 5.5× higher |
-| schbench, 4 message threads, wakeup latency | 42% higher | 41% higher |
-| schbench, 4 message threads, throughput | Same | 6% lower |
-| Kernel compile (`kernel/sched`) | 9% slower | 18% slower |
-| **Total** | **4 better · 4 same · 3 worse** | **4 better · 7 worse** |
+| Against Linux EEVDF | Better | Same | Worse |
+| --- | ---: | ---: | ---: |
+| **Lertick, 8 CPUs** | **6** | 2 | 3 |
+| **Lertick, 4 CPUs** | **4** | 4 | 3 |
+| scx_bpfland, 8 CPUs | 5 | 1 | 5 |
+| scx_bpfland, 4 CPUs | 4 | 0 | 7 |
 
-<sub>Lertick here is its default learned (`online`) mode. Median of 5 runs on the same VM with 4 CPUs; "Same" means within 5%. scx_bpfland is the sched-ext/scx 1.1.2 build. scx_lavd 1.1.2 failed to load on this kernel. \*Linux takes 20 µs per pipe round trip in this VM, against about 1.6 µs for both sched_ext schedulers. This is probably an artefact of the VM, not a general result. Many message threads waking groups of workers remain Linux's strength. A run on 8 CPUs is in progress. [All runs →](results/deadline-ordering/README.md#held-out-result-on-4-cpus-2026-11-16)</sub>
+| Test | Lertick, 4 CPUs | Lertick, 8 CPUs |
+| --- | :--- | :--- |
+| perf bench sched messaging, processes | Same | 6% slower |
+| perf bench sched messaging, threads | Same | 9% slower |
+| perf bench sched pipe | **92% faster**\* | **89% faster**\* |
+| hackbench, threads | **33% faster** | **29% faster** |
+| hackbench, 16 groups | Same | **17% faster** |
+| schbench, 1 thread, request latency | **25% lower** | **22% lower** |
+| schbench, 1 thread, wakeup latency | **7% lower** | **32% lower** |
+| schbench, 4 message threads, request latency | 2.3× higher | Same |
+| schbench, 4 message threads, wakeup latency | 42% higher | 27% higher |
+| schbench, 4 message threads, throughput | Same | **5% higher** |
+| Kernel compile (`kernel/sched`) | 9% slower | Same |
+
+<sub>Lertick here is its default learned (`online`) mode. Median of 5 runs on the same VM with 4 or 8 CPUs; "Same" means within 5%. scx_bpfland is the sched-ext/scx 1.1.2 build; its per-test numbers are in the full results. scx_lavd 1.1.2 failed to load on this kernel. \*Linux takes about 20 µs per pipe round trip in this VM, against 1.6 to 2.9 µs for the sched_ext schedulers. This is probably an artefact of the VM, not a general result. Many message threads waking groups of workers remain Linux's strength. [All runs →](results/deadline-ordering/README.md#held-out-result-on-8-cpus-2026-11-16)</sub>
 
 <p align="center">
   <a href="#get-started-on-linux">Get started →</a> &nbsp;&nbsp;
