@@ -82,6 +82,18 @@ static u64 runnable_weight;
 /* Queued tasks examined, and the longest unbroken run, when prev may keep its CPU. */
 #define LERTICK_HEAD_SCAN 16
 #define LERTICK_KEEP_MAX_NS 20000000ULL
+/*
+ * Experimental learned continuation (off by default). When prev's slice ends
+ * and the model has a trained prediction for its current burst, keep prev if
+ * it is predicted to sleep within LERTICK_AI_SHORT_NS, and yield to a queued
+ * task if it is predicted to run more than LERTICK_AI_LONG_NS longer. Without
+ * a usable prediction (CPU-bound tasks, fixed mode) the fair rule decides.
+ */
+#ifndef LERTICK_AI_KEEP
+#define LERTICK_AI_KEEP 0
+#endif
+#define LERTICK_AI_SHORT_NS 500000ULL
+#define LERTICK_AI_LONG_NS 2000000ULL
 
 UEI_DEFINE(uei);
 
@@ -869,6 +881,21 @@ static __always_inline bool keep_prev(struct task_struct *prev, struct task_ctx 
 		ran = prev->se.sum_exec_runtime - tctx->runtime_start_ns;
 	if (ran >= LERTICK_KEEP_MAX_NS)
 		return false;
+#if LERTICK_AI_KEEP
+	if (tctx && mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
+	    tctx->model.updates >= min_train_samples) {
+		u64 consumed = tctx->episode_runtime_ns + ran;
+
+		if (consumed < tctx->prediction_ns) {
+			u64 left = tctx->prediction_ns - consumed;
+
+			if (left <= LERTICK_AI_SHORT_NS)
+				return true;
+			if (left > LERTICK_AI_LONG_NS)
+				return false;
+		}
+	}
+#endif
 	vtime += ran * 100 / weight;
 	bpf_for_each(scx_dsq, q, SHARED_DSQ, 0) {
 		if (n++ >= LERTICK_HEAD_SCAN)
