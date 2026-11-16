@@ -9,29 +9,24 @@ starts, replaces or retrains the other. [Automatic coordination](docs/INTEGRATIO
 
 ## Performance at a glance
 
-**On hackbench, Lertick ran 15% faster than Linux EEVDF with pipes and 8% faster with sockets. In a saturated schbench run its wakeup p99 was 61% lower.** One loss remains: under schbench overload, Lertick completed 4% fewer requests per second.
+**Better than Linux's default scheduler (EEVDF) on 6 of 8 hackbench and schbench measures, including 15% faster hackbench and 61% lower wakeup latency on a busy machine.** One is the same and one is worse: 4% lower throughput when overloaded.
 
-| Benchmark | Metric | Linux EEVDF | Lertick learned (`online`) | Lertick `fixed` | Learned vs EEVDF |
-| --- | --- | ---: | ---: | ---: | --- |
-| hackbench, pipes (`-p -g 8 -l 2000`) | Time (s) | 0.8255 | 0.6990 | 0.6845 | **15% faster** |
-| hackbench, sockets (`-g 8 -l 2000`) | Time (s) | 1.6250 | 1.4990 | 1.5425 | **8% faster** |
-| schbench, full (`-m 1 -t 4`) | Wakeup p99 (µs) | 120.5 | 47 | 47 | **61% lower** |
-| | Request p99 (µs) | 18,240 | 17,152 | 17,408 | **6% lower** |
-| | Requests/s p50 | 302 | 303 | 303 | Equal |
-| schbench, light (`-m 1 -t 2`) | Wakeup p99 (µs) | 90.5 | 91 | 96 | Equal (+1%) |
-| | Request p99 (µs) | 11,760 | 11,712 | 11,904 | Equal |
-| schbench, overload (`-m 2 -t 6`) | Wakeup p99 (µs) | 8,944 | 8,128 | 8,008 | **9% lower** |
-| | Request p99 (µs) | 379,392 | 371,712 | 347,648 | **2% lower** |
-| | Requests/s p50 | 124.5 | 119 | 118.5 | **4% fewer (loss)** |
+<p align="center">
+  <img src="docs/assets/lertick-vs-eevdf.svg" alt="Bar chart of Lertick against Linux EEVDF: hackbench pipes 15% faster, sockets 8% faster; schbench busy wakeup latency 61% lower and request latency 6% lower; light load the same; overloaded wakeup latency 9% lower, request latency 2% lower, and 4% fewer requests per second." width="1120" />
+</p>
 
-Each value is the median of **10 repetitions** with the arm order shuffled, using 30-second schbench runs after a 5-second warm-up. The guest is **ARM64 QEMU/HVF running Linux `7.0.0-38-generic`**, with each benchmark pinned to 4 of its 8 vCPUs. The tools are [schbench](https://git.kernel.org/pub/scm/linux/kernel/git/mason/schbench.git) `6300b8f` and hackbench from [rt-tests](https://git.kernel.org/pub/scm/utils/rt-tests/rt-tests.git) v2.5.
+| Test | Linux EEVDF | Lertick | Result |
+| --- | ---: | ---: | :--- |
+| hackbench, pipes | 0.83 s | 0.70 s | ✅ 15% faster |
+| hackbench, sockets | 1.63 s | 1.50 s | ✅ 8% faster |
+| schbench busy, wakeup latency | 121 µs | 47 µs | ✅ 61% lower |
+| schbench busy, request latency | 18.2 ms | 17.2 ms | ✅ 6% lower |
+| schbench light, request latency | 11.8 ms | 11.7 ms | ➖ Same |
+| schbench overloaded, wakeup latency | 8.9 ms | 8.1 ms | ✅ 9% lower |
+| schbench overloaded, request latency | 379 ms | 372 ms | ✅ 2% lower |
+| schbench overloaded, throughput | 125 req/s | 119 req/s | ❌ 4% fewer |
 
-- **The learned and fixed modes are within 1% of each other overall.** Most of the gain comes from dispatch changes that both modes share, not yet from learning.
-- **The previous release (`ccfe5b3`) ran in the same comparison.** It was 32% slower than EEVDF with pipes and 29% slower with sockets, and the kernel watchdog removed it once.
-- **The dispatch settings were selected on these same two benchmarks.** A check on tests that were not used for tuning is under way.
-- **These results come from one virtual machine.** They do not establish performance on physical hardware, on larger machines or in other workloads.
-
-[Method, every repetition and the screening history](results/deadline-ordering/README.md)
+<sub>Lertick's learned (`online`) mode against Linux EEVDF on the same machine: the median of 10 runs on one ARM64 VM (Linux 7.0, 4 CPUs), with latency at p99. Fixed-slice mode is within 1% of the learned mode, so most of the gain comes from dispatch rather than from learning so far. The settings were tuned on these two benchmarks, and physical hardware is untested. [Method, commands and all runs →](results/deadline-ordering/README.md)</sub>
 
 <p align="center">
   <a href="#get-started-on-linux">Get started →</a> &nbsp;&nbsp;
@@ -50,7 +45,7 @@ Each value is the median of **10 repetitions** with the arm order shuffled, usin
 </p>
 
 <p align="center">
-  <a href="https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml"><img src="https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml/badge.svg?branch=main" alt="Lertick checks" /></a>
+  <a href="https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml"><img src="https://github.com/Denny-Lin/lertick/actions/workflows/docs.yml/badge.svg?branch=main" alt="CI status" /></a>
   <img src="https://img.shields.io/badge/sched__ext-experimental-6e6e73?style=flat-square" alt="Experimental sched_ext scheduler" />
 </p>
 

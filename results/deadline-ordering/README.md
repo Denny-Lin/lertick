@@ -226,6 +226,7 @@ The measurement uses `hackbench -g 8 -l 2000` (sockets, 321 tasks on CPUs 0–3)
 Every configuration in the screening rounds came from the same schbench and hackbench settings, so a win there may be fitted to them. This check uses only tests and settings that no screening round used. It adds two sched_ext schedulers from the community repository as references, and repeats everything on 8 CPUs to see how the single shared queue scales.
 
 - **Arms:** EEVDF, release online (AI), release fixed, `scx_bpfland` and `scx_lavd` (sched-ext/scx 1.1.2 builds, default options).
+  - **Change before any result:** `scx_lavd` 1.1.2 failed the BPF verifier on this kernel (`arena_init`: `R6 invalid mem access 'scalar'`, load `-EACCES`) and never attached, so it is dropped. The other arms are unchanged.
 - **Tests:**
   - `perf bench sched messaging`, processes and threads
   - `perf bench sched pipe`
