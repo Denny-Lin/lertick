@@ -412,3 +412,9 @@ The p2dq and flash comparison from these sessions is kept here but not added to 
 | --- | --- | --- |
 | scx_p2dq 1.1.4 | 7 better, 2 same, 2 worse | 3 better, 5 same, 3 worse |
 | scx_flash 1.1.4 | 8 better, 2 same, 1 worse | 6 better, 3 same, 2 worse |
+
+### Starvation guard, criteria fixed 2026-11-16 before the run
+
+**Change.** Each enqueue into the shared queue records its time. A BPF timer every 50 ms moves up to 8 tasks that have been queued for more than 200 ms straight to their CPU's local queue and kicks that CPU. The new `stall_rescues` counter reports how often it acts. This bounds the wait well inside the loader's 1 s watchdog without changing fair order otherwise.
+
+**Stress test** (`stall-test.sh`): `hackbench -g 16 -l 1000` and `-g 32 -l 1000` on CPUs 0–3, 10 repetitions, arms EEVDF, `base` (current algorithm) and `guard`, order shuffled per repetition. The guard passes if it has no fallback, its largest wake-to-run time stays under 500 ms, and its median hackbench times are no more than 5% slower than `base`. It then goes to the 5-repetition held-out and kernel compile confirmation on 4 and 8 CPUs against `base` and EEVDF, and replaces `base` only if no measure is worse than `base` on either CPU count.
