@@ -466,3 +466,11 @@ The noise above made single-session verdicts against EEVDF suspect, so `pool.py`
 - **Only two wins hold in every session:** `perf bench pipe` and hackbench in thread mode. The losses on schbench `-m 4 -t 2` also hold in every session.
 - **The README's first held-out session was a favourable one.** It showed 4 wins on 4 CPUs and 6 on 8; pooled, both are 2. The other measures swing by 10–50 percentage points between sessions with no code change.
 - **Consequence for reporting:** verdicts against EEVDF should come from pooled sessions, not from one session. The longer kernel compile (`kbuild-long`) was level or better in every session and is not in this table.
+
+## Overnight sessions with an idle host, criteria fixed 2026-11-16 before the run
+
+The six pooled sessions ran while the host Mac was also in use (a video call and video playback at times). Host load takes vCPUs away from the guest, and Lertick's single shared queue may suffer more from a vCPU paused while holding its lock than EEVDF's per-CPU queues, so host activity could bias results against Lertick rather than only add noise.
+
+- **Sessions** (`night-run.sh`): two rounds, each with EEVDF, Lertick (`t5`, the 5 s watchdog build), scx_bpfland, scx_lavd, scx_p2dq and scx_flash in the same sessions: `heldout.sh` on 4 and 8 CPUs and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions each. The host is not otherwise used.
+- **Host evidence:** `host-load.sh` logs the Mac's load average and busiest processes every 10 s; the guest logs `/proc/stat` every 10 s for steal time.
+- **Use:** if both rounds agree with each other and steal time stays low, they replace the pooled daytime sessions as the README's basis, with verdicts from the median of the two rounds and every scheduler compared within the same rounds. If the overnight results are clearly better for Lertick than the daytime ones, host load biased the daytime sessions.
