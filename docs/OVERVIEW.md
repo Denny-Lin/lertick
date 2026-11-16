@@ -22,7 +22,7 @@ Compilation, BPF verifier acceptance, sched_ext registration, real task executio
 
 **Learning does not yet establish a scheduling advantage.** All online/fixed throughput confidence intervals included zero change. Online wake p99 increased about **214% in mixed** and **147% in multicore** contention versus fixed slices. Linear prediction MAE exceeded same-episode EWMA in all six categories with eligible labels. These five-trial VM comparisons are exploratory; they do not establish superiority over Linux EEVDF or other sched_ext schedulers.
 
-The table above describes Phase 2. The current scheduler is compared with EEVDF on schbench and hackbench in the [README](../README.md#performance-at-a-glance). There, online and fixed modes are within 1% of each other, so learning still does not account for the gain.
+The table above describes Phase 2. The current scheduler is compared with EEVDF on standard kernel scheduler benchmarks in the [README](../README.md#performance). Fixed-slice mode scores about the same as the learned mode there, so learning does not yet account for most of the gain.
 
 [Full results, uncertainty and overhead](PHASE2_RESULTS.md) · [Raw evidence and analysis commands](../results/phase2/README.md)
 
