@@ -8,30 +8,30 @@
 
 ## Performance
 
-**Lertick beats Linux's default scheduler (EEVDF) on 5 of 11 standard kernel scheduler benchmarks with 4 CPUs and on 6 with 8 CPUs.** Against the community sched_ext schedulers it wins far more than it loses: 6 to 1 and 9 to 0 against scx_bpfland, 7 to 1 and 6 to 2 against scx_lavd. Its losses to EEVDF come mostly when many message threads wake groups of workers.
+**Against Linux's default scheduler (EEVDF), Lertick is clearly faster on 2 of 11 standard kernel scheduler benchmarks, level on 5 to 6 and slower on 3 to 4.** The wins, `perf bench pipe` and hackbench with threads, hold in every session; the losses are mostly latency when many message threads wake groups of workers. Against the community sched_ext schedulers it wins far more than it loses: scx_bpfland 6 to 1 and 9 to 0, scx_lavd 7 to 1 and 6 to 2, scx_p2dq 7 to 2 and 3 to 3, scx_flash 8 to 1 and 6 to 2 (4 and 8 CPUs).
 
 <p align="center">
-  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 5, the same on 4 and worse on 2; against scx_bpfland, better on 6, the same on 4 and worse on 1; against scx_lavd, better on 7, the same on 3 and worse on 1." width="1120" />
+  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 2, the same on 6 and worse on 3; against scx_bpfland, better on 6, the same on 4 and worse on 1; against scx_lavd, better on 7, the same on 3 and worse on 1; against scx_p2dq, better on 7, the same on 2 and worse on 2; against scx_flash, better on 8, the same on 2 and worse on 1." width="1120" />
 </p>
 
 <p align="center">
-  <img src="docs/assets/lertick-scoreboard-cpu8.svg" alt="8 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 6, the same on 2 and worse on 3; against scx_bpfland, better on 9, the same on 2 and worse on 0; against scx_lavd, better on 6, the same on 3 and worse on 2." width="1120" />
+  <img src="docs/assets/lertick-scoreboard-cpu8.svg" alt="8 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 2, the same on 5 and worse on 4; against scx_bpfland, better on 9, the same on 2 and worse on 0; against scx_lavd, better on 6, the same on 3 and worse on 2; against scx_p2dq, better on 3, the same on 5 and worse on 3; against scx_flash, better on 6, the same on 3 and worse on 2." width="1120" />
 </p>
 
 <details>
 <summary><strong>Each benchmark against Linux EEVDF</strong></summary>
 
 <p align="center">
-  <img src="docs/assets/lertick-vs-eevdf-cpu4.svg" alt="4 CPUs: Lertick is better than Linux EEVDF on perf pipe, hackbench threads, schbench 1-thread request and wakeup latency, and kernel compile; the same on perf messaging, hackbench 16 groups and schbench 4-thread throughput; worse on schbench 4 message threads request and wakeup latency." width="1120" />
+  <img src="docs/assets/lertick-vs-eevdf-cpu4.svg" alt="4 CPUs, median over several sessions: Lertick is better than Linux EEVDF on perf pipe and hackbench threads; the same on perf messaging, hackbench 16 groups, schbench 1-thread wakeup latency, schbench 4-thread throughput and kernel compile; worse on schbench 1-thread request latency and schbench 4 message threads request and wakeup latency." width="1120" />
 </p>
 
 <p align="center">
-  <img src="docs/assets/lertick-vs-eevdf-cpu8.svg" alt="8 CPUs: Lertick is better than Linux EEVDF on perf pipe, hackbench threads and 16 groups, schbench 1-thread request and wakeup latency, and schbench 4-thread throughput; the same on schbench 4-thread request latency and kernel compile; worse on perf messaging processes and threads and schbench 4 message threads wakeup latency." width="1120" />
+  <img src="docs/assets/lertick-vs-eevdf-cpu8.svg" alt="8 CPUs, median over several sessions: Lertick is better than Linux EEVDF on perf pipe and hackbench threads; the same on perf messaging threads, hackbench 16 groups, schbench 1-thread wakeup latency, schbench 4-thread throughput and kernel compile; worse on perf messaging processes, schbench 1-thread request latency and schbench 4 message threads request and wakeup latency." width="1120" />
 </p>
 
 </details>
 
-<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode. Median of 5 runs on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Each scheduler is compared with Lertick runs from the same sessions. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#held-out-result-on-8-cpus-2026-11-16)</sub>
+<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Against EEVDF: the median over 5 to 6 sessions of 5 runs each, because single sessions swing by 10 to 50 points on some measures. Against the other schedulers: one session each, compared with Lertick runs from the same session, so treat those counts as indicative. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#pooled-comparison-with-eevdf-over-six-sessions-2026-11-16)</sub>
 
 ## Get started
 
