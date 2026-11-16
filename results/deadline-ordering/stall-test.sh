@@ -9,7 +9,7 @@ HB=rt-tests/hackbench; TS="taskset -c 0,1,2,3"
 log() { echo "$(date +%T) $*" >> $OUT/progress.log; }
 state() { cat /sys/kernel/sched_ext/state; }
 wait_state() { for _ in $(seq 1 150); do [ "$(state)" = "$1" ] && return 0; sleep 0.1; done; return 1; }
-ARMS="default base=kick/base/scx_lertick guard=guard/guard/scx_lertick"
+ARMS=${ARMS:-"default base=kick/base/scx_lertick guard=guard/guard/scx_lertick"}
 for rep in $(seq 0 $((reps - 1))); do
   for arm in $(printf '%s\n' $ARMS | shuf --random-source=<(yes "$label$rep")); do
     name=${arm%%=*}; d=$OUT/$rep-$name; mkdir -p $d; pid=
