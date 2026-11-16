@@ -8,7 +8,18 @@
 
 ## Performance
 
-**Better than Linux's default scheduler (EEVDF) on 5 of 11 standard kernel scheduler benchmarks with 4 CPUs and on 6 with 8 CPUs.** It is worse on 2 and 3, mostly when many message threads wake groups of workers.
+**Lertick beats Linux's default scheduler (EEVDF) on 5 of 11 standard kernel scheduler benchmarks with 4 CPUs and on 6 with 8 CPUs, and the community scheduler scx_bpfland on 6 and 9.** It loses to EEVDF on 2 and 3, mostly when many message threads wake groups of workers.
+
+<p align="center">
+  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 5, the same on 4 and worse on 2; against scx_bpfland, better on 6, the same on 4 and worse on 1." width="1120" />
+</p>
+
+<p align="center">
+  <img src="docs/assets/lertick-scoreboard-cpu8.svg" alt="8 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 6, the same on 2 and worse on 3; against scx_bpfland, better on 9, the same on 2 and worse on 0." width="1120" />
+</p>
+
+<details>
+<summary><strong>Each benchmark against Linux EEVDF</strong></summary>
 
 <p align="center">
   <img src="docs/assets/lertick-vs-eevdf-cpu4.svg" alt="4 CPUs: Lertick is better than Linux EEVDF on perf pipe, hackbench threads, schbench 1-thread request and wakeup latency, and kernel compile; the same on perf messaging, hackbench 16 groups and schbench 4-thread throughput; worse on schbench 4 message threads request and wakeup latency." width="1120" />
@@ -18,14 +29,9 @@
   <img src="docs/assets/lertick-vs-eevdf-cpu8.svg" alt="8 CPUs: Lertick is better than Linux EEVDF on perf pipe, hackbench threads and 16 groups, schbench 1-thread request and wakeup latency, and schbench 4-thread throughput; the same on schbench 4-thread request latency and kernel compile; worse on perf messaging processes and threads and schbench 4 message threads wakeup latency." width="1120" />
 </p>
 
-| Against Linux EEVDF | Better | Same | Worse |
-| --- | ---: | ---: | ---: |
-| **Lertick, 4 CPUs** | **5** | 4 | 2 |
-| **Lertick, 8 CPUs** | **6** | 2 | 3 |
-| [scx_bpfland](https://github.com/sched-ext/scx), 4 CPUs | 4 | 1 | 6 |
-| [scx_bpfland](https://github.com/sched-ext/scx), 8 CPUs | 5 | 1 | 5 |
+</details>
 
-<sub>Lertick in its default learned (`online`) mode. None of these benchmarks was used to choose its settings. Median of 5 runs on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "Same" means within 5%. Kernel compile rebuilds all of `kernel/` (about 30 s). scx_bpfland is the community sched_ext scheduler, version 1.1.2. \*Linux takes about 20 µs per pipe round trip in this VM against 1.6 to 2.3 µs for Lertick, which is probably an artefact of the VM. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#longer-kernel-compile-result-2026-11-16)</sub>
+<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode. Median of 5 runs on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#held-out-result-on-8-cpus-2026-11-16)</sub>
 
 ## Get started
 
