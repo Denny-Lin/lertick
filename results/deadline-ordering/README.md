@@ -482,3 +482,19 @@ The six pooled sessions ran while the host Mac was also in use (a video call and
 **Change** (`LERTICK_AI_DEADLINE=1`): the shared queue key becomes vtime plus the task's slice over its weight; in online mode the slice is the predicted burst (0.5–5 ms). The offset is removed when the task starts running, so charging is unchanged, and `keep_prev` adds prev's own offset before comparing. r4's earlier deadline variant hurt hackbench pipe (1.72×); it is not identical (it was combined with other changes and judged on the tuned set), so pipe and hackbench are watched closely.
 
 **Screening** (`heldout.sh aidl-cpu4` and `aidl-cpu8`, 3 repetitions, arms EEVDF, `base` and `dl` built from the same source). `dl` against `base` is compared within each session, so host load affects both Lertick arms alike. `dl` goes on if schbench `-m 4 -t 2` wakeup p99 is lower than `base` by more than 10% on both CPU counts and no other measure is worse than `base` by more than 10% (the spread seen between identical builds in one session).
+
+### Screening result: AI deadline order rejected, 2026-11-16
+
+`aidl-sets.tar.gz` holds both sets (3 repetitions, EEVDF, `base`, `dl`). `dl` against `base`, same session:
+
+| Measure | 4 CPUs | 8 CPUs |
+| --- | ---: | ---: |
+| schbench `-m 4 -t 2` wakeup p99 (target) | +1% | +15% |
+| schbench `-m 4 -t 2` request p99 | +1% | +12% |
+| perf messaging, processes | +8% | +6% |
+| perf messaging, threads | +25% | −9% |
+| hackbench `-g 16` | +7% | +11% |
+| perf pipe | −45% | −29% |
+| schbench `-m 1 -t 1` request p99 | −6% | +6% |
+
+Positive is worse for `dl`. The target measure does not improve and several others get worse, so `dl` is rejected and the switch reverted. With one shared queue, ordering by predicted deadline moves short-burst tasks ahead of fair order without shortening the wakeup tail; this agrees with r4.
