@@ -61,13 +61,24 @@ const volatile u16 cpu_cap_override[LERTICK_MAX_CPUS];
 #define LERTICK_QUEUE_REFERENCE 16U
 
 static u64 vtime_now;
+/* Sum of runnable tasks' weights: the virtual clock advances by service / weight. */
+static u64 runnable_weight;
+/* vtime + 1 of the task running on each CPU, 0 when none: wakeup preemption reads it. */
+static u64 cpu_curr_vtime[LERTICK_MAX_CPUS];
 
-/* Screening switches for the dispatch-order experiment; removed once decided. */
-#ifndef LERTICK_ORDER_BY_REQUEST
-#define LERTICK_ORDER_BY_REQUEST 1
+/* Screening switches; each is removed once its experiment is decided. */
+#ifndef LERTICK_CLOCK_AVG
+#define LERTICK_CLOCK_AVG 1
 #endif
-#ifndef LERTICK_CAP_ADAPTIVE_SLICE
-#define LERTICK_CAP_ADAPTIVE_SLICE 1
+/* 0: never preempt on wakeup; 1: preempt a CPU running far later work; 2: as 1, for predicted-short bursts only. */
+#ifndef LERTICK_WAKE_PREEMPT
+#define LERTICK_WAKE_PREEMPT 0
+#endif
+#ifndef LERTICK_PREEMPT_GAP_NS
+#define LERTICK_PREEMPT_GAP_NS 1000000ULL
+#endif
+#ifndef LERTICK_PREEMPT_BURST_NS
+#define LERTICK_PREEMPT_BURST_NS 1000000ULL
 #endif
 UEI_DEFINE(uei);
 
@@ -93,8 +104,9 @@ struct task_ctx {
 	/* Lerwatt plug-in only: classification of the current episode. */
 	bool latcrit;
 	u64 lc_last_burst_ns;
-	/* Charged CPU service; dsq_vtime carries the dispatch deadline instead. */
-	u64 vtime;
+	u32 rq_weight;		/* weight counted in runnable_weight, 0 when not counted */
+	bool cg_counted;	/* rq_weight is also counted in its cgroup's sums */
+	u32 eff_weight;		/* weight of the last charge; dispatch() cannot look up cgroups */
 	struct lertick_task_snapshot snapshot;
 };
 
@@ -520,13 +532,6 @@ static __always_inline u64 choose_slice(struct task_ctx *tctx, u64 consumed_ns)
 		slice = min_slice_ns;
 	if (slice > max_slice_ns)
 		slice = max_slice_ns;
-	/*
-	 * A slice longer than the fixed one only matters while others wait:
-	 * dispatch() renews an uncontended task anyway. Prediction orders the
-	 * queue instead (request_ns()).
-	 */
-	if (LERTICK_CAP_ADAPTIVE_SLICE && slice > fixed_slice_ns)
-		slice = fixed_slice_ns;
 	if (!tctx)
 		return slice;
 	tctx->slice_was_adaptive = adaptive;
@@ -586,27 +591,231 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 }
 
 /*
- * Service the task asks for before it next sleeps: the predicted remainder
- * of its burst, bounded to the slice range, or the fixed slice without one.
- * As in EEVDF, the deadline is vtime plus the request, so a short predicted
- * burst runs before long work with the same charged service.
+ * cgroup CPU weights (cpu.weight, systemd CPUWeight=). The hierarchy is
+ * flattened as in the sched_ext scx_flatcg example (Tejun Heo, GPL-2.0): a
+ * cgroup's hierarchical share (hweight) is the product, at each level, of
+ * its weight over the weights of its active siblings. Lertick keeps one
+ * global vtime queue, so the share becomes a per-task effective weight:
+ * the task's part of its cgroup's runnable weight times the cgroup's share
+ * of all runnable weight. With every cgroup at the default weight, and
+ * runnable tasks in one cgroup, this equals the task weight.
  */
-static __always_inline u64 request_ns(struct task_ctx *tctx, u64 slice)
+#define LERTICK_HWEIGHT_ONE (1ULL << 16)
+
+struct lertick_cgrp {
+	u32 nr_active;		/* this cgroup or a descendant has runnable tasks */
+	u32 nr_runnable;	/* runnable tasks directly in this cgroup */
+	u32 weight;
+	u32 hweight;		/* share of the whole machine, LERTICK_HWEIGHT_ONE = all */
+	u64 child_weight_sum;	/* weights of active children */
+	u64 hweight_gen;
+	u64 task_weight_sum;	/* weights of runnable tasks directly in this cgroup */
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_CGRP_STORAGE);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+	__type(key, int);
+	__type(value, struct lertick_cgrp);
+} cgrp_ctx_stor SEC(".maps");
+
+private(LERTICK_CGRP) struct bpf_spin_lock cgrp_lock;
+static u64 hweight_gen = 1;
+
+static __always_inline struct lertick_cgrp *cgrp_ctx(struct cgroup *cgrp)
 {
-	return tctx && tctx->slice_was_adaptive ? slice : fixed_slice_ns;
+	return bpf_cgrp_storage_get(&cgrp_ctx_stor, cgrp, 0, 0);
+}
+
+static struct lertick_cgrp *cgrp_ancestor_ctx(struct cgroup *cgrp, int level)
+{
+	struct lertick_cgrp *cgc;
+
+	cgrp = bpf_cgroup_ancestor(cgrp, level);
+	if (!cgrp)
+		return NULL;
+	cgc = cgrp_ctx(cgrp);
+	bpf_cgroup_release(cgrp);
+	return cgc;
+}
+
+static void cgrp_refresh_hweight(struct cgroup *cgrp, struct lertick_cgrp *cgc)
+{
+	int level;
+
+	if (!cgc->nr_active || cgc->hweight_gen == hweight_gen)
+		return;
+	bpf_for(level, 0, cgrp->level + 1) {
+		struct lertick_cgrp *c, *pc;
+		bool active;
+
+		c = cgrp_ancestor_ctx(cgrp, level);
+		if (!c)
+			break;
+		if (!level) {
+			c->hweight = LERTICK_HWEIGHT_ONE;
+			c->hweight_gen = hweight_gen;
+			continue;
+		}
+		pc = cgrp_ancestor_ctx(cgrp, level - 1);
+		if (!pc)
+			break;
+		bpf_spin_lock(&cgrp_lock);
+		active = c->nr_active;
+		if (active && pc->child_weight_sum) {
+			c->hweight_gen = pc->hweight_gen;
+			c->hweight = (u64)pc->hweight * c->weight / pc->child_weight_sum;
+			if (!c->hweight)
+				c->hweight = 1;
+		}
+		bpf_spin_unlock(&cgrp_lock);
+		if (!active)
+			break;
+	}
+}
+
+/* A cgroup gains or loses its first or last runnable task: update active sums upward. */
+static void cgrp_update_active(struct cgroup *cgrp, struct lertick_cgrp *cgc, bool runnable)
+{
+	bool updated = false;
+	int idx;
+
+	if (runnable) {
+		if (__sync_fetch_and_add(&cgc->nr_runnable, 1))
+			return;
+	} else {
+		if (__sync_sub_and_fetch(&cgc->nr_runnable, 1))
+			return;
+		cgrp_refresh_hweight(cgrp, cgc);
+	}
+	bpf_for(idx, 0, cgrp->level) {
+		int level = cgrp->level - idx;
+		struct lertick_cgrp *c, *pc = NULL;
+		bool propagate = false;
+
+		c = cgrp_ancestor_ctx(cgrp, level);
+		if (!c)
+			break;
+		if (level) {
+			pc = cgrp_ancestor_ctx(cgrp, level - 1);
+			if (!pc)
+				break;
+		}
+		bpf_spin_lock(&cgrp_lock);
+		if (runnable) {
+			if (!c->nr_active++) {
+				updated = true;
+				if (pc) {
+					propagate = true;
+					pc->child_weight_sum += c->weight;
+				}
+			}
+		} else if (c->nr_active) {
+			if (!--c->nr_active) {
+				updated = true;
+				if (pc) {
+					propagate = true;
+					pc->child_weight_sum -= c->weight;
+				}
+			}
+		}
+		bpf_spin_unlock(&cgrp_lock);
+		if (!propagate)
+			break;
+	}
+	if (updated)
+		__sync_fetch_and_add(&hweight_gen, 1);
+	if (runnable)
+		cgrp_refresh_hweight(cgrp, cgc);
+}
+
+static void cgrp_account(struct cgroup *cgrp, struct task_ctx *tctx, bool runnable)
+{
+	struct lertick_cgrp *cgc = cgrp_ctx(cgrp);
+
+	if (!cgc)
+		return;
+	if (runnable)
+		__sync_fetch_and_add(&cgc->task_weight_sum, tctx->rq_weight);
+	else
+		__sync_fetch_and_sub(&cgc->task_weight_sum, tctx->rq_weight);
+	cgrp_update_active(cgrp, cgc, runnable);
+	tctx->cg_counted = runnable;
+}
+
+static void cgrp_task_runnable(struct task_struct *p, struct task_ctx *tctx, bool runnable)
+{
+	struct cgroup *cgrp;
+
+	if (runnable == tctx->cg_counted)
+		return;
+	cgrp = __COMPAT_scx_bpf_task_cgroup(p);
+	if (!cgrp)
+		return;
+	cgrp_account(cgrp, tctx, runnable);
+	bpf_cgroup_release(cgrp);
+}
+
+/* Weight to charge service against: the task's share of its cgroup's share. */
+static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx, u32 weight)
+{
+	struct lertick_cgrp *cgc;
+	struct cgroup *cgrp;
+	u64 eff, tws, rw = runnable_weight;
+
+	if (!tctx || !tctx->cg_counted)
+		return weight;
+	cgrp = __COMPAT_scx_bpf_task_cgroup(p);
+	if (!cgrp)
+		return weight;
+	cgc = cgrp_ctx(cgrp);
+	if (!cgc) {
+		bpf_cgroup_release(cgrp);
+		return weight;
+	}
+	cgrp_refresh_hweight(cgrp, cgc);
+	tws = cgc->task_weight_sum;
+	eff = (u64)weight * cgc->hweight / LERTICK_HWEIGHT_ONE;
+	bpf_cgroup_release(cgrp);
+	if (!tws || !rw)
+		return weight;
+	eff = eff * rw / tws;
+	if (eff < 1)
+		eff = 1;
+	if (eff > 1000000)
+		eff = 1000000;
+	return eff;
+}
+
+/*
+ * No CPU was idle for this wakeup. If the CPU it last ran on is running work
+ * well behind it in fair order, cut that work short instead of letting the
+ * woken task wait out a whole slice. Under mode 2 only bursts the model
+ * predicts to be short may do so.
+ */
+static __always_inline void wake_preempt(struct task_struct *p, struct task_ctx *tctx, u64 vtime)
+{
+	s32 cpu = scx_bpf_task_cpu(p);
+	u64 curr;
+
+	if (cpu < 0 || cpu >= LERTICK_MAX_CPUS)
+		return;
+	if (LERTICK_WAKE_PREEMPT == 2 &&
+	    !(tctx && tctx->episode_valid && tctx->prediction_ns &&
+	      tctx->model.updates >= min_train_samples &&
+	      tctx->prediction_ns <= LERTICK_PREEMPT_BURST_NS))
+		return;
+	curr = cpu_curr_vtime[cpu];
+	if (curr && time_before(vtime + LERTICK_PREEMPT_GAP_NS, curr - 1)) {
+		scx_bpf_kick_cpu(cpu, SCX_KICK_PREEMPT);
+	}
 }
 
 void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 {
 	struct task_ctx *tctx = task_ctx(p);
 	u64 vtime = p->scx.dsq_vtime;
-	u32 weight = p->scx.weight ? p->scx.weight : 1;
 	u64 slice;
-
-	/* Keep two loads: the verifier rejects one load through either pointer. */
-	barrier_var(vtime);
-	if (tctx)
-		vtime = tctx->vtime;
 
 	if (is_fault_target(p)) {
 		stat_add(LERTICK_STAT_FAULT_STALLS, 1);
@@ -615,25 +824,60 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	if (tctx)
 		refresh_tracking(p, tctx);
 	slice = choose_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
-	/* Sleeper credit is bounded independently of model output. */
-	if (time_before(vtime, vtime_now - max_slice_ns))
+	/*
+	 * Sleeper credit is bounded independently of model output. Only a
+	 * wakeup is a sleeper: a task requeued after its slice keeps its vtime,
+	 * or tasks with larger weights would be pulled back to the clock and
+	 * lose their share.
+	 */
+	if ((enq_flags & SCX_ENQ_WAKEUP) && time_before(vtime, vtime_now - max_slice_ns))
 		vtime = vtime_now - max_slice_ns;
-	if (tctx) {
-		tctx->vtime = vtime;
-		if (LERTICK_ORDER_BY_REQUEST)
-			vtime += request_ns(tctx, slice) * 100 / weight;
-	}
 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
 	scx_bpf_dsq_insert_vtime(p, SHARED_DSQ, slice, vtime, enq_flags);
+	if (LERTICK_WAKE_PREEMPT && (enq_flags & SCX_ENQ_WAKEUP))
+		wake_preempt(p, tctx, vtime);
 	if (tctx)
 		publish(tctx);
 }
 
+/*
+ * Whether the queue's first task is ahead of prev in fair order. prev is
+ * still running and not yet charged for its current run, so add that run.
+ * Without this check a task whose slice ends always yields to the queue
+ * head, and two tasks sharing a CPU alternate regardless of their weights.
+ */
+static __always_inline bool queue_head_first(struct task_struct *prev, struct task_ctx *tctx)
+{
+	struct bpf_iter_scx_dsq it;
+	struct task_struct *head;
+	u64 vtime = prev->scx.dsq_vtime;
+	u32 weight = tctx && tctx->eff_weight ? tctx->eff_weight :
+		     prev->scx.weight ? prev->scx.weight : 1;
+	bool first = false;
+
+	if (tctx && tctx->running && prev->se.sum_exec_runtime > tctx->runtime_start_ns)
+		vtime += (prev->se.sum_exec_runtime - tctx->runtime_start_ns) * 100 / weight;
+	if (bpf_iter_scx_dsq_new(&it, SHARED_DSQ, 0) == 0) {
+		head = bpf_iter_scx_dsq_next(&it);
+		first = head && time_before(head->scx.dsq_vtime, vtime);
+	}
+	bpf_iter_scx_dsq_destroy(&it);
+	return first;
+}
+
 void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 {
-	/* Explicitly reinsert a continuing task to avoid the kernel's DFL refill. */
-	if (!scx_bpf_dsq_move_to_local(SHARED_DSQ) && prev &&
-	    (prev->scx.flags & SCX_TASK_QUEUED) && !is_fault_target(prev)) {
+	bool continuing = prev && (prev->scx.flags & SCX_TASK_QUEUED) && !is_fault_target(prev);
+
+	/*
+	 * Run the queue head only if it is ahead of a continuing prev.
+	 * Explicitly reinsert a continuing task to avoid the kernel's DFL refill.
+	 */
+	if (!continuing) {
+		scx_bpf_dsq_move_to_local(SHARED_DSQ);
+		return;
+	}
+	if (!queue_head_first(prev, task_ctx(prev)) || !scx_bpf_dsq_move_to_local(SHARED_DSQ)) {
 		struct task_ctx *tctx = task_ctx(prev);
 		struct lertick_service_sample service = {0};
 		u64 slice;
@@ -681,6 +925,11 @@ void BPF_STRUCT_OPS(lertick_runnable, struct task_struct *p, u64 enq_flags)
 
 	if (!tctx)
 		return;
+	if (!tctx->rq_weight) {
+		tctx->rq_weight = p->scx.weight ? p->scx.weight : 1;
+		__sync_fetch_and_add(&runnable_weight, tctx->rq_weight);
+		cgrp_task_runnable(p, tctx, true);
+	}
 	refresh_tracking(p, tctx);
 	/* Migration can produce runnable notifications without a new wakeup. */
 	if (!tctx->episode_active)
@@ -722,14 +971,16 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 {
 	struct task_ctx *tctx = task_ctx(p);
 	u64 observed_slice = p->scx.slice;
-	u64 vtime = p->scx.dsq_vtime;
 
-	barrier_var(vtime);
-	if (tctx)
-		vtime = tctx->vtime;
 	/* As in scx_simple, this cross-CPU monotonic update tolerates small races. */
-	if (time_before(vtime_now, vtime))
-		vtime_now = vtime;
+	if (time_before(vtime_now, p->scx.dsq_vtime))
+		vtime_now = p->scx.dsq_vtime;
+	if (LERTICK_WAKE_PREEMPT) {
+		s32 cpu = bpf_get_smp_processor_id();
+
+		if (cpu >= 0 && cpu < LERTICK_MAX_CPUS)
+			cpu_curr_vtime[cpu] = p->scx.dsq_vtime + 1;
+	}
 	stat_add(LERTICK_STAT_RUNS, 1);
 	cpu_on_running(p, tctx);
 	if (!tctx)
@@ -777,6 +1028,12 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	u32 weight = p->scx.weight;
 
 	cpu_on_stopping();
+	if (LERTICK_WAKE_PREEMPT) {
+		s32 cpu = bpf_get_smp_processor_id();
+
+		if (cpu >= 0 && cpu < LERTICK_MAX_CPUS)
+			cpu_curr_vtime[cpu] = 0;
+	}
 	if (!tctx || !tctx->running)
 		return;
 	/* comm can change while a task continues without a running callback. */
@@ -794,7 +1051,19 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	/* No bounded slice is treated as executed service for accounting. */
 	if (!weight)
 		weight = 1;
-	tctx->vtime += delta * 100 / weight;
+	tctx->eff_weight = cgrp_effective_weight(p, tctx, weight);
+	p->scx.dsq_vtime += delta * 100 / tctx->eff_weight;
+	/*
+	 * Advance the clock by the service delivered over the runnable weight,
+	 * as the average vtime of runnable tasks moves. Otherwise a stream of
+	 * short sleepers, each placed just behind the clock, keeps it still and
+	 * starves tasks that have already run.
+	 */
+	if (LERTICK_CLOCK_AVG) {
+		u64 rw = runnable_weight;
+
+		vtime_now += delta * 100 / (rw < 100 ? 100 : rw);
+	}
 	tctx->episode_runtime_ns = service.consumed_ns;
 	stat_add(LERTICK_STAT_RUNTIME_NS, delta);
 	cpu_account_run(delta, tctx->latcrit);
@@ -810,6 +1079,11 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 	struct task_ctx *tctx = task_ctx(p);
 	u64 burst;
 
+	if (tctx && tctx->rq_weight) {
+		cgrp_task_runnable(p, tctx, false);
+		__sync_fetch_and_sub(&runnable_weight, tctx->rq_weight);
+		tctx->rq_weight = 0;
+	}
 	if (!tctx || !(deq_flags & SCX_DEQ_SLEEP))
 		return;
 	/*
@@ -909,11 +1183,7 @@ s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 
 void BPF_STRUCT_OPS(lertick_enable, struct task_struct *p)
 {
-	struct task_ctx *tctx = task_ctx(p);
-
 	p->scx.dsq_vtime = vtime_now;
-	if (tctx)
-		tctx->vtime = vtime_now;
 }
 
 void BPF_STRUCT_OPS(lertick_disable, struct task_struct *p)
@@ -997,6 +1267,50 @@ void BPF_STRUCT_OPS(lertick_exit, struct scx_exit_info *ei)
 	UEI_RECORD(uei, ei);
 }
 
+s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_cgroup_init, struct cgroup *cgrp,
+			     struct scx_cgroup_init_args *args)
+{
+	struct lertick_cgrp *cgc = bpf_cgrp_storage_get(&cgrp_ctx_stor, cgrp, 0,
+						       BPF_LOCAL_STORAGE_GET_F_CREATE);
+
+	if (!cgc)
+		return -ENOMEM;
+	cgc->weight = args->weight;
+	cgc->hweight = LERTICK_HWEIGHT_ONE;
+	return 0;
+}
+
+void BPF_STRUCT_OPS(lertick_cgroup_set_weight, struct cgroup *cgrp, u32 weight)
+{
+	struct lertick_cgrp *cgc = cgrp_ctx(cgrp), *pc = NULL;
+
+	if (!cgc)
+		return;
+	if (cgrp->level) {
+		pc = cgrp_ancestor_ctx(cgrp, cgrp->level - 1);
+		if (!pc)
+			return;
+	}
+	bpf_spin_lock(&cgrp_lock);
+	if (pc && cgc->nr_active)
+		pc->child_weight_sum += (s64)weight - cgc->weight;
+	cgc->weight = weight;
+	bpf_spin_unlock(&cgrp_lock);
+	__sync_fetch_and_add(&hweight_gen, 1);
+}
+
+/* A runnable task changing cgroups takes its weight with it. */
+void BPF_STRUCT_OPS(lertick_cgroup_move, struct task_struct *p,
+		    struct cgroup *from, struct cgroup *to)
+{
+	struct task_ctx *tctx = task_ctx(p);
+
+	if (!tctx || !tctx->cg_counted)
+		return;
+	cgrp_account(from, tctx, false);
+	cgrp_account(to, tctx, true);
+}
+
 SCX_OPS_DEFINE(lertick_ops,
 	.select_cpu = (void *)lertick_select_cpu,
 	.enqueue = (void *)lertick_enqueue,
@@ -1005,6 +1319,9 @@ SCX_OPS_DEFINE(lertick_ops,
 	.running = (void *)lertick_running,
 	.stopping = (void *)lertick_stopping,
 	.quiescent = (void *)lertick_quiescent,
+	.cgroup_init = (void *)lertick_cgroup_init,
+	.cgroup_set_weight = (void *)lertick_cgroup_set_weight,
+	.cgroup_move = (void *)lertick_cgroup_move,
 	.tick = (void *)lertick_tick,
 	.init_task = (void *)lertick_init_task,
 	.exit_task = (void *)lertick_exit_task,
