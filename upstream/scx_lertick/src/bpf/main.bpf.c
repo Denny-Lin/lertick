@@ -471,7 +471,7 @@ static bool take_next(s32 cpu)
 		n++;
 	}
 
-	return scx_bpf_dsq_move_to_local(SHARED_DSQ);
+	return scx_bpf_dsq_move_to_local(SHARED_DSQ, 0);
 }
 
 void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
