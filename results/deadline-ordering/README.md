@@ -319,3 +319,25 @@ The held-out kernel/sched rebuild takes under 3 s and its spread across runs (2.
 - **Arms:** EEVDF (sched_ext off), Lertick online (release build) and scx_bpfland 1.1.2.
 - **Sets:** 4 CPUs (0–3) and 8 CPUs (0–7), 5 repetitions each.
 - **Verdict:** the median wall time of each arm against EEVDF. Better or worse if the median differs by more than 3%, otherwise the same. The min and max of every arm are reported next to the median. Any fallback or failed build voids that run.
+
+## Longer kernel compile result, 2026-11-16
+
+`kbuild-long.tar.gz` holds every run, including the discarded first 8-CPU set. Each run rebuilds all of `kernel/` (about 30 s); values are wall-clock seconds.
+
+| CPUs | EEVDF median (min–max) | Lertick online | scx_bpfland |
+| --- | --- | --- | --- |
+| 4 | 30.12 (28.93–31.50) | 28.41 (27.20–31.77), −5.7%, better | 28.95 (26.60–30.74), −3.9%, better |
+| 8 | 25.69 (23.80–28.73) | 25.68 (24.87–33.43), −0.1%, same | 26.44 (23.59–28.20), +2.9%, same |
+
+- **The short kernel/sched rebuild's 9% loss on 4 CPUs does not hold up.** With ten times more work per run, Lertick is 5.7% faster than EEVDF on 4 CPUs and level on 8.
+- **The first 8-CPU set was discarded before judging.** Between 19:10 and 19:16 guest time, both sched_ext arms took 51 to 151 s and EEVDF 33 s, while the host was cloning the repository. With all 8 vCPUs busy, host load reaches the guest directly. The set was moved to `kbuild-long/cpu8-disturbed` and rerun with the host idle; the table uses the rerun.
+- **The README uses the held-out 5% threshold for every row,** so scx_bpfland's −3.9% on 4 CPUs is shown there as the same.
+
+## scx_lavd as a second reference, criteria fixed 2026-11-16 before the run
+
+scx_lavd 1.1.2 and 1.1.4 failed to load when built with the guest's clang 18: the verifier rejected `arena_init` with `R6 invalid mem access 'scalar'`. lavd keeps data in a BPF arena, and arena pointers need address-space casts that clang 18 does not emit, so the verifier saw a plain integer used as a pointer. The same lavd 1.1.4 source built with the official LLVM 20.1.8 release (SHA-256 checked against the release attestation) loads and runs on this kernel. The fault was the compiler, not lavd or the kernel.
+
+- **Arms:** EEVDF, Lertick online (release build) and scx_lavd 1.1.4 with default options, in fresh sessions so that each set has its own EEVDF baseline.
+- **Held-out:** `heldout.sh` on 4 CPUs and on 8 CPUs, 5 repetitions each, judged as before (5% threshold).
+- **Kernel compile:** `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions each, judged as before (3% threshold).
+- No other work runs on the host during the 8-CPU sets.
