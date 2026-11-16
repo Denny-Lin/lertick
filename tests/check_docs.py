@@ -5,6 +5,7 @@
 from pathlib import Path
 from html.parser import HTMLParser
 import re
+import subprocess
 import sys
 from urllib.parse import unquote, urlsplit
 
@@ -38,6 +39,18 @@ class HtmlLinks(HTMLParser):
                 self.targets.append((self.getpos()[0], value))
 
 
+def tracked_files():
+    """Paths git tracks; CI skips large archives in a sparse checkout."""
+    try:
+        out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return set()
+    return {(ROOT / name).resolve() for name in out.decode().split("\0") if name}
+
+
+TRACKED = tracked_files()
+
+
 def check_target(path, number, target, failures):
     parts = urlsplit(target)
     if parts.scheme or parts.netloc or not parts.path:
@@ -46,7 +59,7 @@ def check_target(path, number, target, failures):
     destination = (path.parent / unquote(parts.path)).resolve()
     if not destination.is_relative_to(ROOT):
         failures.append(f"{relative}:{number}: link escapes repository: {target}")
-    elif not destination.exists():
+    elif not destination.exists() and destination not in TRACKED:
         failures.append(f"{relative}:{number}: missing local target: {target}")
 
 

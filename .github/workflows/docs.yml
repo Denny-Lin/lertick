@@ -20,6 +20,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+          # Raw result archives (about 380 MB) are not needed by any check.
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !*.tar.gz
+            !*.tgz
+            !*.tar.xz
       - name: Check documents and local links
         run: python3 tests/check_docs.py
       - name: Test fixed-point arithmetic and learning
@@ -55,6 +63,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+          # Raw result archives (about 380 MB) are not needed by any check.
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !*.tar.gz
+            !*.tgz
+            !*.tar.xz
       - name: Check runtime and deployment fixtures with musl and BusyBox
         run: |
           docker run --rm -v "$PWD:/source:ro" alpine:3.22 sh -ec '
