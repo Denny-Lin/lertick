@@ -18,6 +18,8 @@ CPPFLAGS += -DLERTICK_VERSION=\"$(VERSION)\"
 CFLAGS ?= -O2 -g
 CFLAGS += -std=gnu11 -Wall -Wextra
 BPF_CFLAGS ?= -O2 -g -target bpf -mcpu=v3 -Wall -Wno-compare-distinct-pointer-types
+# Experiment switches, for example BPF_DEFS="-DLERTICK_WAKE_KICK=1".
+BPF_DEFS ?=
 BPF_CFLAGS += -D__TARGET_ARCH_$(TARGET_ARCH) -Ivendor/bpf-compat -I/usr/include/$(MULTIARCH)
 BPF_HEADERS := $(wildcard vendor/scx/*.h) $(wildcard vendor/lerwatt/*.h) $(wildcard src/shared/*.h)
 
@@ -42,7 +44,7 @@ $(BUILD)/vmlinux.h: | $(BUILD)
 	mv $@.tmp $@
 
 $(BUILD)/scx_lertick.bpf.o: src/bpf/scx_lertick.bpf.c $(BUILD)/vmlinux.h $(BPF_HEADERS)
-	$(CLANG) $(CPPFLAGS) $(BPF_CFLAGS) -c $< -o $@
+	$(CLANG) $(CPPFLAGS) $(BPF_CFLAGS) $(BPF_DEFS) -c $< -o $@
 
 $(BUILD)/scx_lertick.bpf.skel.h: $(BUILD)/scx_lertick.bpf.o
 	$(BPFTOOL) gen skeleton $< name scx_lertick > $@.tmp
