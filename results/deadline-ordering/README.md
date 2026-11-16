@@ -500,3 +500,11 @@ The six pooled sessions ran while the host Mac was also in use (a video call and
 Positive is worse for `dl`. The target measure does not improve and several others get worse, so `dl` is rejected and the switch reverted. With one shared queue, ordering by predicted deadline moves short-burst tasks ahead of fair order without shortening the wakeup tail; this agrees with r4.
 
 **Schedule change.** The idle-host comparison runs as one round (`night-run.sh 1 eve`) from 17:35 to about 20:00 local time on 2026-11-16, while the owner is out, instead of two rounds overnight. `host-load.sh` logs the host from 17:35 to 21:00. One round cannot show round-to-round spread on an idle host; it does show whether the daytime sessions were biased against Lertick.
+
+## Learned continuation (`ek`), hypothesis fixed 2026-11-16 before the run
+
+**Why.** Online and fixed modes score alike because the prediction only sets the slice, and most tasks sleep before any slice ends. The consistent loss is wakeup latency with many message threads, where a woken task waits behind a running one: `keep_prev` lets prev continue while it is ahead in fair order, for up to 20 ms.
+
+**Change** (`LERTICK_AI_KEEP=1`): when prev's slice ends and its current burst has a trained prediction, keep prev if it is predicted to sleep within 0.5 ms, and yield to a queued task if it is predicted to run more than 2 ms longer. Otherwise the fair rule decides. CPU-bound tasks have no valid burst and fixed mode has no prediction, so both are unchanged; only the learned mode can change.
+
+**Screening** (`ek-run.sh`, starts when the evening round ends): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `base` online, `base` fixed and `ek` online, built from the same source. `ek` goes on if schbench `-m 4 -t 2` wakeup p99 is lower than `base` online by more than 10% on both CPU counts and no other measure is worse than `base` online by more than 10%. The `base` online and fixed arms also measure what the learned slice adds today.
