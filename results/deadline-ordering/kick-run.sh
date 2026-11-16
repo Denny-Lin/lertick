@@ -4,7 +4,7 @@
 # Starts after more-run.sh; stops if any build fails a 10-second load test.
 set -u
 cd ~/lertick-exp
-while pgrep -f more-run.sh > /dev/null; do sleep 30; done
+while [ -n "$(pgrep -x -f "/bin/bash ./more-run.sh")" ]; do sleep 30; done
 log() { echo "$(date +%T) $*" >> kick-run.log; }
 for n in base kickA kickB keepC; do
   sudo timeout -s INT 10 kick/$n/scx_lertick --mode online --track-all --duration 0 > kick/$n-smoke.log 2>&1 &
