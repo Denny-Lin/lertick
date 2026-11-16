@@ -1,0 +1,21 @@
+08:19:02 start base-default-20261116
+08:23:27 ok base-default-20261116 20M
+08:23:27 start B-online-20261116
+08:27:53 ok B-online-20261116 14M
+08:27:53 start base-scx_bpfland-20261116
+08:32:19 ok base-scx_bpfland-20261116 12M
+08:32:19 start base-fixed-20261116
+08:36:40 ok base-fixed-20261116 14M
+08:36:40 start base-online-20261116
+08:41:01 ok base-online-20261116 14M
+08:41:01 start base-online-20261117
+08:45:22 ok base-online-20261117 14M
+08:45:22 start base-fixed-20261117
+08:49:43 ok base-fixed-20261117 14M
+08:49:43 start base-scx_bpfland-20261117
+08:54:09 ok base-scx_bpfland-20261117 12M
+08:54:09 start B-online-20261117
+08:58:31 ok B-online-20261117 14M
+08:58:31 start base-default-20261117
+09:02:53 ok base-default-20261117 20M
+09:02:53 all done

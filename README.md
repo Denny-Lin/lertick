@@ -9,18 +9,29 @@ starts, replaces or retrains the other. [Automatic coordination](docs/INTEGRATIO
 
 ## Performance at a glance
 
-**Lertick online mode recorded 50.34% lower short-burst completion p99 than Linux EEVDF in our VM benchmark.** Mixed-contention tests also expose clear regressions:
+**On hackbench, Lertick ran 15% faster than Linux EEVDF with pipes and 8% faster with sockets. In a saturated schbench run its wakeup p99 was 61% lower.** One loss remains: under schbench overload, Lertick completed 4% fewer requests per second.
 
-| Workload | Compared with | Metric | Measured change |
-| --- | --- | --- | --- |
-| Short CPU bursts (`shortburst`) | Linux EEVDF | Burst completion p99 | **50.34% lower** |
-| Frequent wakeups (`wakeheavy`) | Linux EEVDF | Burst completion p99 | **27.88% lower** |
-| Mixed CPU contention (`mixed`) | Linux EEVDF | Kernel wake p99 | **157.54% higher** |
-| Mixed CPU contention (`mixed`) | `scx_bpfland` v1.0.16 | Burst completion p99 | **155.40% higher** |
+| Benchmark | Metric | Linux EEVDF | Lertick learned (`online`) | Lertick `fixed` | Learned vs EEVDF |
+| --- | --- | ---: | ---: | ---: | --- |
+| hackbench, pipes (`-p -g 8 -l 2000`) | Time (s) | 0.8255 | 0.6990 | 0.6845 | **15% faster** |
+| hackbench, sockets (`-g 8 -l 2000`) | Time (s) | 1.6250 | 1.4990 | 1.5425 | **8% faster** |
+| schbench, full (`-m 1 -t 4`) | Wakeup p99 (µs) | 120.5 | 47 | 47 | **61% lower** |
+| | Request p99 (µs) | 18,240 | 17,152 | 17,408 | **6% lower** |
+| | Requests/s p50 | 302 | 303 | 303 | Equal |
+| schbench, light (`-m 1 -t 2`) | Wakeup p99 (µs) | 90.5 | 91 | 96 | Equal (+1%) |
+| | Request p99 (µs) | 11,760 | 11,712 | 11,904 | Equal |
+| schbench, overload (`-m 2 -t 6`) | Wakeup p99 (µs) | 8,944 | 8,128 | 8,008 | **9% lower** |
+| | Request p99 (µs) | 379,392 | 371,712 | 347,648 | **2% lower** |
+| | Requests/s p50 | 124.5 | 119 | 118.5 | **4% fewer (loss)** |
 
-These are median paired trial changes from **five repetitions** on **ARM64 QEMU/HVF, Linux `7.0.0-38-generic`, four vCPUs**, using implementation `109ce71`, 10-second measured windows and two-second warm-up. Completion includes the burst's CPU service; wake latency measures wakeup to running. The intervals and every policy are in the [Phase 2 results](docs/PHASE2_RESULTS.md#selected-gains-and-regressions--measured-tradeoffs), with [raw evidence and reproduction commands](results/phase2/README.md). These results do not establish a learning benefit over fixed slices or performance on current kernels and physical hardware.
+Each value is the median of **10 repetitions** with the arm order shuffled, using 30-second schbench runs after a 5-second warm-up. The guest is **ARM64 QEMU/HVF running Linux `7.0.0-38-generic`**, with each benchmark pinned to 4 of its 8 vCPUs. The tools are [schbench](https://git.kernel.org/pub/scm/linux/kernel/git/mason/schbench.git) `6300b8f` and hackbench from [rt-tests](https://git.kernel.org/pub/scm/utils/rt-tests/rt-tests.git) v2.5.
 
-**Latest model work: better predictions do not yet mean faster scheduling.** In the separate [240-trial confirmation](results/model-confirmation/README.md), optional EWMA initialization and fractional updates reduced online prediction MAE by **61–82%** across four custom workloads versus the original online model. There was no reliable throughput gain; shortburst wake p99 **increased 35.65%** versus original online, and full-preemption held-out alternating-burst MAE **increased 17.82%**. Model defaults remain `bias` / `trunc`. A [natural watchdog fallback remains unresolved](results/model-confirmation/README.md#unresolved-fallback-and-omissions); a successful retry did not erase it.
+- **The learned and fixed modes are within 1% of each other overall.** Most of the gain comes from dispatch changes that both modes share, not yet from learning.
+- **The previous release (`ccfe5b3`) ran in the same comparison.** It was 32% slower than EEVDF with pipes and 29% slower with sockets, and the kernel watchdog removed it once.
+- **The dispatch settings were selected on these same two benchmarks.** A check on tests that were not used for tuning is under way.
+- **These results come from one virtual machine.** They do not establish performance on physical hardware, on larger machines or in other workloads.
+
+[Method, every repetition and the screening history](results/deadline-ordering/README.md)
 
 <p align="center">
   <a href="#get-started-on-linux">Get started →</a> &nbsp;&nbsp;
@@ -126,6 +137,8 @@ flowchart LR
     linkStyle default stroke:#86868b,stroke-width:1.5px
 ```
 
+Dispatch keeps one weighted virtual-time queue. Its clock advances with the CPU time actually delivered, so tasks that keep waking cannot hold back tasks that have already run. A CPU prefers a task that last ran on it when that task is within 2 ms of the queue head. A synchronous wakeup can queue on the waker's CPU. `nice` values and cgroup `cpu.weight` (for example systemd `CPUWeight=`) set each task's share. CPU quotas such as `cpu.max` are not enforced.
+
 The model learns while tasks run, with no offline dataset, model download or cloud inference. After warm-up, predictions select newly assigned slice budgets within the default **0.5–5 ms** range. Those are assigned budgets, not a guarantee of exact execution time. Fairness accounting continues charging actual CPU service independently of predictions. [Architecture, modes and limits →](docs/OVERVIEW.md)
 
 The helper learns from all eligible tasks by default. The raw loader's historical name-prefix default remains available for reproducible experiments. `shadow` trains while using fixed slices, and **still activates the scheduler**; it is not a passive preview.
@@ -145,7 +158,8 @@ Let [Lerwatt](https://github.com/Denny-Lin/lerwatt) manage CPU power constraints
 | Continuous loader checks in that VM | Unlimited default, compact 60-second summaries, readiness after registration/initial health, and verifier-only loading without replacing the active scheduler |
 | Daily service lifecycle in that VM | 65-second continuous session; enable/start/stop/restart/disable, update, injected startup failure with old-bundle recovery, manual rollback, inactive update, local reports and uninstall |
 | Historical correctness and recovery | 19 correctness cases, 15 recovery tests, churn and concurrent fork checks |
-| Historical benchmarks | 360 completed scheduler/control trials with retained results and uncertainty |
+| schbench and hackbench | 10-repetition comparison of the current scheduler with EEVDF and the previous release; earlier screening rounds are listed with their decisions |
+| Historical benchmarks | 360 completed scheduler/control trials on the project's own workloads, with retained results and uncertainty |
 | Optional model confirmation | 240 valid long-window trials; prediction gains, latency regressions and a separate failed session remain documented |
 
 Ubuntu release numbers alone do not determine support. Stock Ubuntu 22.04/24.04 GA kernels are not the tested sched_ext target; HWE/OEM kernels can differ. Other kernels require their own build, verifier and runtime checks. Short loader checks do not establish days of service uptime, physical-hardware performance or cross-kernel compatibility. [Exact requirements and deployment evidence →](docs/INSTALL.md)

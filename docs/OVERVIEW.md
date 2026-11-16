@@ -22,12 +22,16 @@ Compilation, BPF verifier acceptance, sched_ext registration, real task executio
 
 **Learning does not yet establish a scheduling advantage.** All online/fixed throughput confidence intervals included zero change. Online wake p99 increased about **214% in mixed** and **147% in multicore** contention versus fixed slices. Linear prediction MAE exceeded same-episode EWMA in all six categories with eligible labels. These five-trial VM comparisons are exploratory; they do not establish superiority over Linux EEVDF or other sched_ext schedulers.
 
+The table above describes Phase 2. The current scheduler is compared with EEVDF on schbench and hackbench in the [README](../README.md#performance-at-a-glance). There, online and fixed modes are within 1% of each other, so learning still does not account for the gain.
+
 [Full results, uncertainty and overhead](PHASE2_RESULTS.md) · [Raw evidence and analysis commands](../results/phase2/README.md)
 
 ## Features and modes
 
 - C/eBPF struct_ops scheduler derived from the pinned [official sched_ext C examples](legal/THIRD_PARTY.md).
-- Weighted virtual-time dispatch charges actual CPU service independently of predictions.
+- Weighted virtual-time dispatch charges actual CPU service independently of predictions. The queue's clock advances with delivered service over the runnable weight.
+- A CPU prefers a queued task that last ran on it when that task is within 2 ms of the queue head (first 8 entries). A synchronous wakeup may queue on the waker's CPU within the same 2 ms bound. Sleeper credit is at most 2 ms.
+- `nice` and hierarchical cgroup `cpu.weight` set each task's effective weight. A task whose slice ends keeps its CPU while it is ahead of the first queued task that can run there, for at most 20 ms. CPU bandwidth limits (`cpu.max`) are not enforced.
 - CPU bursts accumulate across preemption and slice expiration; verified wake-to-sleep episodes provide labels. Attachment and exit are censored.
 - Per-task five-feature Q16 linear model with bounded LMS updates. Features: bias, previous burst, burst EWMA, sleep interval and queue depth.
 - `--model-init ewma` initializes that model from causal burst history; the default remains `bias`. Use shadow mode to evaluate the prior while keeping fixed slice budgets.
@@ -82,7 +86,7 @@ flowchart LR
     L[C/libbpf loader] -. attach and observe .-> D
 ```
 
-Continuing-task decisions include committed and pending CPU service. Only `stopping` commits runtime and fairness charges. Live task/model storage is separate from the bounded LRU telemetry map. Predictions affect slice budgets; dispatch ordering and CPU selection remain based on the existing policy. See [correctness and kernel assumptions](PHASE2_CORRECTNESS.md).
+Continuing-task decisions include committed and pending CPU service. Only `stopping` commits runtime and fairness charges. Live task/model storage is separate from the bounded LRU telemetry map. Predictions affect slice budgets only; dispatch order and CPU selection do not use them. See [correctness and kernel assumptions](PHASE2_CORRECTNESS.md).
 
 ## Historical VM build and validation
 

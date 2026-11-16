@@ -61,7 +61,7 @@ lertick report
 
 After stopping Lertick, sched_ext should be `disabled` unless another owner has started a scheduler. The kernel's normal fallback path also detaches a faulty sched_ext scheduler; that mechanism is distinct from a systemd service watchdog. The helper never sends a global SysRq abort automatically. Manual emergency recovery is documented in the [VM/recovery guide](DEPLOYMENT.md#recovery-and-watchdog-test).
 
-Lertick does not implement cgroup CPU-bandwidth or hierarchical-weight callbacks. Do not assume systemd `CPUQuota`/`CPUWeight`, Docker CPU quotas or equivalent controls retain the default scheduler's resource-policy semantics while Lertick is active. Per-task weighted service accounting and successful service startup do not establish that isolation.
+Lertick follows hierarchical cgroup CPU weights (`cpu.weight`, systemd `CPUWeight=`, Docker `--cpu-shares`) and task `nice` values. It does not enforce CPU bandwidth limits: systemd `CPUQuota=`, Docker `--cpus` and `cpu.max` have no effect while Lertick is active. `cpu.idle` is not implemented either.
 
 ## Foreground runs and finite trials
 
