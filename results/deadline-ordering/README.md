@@ -474,3 +474,11 @@ The six pooled sessions ran while the host Mac was also in use (a video call and
 - **Sessions** (`night-run.sh`): two rounds, each with EEVDF, Lertick (`t5`, the 5 s watchdog build), scx_bpfland, scx_lavd, scx_p2dq and scx_flash in the same sessions: `heldout.sh` on 4 and 8 CPUs and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions each. The host is not otherwise used.
 - **Host evidence:** `host-load.sh` logs the Mac's load average and busiest processes every 10 s; the guest logs `/proc/stat` every 10 s for steal time.
 - **Use:** if both rounds agree with each other and steal time stays low, they replace the pooled daytime sessions as the README's basis, with verdicts from the median of the two rounds and every scheduler compared within the same rounds. If the overnight results are clearly better for Lertick than the daytime ones, host load biased the daytime sessions.
+
+## AI deadline order (`dl`), hypothesis fixed 2026-11-16 before the run
+
+**Why.** The losses that hold in every session are latency with many message threads (schbench `-m 4 -t 2`) and single-thread request latency. EEVDF orders by virtual deadline (vruntime plus the requested slice over weight), and lavd puts short, frequently waking tasks first. Lertick orders by vtime alone; the model's predicted burst only sets the slice, which is why online and fixed modes score alike.
+
+**Change** (`LERTICK_AI_DEADLINE=1`): the shared queue key becomes vtime plus the task's slice over its weight; in online mode the slice is the predicted burst (0.5–5 ms). The offset is removed when the task starts running, so charging is unchanged, and `keep_prev` adds prev's own offset before comparing. r4's earlier deadline variant hurt hackbench pipe (1.72×); it is not identical (it was combined with other changes and judged on the tuned set), so pipe and hackbench are watched closely.
+
+**Screening** (`heldout.sh aidl-cpu4` and `aidl-cpu8`, 3 repetitions, arms EEVDF, `base` and `dl` built from the same source). `dl` against `base` is compared within each session, so host load affects both Lertick arms alike. `dl` goes on if schbench `-m 4 -t 2` wakeup p99 is lower than `base` by more than 10% on both CPU counts and no other measure is worse than `base` by more than 10% (the spread seen between identical builds in one session).
