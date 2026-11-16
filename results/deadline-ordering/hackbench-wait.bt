@@ -1,0 +1,11 @@
+// Runnable wait: wakeup or preemption to next switch-in, on CPUs 0-3, hackbench only.
+tracepoint:sched:sched_wakeup /args.target_cpu < 4 && args.comm == "hackbench"/ { @q[args.pid] = nsecs; }
+tracepoint:sched:sched_wakeup_new /args.target_cpu < 4 && args.comm == "hackbench"/ { @q[args.pid] = nsecs; }
+tracepoint:sched:sched_switch /cpu < 4/ {
+  if (args.prev_state == 0 && args.prev_comm == "hackbench") { @q[args.prev_pid] = nsecs; @preempt = count(); }
+  $t = @q[args.next_pid];
+  if ($t) { $w = (nsecs - $t) / 1000; @wait_us = hist($w); @max_us = max($w); @n = count();
+            if ($w > 100000) { @over100ms = count(); } if ($w > 500000) { @over500ms = count(); }
+            delete(@q[args.next_pid]); }
+}
+END { clear(@q); }

@@ -201,3 +201,22 @@ There are 30 runs (3 arms × 10 repetitions), each covering all five configurati
 - **The Phase 2 wins do not carry over to throughput under heavy load.** Fixed wins only schbench light. Wakeup latency is much lower with a full machine, but requests take longer and throughput falls. Under overload and in both hackbench modes, Lertick is 15–31% slower than EEVDF.
 - **Reliability:** in repetition 8, online fell back to EEVDF during hackbench with `runnable task stall (hackbench[405314] failed to run for 1.364s)`. The kernel restored its default scheduler. The fixed arm had no fallback. That online repetition ran partly under EEVDF; its values remain in the medians, and its loader log is in the archive.
 - **Likely cause, not yet measured:** Lertick dispatches every task from one global vtime queue (`SHARED_DSQ`). It has no per-CPU queues and no wake-affine placement, so tasks that wake each other at a high rate lose cache locality and contend on one queue. EEVDF keeps per-CPU run queues. Before changing the policy, the next step is to measure where hackbench loses time: queue contention, migrations or wake-to-run.
+
+## Where hackbench loses time, 2026-11-16
+
+The measurement uses `hackbench -g 8 -l 2000` (sockets, 321 tasks on CPUs 0–3), 5 runs per arm. `hackbench-wait.bt` records each hackbench task's runnable wait, from wakeup or preemption to the next switch-in.
+
+| Median of 5 runs | EEVDF | Lertick fixed |
+| --- | --- | --- |
+| hackbench time (s) | 1.46 | 2.00 (+37%) |
+| Waits over 100 ms | 94 | 657 |
+| Longest wait (ms) | 187 | 456 |
+| Preemptions of a running hackbench task | 87,805 | 51 |
+
+- **The loss is long runnable waits, not CPU overhead or migration.** Total task-clock, context switches and CPU migrations under `perf stat` are similar between the arms. The top kernel symbols under `perf record` are the same socket and slab paths in both. Lertick, however, leaves about 7× as many waits above 100 ms, and its longest wait is about 2.5× EEVDF's. A hackbench group finishes only when its slowest task does, so the tail sets the time.
+- **The same tail produces the stalls.** During this diagnosis, fixed mode was once removed by the kernel watchdog with `runnable task stall (hackbench[412745] failed to run for 1.009s)`. Online fell back the same way during the schbench/hackbench run. The `perf stat`/`perf record` profile above was taken around that fallback, so only the wait measurements, which had no fallback, are used here.
+- **Lertick almost never preempts.** EEVDF preempted running hackbench tasks about 88,000 times per run, against about 50 for Lertick. A task woken while all four CPUs are busy waits for a running task to sleep or use up its 2 ms slice.
+
+### Hypothesis for the next change
+
+`vtime_now` only moves when a task with a higher vtime starts running. A woken task is placed at `vtime_now − max_slice` or later. Short sleepers that keep waking therefore stay near `vtime_now` and keep sorting ahead of tasks that have already run, while `vtime_now` itself barely advances. A task that has run waits until the stream of wakers pauses, which matches the hundreds of milliseconds observed and the stalls of 1 s or more. Advancing the queue's virtual clock with the service actually delivered, as EEVDF does with its average vruntime, should bound these waits. A wakeup preemption bound would address the second gap. The change goes into the shared dispatch path, so both online and fixed modes get it, and online must still beat fixed.
