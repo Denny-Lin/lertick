@@ -364,7 +364,7 @@ static void cgrp_task_runnable(struct task_struct *p, struct task_ctx *tctx, boo
 
 	if (runnable == tctx->cg_counted)
 		return;
-	cgrp = __COMPAT_scx_bpf_task_cgroup(p);
+	cgrp = scx_bpf_task_cgroup(p);
 	if (!cgrp)
 		return;
 	cgrp_account(cgrp, tctx, runnable);
@@ -380,7 +380,7 @@ static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx, u
 
 	if (!tctx->cg_counted)
 		return weight;
-	cgrp = __COMPAT_scx_bpf_task_cgroup(p);
+	cgrp = scx_bpf_task_cgroup(p);
 	if (!cgrp)
 		return weight;
 	cgc = cgrp_ctx(cgrp);

@@ -10,6 +10,10 @@
 
 #include <limits.h>
 
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#define CLAMP(val, lo, hi) MIN(MAX(val, lo), hi)
+
 enum consts {
 	NSEC_PER_USEC = 1000ULL,
 	NSEC_PER_MSEC = (1000ULL * NSEC_PER_USEC),
