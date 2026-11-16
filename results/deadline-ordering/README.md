@@ -102,3 +102,36 @@ There are 120 trials, all of which passed the runner's checks. `trials.tar.gz` h
 - **B was not the arm the criteria named.** It needs a confirmation run with fresh seeds and more repetitions before it can be called a win, including a check of the `multicore` worker gap.
 - **The run had no `scx_bpfland` arm**, so the README's `mixed` regression against scx_bpfland is not retested here.
 - **EEVDF's 300 µs completion p99 in `mixed` was 12.1 ms here against 9.0 ms in Phase 2.** The guest has changed since Phase 2, so compare arms within one run only.
+
+## Confirmation run for B, criteria fixed 2026-11-16 before it starts
+
+The question is whether B (adaptive slices capped at the fixed slice, no ordering by request) beats EEVDF, using fresh seeds and twice the repetitions. The criteria are the ones above, now applied to B. The arms are EEVDF, base fixed, base online, B and `scx_bpfland`. The `scx_bpfland` arm is for information only and is not part of the criteria.
+
+- **Repetitions:** 10 per arm, in two blocks of 5 with seeds 20261116 and 20261117. The arms run in a shuffled order in the first block and in reverse order in the second, so slow drift in the guest does not favor one arm.
+- **Win per workload:** the medians over the 10 repetitions meet criteria 1 to 3 against EEVDF.
+- **Confirmed:** B wins `mixed`, `shortburst` and `wakeheavy` again, and is no more than 5% worse than base online in any burst class. `multicore` is reported either way.
+
+## Confirmation result, 2026-11-16: B is not confirmed
+
+There are 200 trials (5 arms × 4 workloads × 10 repetitions), all of which passed the runner's checks. `confirm-summary.jsonl` holds one row per trial; `judge.py confirm-summary.jsonl` reproduces the verdicts. The raw archives stay in the guest under `~/lertick-exp/confirm`.
+
+| B against EEVDF | mixed | multicore | shortburst | wakeheavy |
+| --- | --- | --- | --- | --- |
+| Burst classes | -3% to -83%, except 3 ms completion +3% | -35% to -72% | -52% to -55% | -39% to -41% |
+| Worker gap | **1.98×** | 0.71× | **1.51×** | 1.12× |
+| Throughput | **-2.5%** | -0.1% | -0.8% | +6.2% |
+| Verdict | no win | win | no win | win |
+
+- **B fails the confirmation.** It also gets worse than base online: in `mixed`, 300 µs completion is 15% higher, 3 ms completion 20% higher and the worker gap 52.7 ms against 25.6 ms. In `shortburst`, wake p99 is 63% higher. B stays an experiment and does not replace base online.
+- **The likely cause is adaptive slices shorter than the fixed slice.** Under B, online can give a burst less than 2 ms when the prediction is low. A 3 ms burst then runs in shorter pieces and waits more often. This was not measured directly.
+
+### Exploratory finding: fixed mode beats EEVDF in all four workloads
+
+This was not the hypothesis under test. Applying the same criteria to the other arms shows:
+
+| Against EEVDF, criteria 1–3 | mixed | multicore | shortburst | wakeheavy |
+| --- | --- | --- | --- | --- |
+| base fixed | **win** (gap 1.17×) | **win** | **win** | **win** (throughput +6.8%) |
+| base online | no: 3 ms wake +74% | no: 3 ms wake +8% | win | win |
+
+Fixed mode also met the criteria in all four workloads in the first run. In both runs, then, Lertick's dispatch with a fixed 2 ms slice beats EEVDF on these four workloads, and online's adaptive slices are what lose `mixed` and `multicore`. `cpu`, `affinity`, `memory` and `kernelcompile` have not been rerun against EEVDF.
