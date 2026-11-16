@@ -498,3 +498,5 @@ The six pooled sessions ran while the host Mac was also in use (a video call and
 | schbench `-m 1 -t 1` request p99 | −6% | +6% |
 
 Positive is worse for `dl`. The target measure does not improve and several others get worse, so `dl` is rejected and the switch reverted. With one shared queue, ordering by predicted deadline moves short-burst tasks ahead of fair order without shortening the wakeup tail; this agrees with r4.
+
+**Schedule change.** The idle-host comparison runs as one round (`night-run.sh 1 eve`) from 17:35 to about 20:00 local time on 2026-11-16, while the owner is out, instead of two rounds overnight. `host-load.sh` logs the host from 17:35 to 21:00. One round cannot show round-to-round spread on an idle host; it does show whether the daytime sessions were biased against Lertick.
