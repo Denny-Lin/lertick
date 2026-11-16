@@ -434,3 +434,35 @@ The owner chose to raise the runnable-task watchdog timeout from 1 s to 5 s (`t5
 - **Stall stress** (`stall-test.sh s3 10`, arms EEVDF, `base`, `t5`): `t5` passes with no fallback in 10 repetitions and median hackbench times within 5% of `base`.
 - **Watchdog still works:** `tests/validate_watchdog_flags.py` (expected and unexpected injected stalls) passes with `t5` in the VM.
 - **No regression:** the held-out suite and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions, against `base` and EEVDF; no measure worse than `base` by more than 5% (3% for the kernel compile) on either CPU count. Since scheduling is unchanged, a difference beyond that would point to noise and be rerun rather than accepted.
+
+### Watchdog timeout 5 s: result
+
+`t5-sets.tar.gz` holds the load test, the injected watchdog tests and the held-out and kernel compile sets; `stall-s3-s4.tar.gz` the two stress runs.
+
+- **Load and watchdog:** `t5` loads with `timeout_ms` 5000, and `validate_watchdog_flags.py` passes (normal exit, expected and unexpected injected stalls all eject the scheduler and restore the default).
+- **Stress:** `t5` had no fallback in 20 repetitions (`s3`, `s4`); `base` fell back once in `s4`. Median hackbench `t5` against `base`: −2.8% and +7.3% (`s3`), −0.4% and −3.1% (`s4`) for `-g 16` and `-g 32`. The +7.3% exceeded the 5% rule and was rerun as planned; the rerun is within it.
+- **Held-out and kernel compile:** no fallback. `t5` against `base` was worse by 6–7% on three 4-CPU measures and better by 12–42% on four 8-CPU measures, with no 8-CPU loss. The two builds make identical scheduling decisions, so these differences measure the noise between two arms of one session, not the change.
+- **Decision:** `t5` replaces `base`. It removes the fallbacks without changing scheduling.
+
+## Pooled comparison with EEVDF over six sessions, 2026-11-16
+
+The noise above made single-session verdicts against EEVDF suspect, so `pool.py` combines every held-out session that ran Lertick (the release algorithm) and EEVDF together: the first held-out sessions, the lavd, p2dq/flash, kick and t5 sessions, six per CPU count (the t5 session contributes both `base` and `t5`). Each session gives one percentage per measure; the verdict uses the median over sessions.
+
+| Measure | 4 CPUs | 8 CPUs |
+| --- | --- | --- |
+| perf messaging, processes | same (−1%) | worse (−7%) |
+| perf messaging, threads | same (+1%) | same (−3%) |
+| perf pipe | better (+93%) | better (+89%) |
+| schbench `-m 4 -t 2` wakeup p99 | worse (−47%) | worse (−32%) |
+| schbench `-m 4 -t 2` request p99 | worse (−136%) | worse (−6%) |
+| schbench `-m 4 -t 2` RPS | same (+4%) | same (0%) |
+| schbench `-m 1 -t 1` wakeup p99 | same (+5%) | same (+5%) |
+| schbench `-m 1 -t 1` request p99 | worse (−7%) | worse (−12%) |
+| hackbench threads | better (+29%) | better (+11%) |
+| hackbench `-g 16` | same (+1%) | same (+4%) |
+| kernel/sched rebuild (short) | same (−4%) | same (0%) |
+| **Total** | **2 better, 6 same, 3 worse** | **2 better, 5 same, 4 worse** |
+
+- **Only two wins hold in every session:** `perf bench pipe` and hackbench in thread mode. The losses on schbench `-m 4 -t 2` also hold in every session.
+- **The README's first held-out session was a favourable one.** It showed 4 wins on 4 CPUs and 6 on 8; pooled, both are 2. The other measures swing by 10–50 percentage points between sessions with no code change.
+- **Consequence for reporting:** verdicts against EEVDF should come from pooled sessions, not from one session. The longer kernel compile (`kbuild-long`) was level or better in every session and is not in this table.
