@@ -82,18 +82,6 @@ static u64 runnable_weight;
 /* Queued tasks examined, and the longest unbroken run, when prev may keep its CPU. */
 #define LERTICK_HEAD_SCAN 16
 #define LERTICK_KEEP_MAX_NS 20000000ULL
-/*
- * Starvation guard. Fair order alone does not bound a queued task's wait: the
- * clock advances by service over the runnable weight, so with hundreds of
- * runnable tasks a task a few ms ahead of the clock can wait over a second
- * while woken tasks keep being placed before it. Every LERTICK_STALL_SCAN_NS,
- * a timer moves up to LERTICK_STALL_MOVES tasks queued for longer than
- * LERTICK_STALL_AGE_NS straight to their CPU, well inside the 1 s watchdog.
- */
-#define LERTICK_STALL_SCAN_NS 50000000ULL
-#define LERTICK_STALL_AGE_NS 200000000ULL
-#define LERTICK_STALL_MOVES 8
-#define LERTICK_STALL_SCAN_MAX 8192
 
 UEI_DEFINE(uei);
 
@@ -122,7 +110,6 @@ struct task_ctx {
 	u32 rq_weight;		/* weight counted in runnable_weight, 0 when not counted */
 	bool cg_counted;	/* rq_weight is also counted in its cgroup's sums */
 	u32 eff_weight;		/* weight of the last charge; dispatch() cannot look up cgroups */
-	u64 enq_ns;		/* when last inserted into the shared queue */
 	struct lertick_task_snapshot snapshot;
 };
 
@@ -164,13 +151,6 @@ struct {
 	__type(key, u32);
 	__type(value, struct lertick_idle_timer);
 } idle_timer_map SEC(".maps");
-
-struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__uint(max_entries, 1);
-	__type(key, u32);
-	__type(value, struct lertick_idle_timer);
-} stall_timer_map SEC(".maps");
 
 /*
  * Lerwatt contract (vendor/lerwatt/contract.h). The loader pins both maps only
@@ -863,8 +843,6 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	if ((enq_flags & SCX_ENQ_WAKEUP) && time_before(vtime, vtime_now - LERTICK_LAG_NS))
 		vtime = vtime_now - LERTICK_LAG_NS;
 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
-	if (tctx)
-		tctx->enq_ns = bpf_ktime_get_ns();
 	scx_bpf_dsq_insert_vtime(p, SHARED_DSQ, slice, vtime, enq_flags);
 	if (tctx)
 		publish(tctx);
@@ -1280,36 +1258,6 @@ void BPF_STRUCT_OPS(lertick_tick, struct task_struct *p)
 		cpu_send(c, cpu, target, now, true, LERTICK_STAT_CPUPERF_SETS);
 }
 
-/* Starvation guard; see LERTICK_STALL_AGE_NS. */
-static int stall_timer_fn(void *map, int *key, struct bpf_timer *timer)
-{
-	u64 now = bpf_ktime_get_ns();
-	struct task_struct *q;
-	int seen = 0, moved = 0;
-
-	bpf_for_each(scx_dsq, q, SHARED_DSQ, 0) {
-		struct task_ctx *tctx;
-		s32 cpu;
-
-		if (++seen > LERTICK_STALL_SCAN_MAX || moved >= LERTICK_STALL_MOVES)
-			break;
-		tctx = bpf_task_storage_get(&task_ctx_stor, q, 0, 0);
-		if (!tctx || !tctx->enq_ns || now - tctx->enq_ns < LERTICK_STALL_AGE_NS)
-			continue;
-		cpu = scx_bpf_task_cpu(q);
-		if (!bpf_cpumask_test_cpu(cpu, q->cpus_ptr))
-			continue;
-		if (scx_bpf_dsq_move(BPF_FOR_EACH_ITER, q, SCX_DSQ_LOCAL_ON | cpu, 0)) {
-			scx_bpf_kick_cpu(cpu, SCX_KICK_PREEMPT);
-			moved++;
-		}
-	}
-	if (moved)
-		stat_add(LERTICK_STAT_STALL_RESCUES, moved);
-	bpf_timer_start(timer, LERTICK_STALL_SCAN_NS, 0);
-	return 0;
-}
-
 s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 {
 	struct lertick_idle_timer *t;
@@ -1317,16 +1265,6 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 	s32 ret;
 
 	ret = scx_bpf_create_dsq(SHARED_DSQ, -1);
-	if (ret)
-		return ret;
-	t = bpf_map_lookup_elem(&stall_timer_map, &zero);
-	if (!t)
-		return -ESRCH;
-	ret = bpf_timer_init(&t->timer, &stall_timer_map, CLOCK_MONOTONIC);
-	if (!ret)
-		ret = bpf_timer_set_callback(&t->timer, stall_timer_fn);
-	if (!ret)
-		ret = bpf_timer_start(&t->timer, LERTICK_STALL_SCAN_NS, 0);
 	if (ret || cpuperf_mode != LERTICK_CPUPERF_UTIL)
 		return ret;
 	t = bpf_map_lookup_elem(&idle_timer_map, &zero);

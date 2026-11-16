@@ -20,7 +20,7 @@ counter_errors alloc_failures snapshot_failures prediction_ns_sum selected_slice
 matching_dispatch_slices continuation_slices continuation_pending_ns init_tasks exit_tasks
 training_time_ns inference_time_ns prediction_samples linear_abs_error_ns ewma_abs_error_ns
 wake_samples wake_to_run_ns wake_to_run_max_ns cpuperf_sets cpuperf_idle_sets contract_applied
-contract_stale stall_rescues live_tasks""".split())
+contract_stale live_tasks""".split())
 PROPERTIES = ("LoadState", "ActiveState", "SubState", "UnitFileState", "Result",
               "ExecMainCode", "ExecMainStatus", "NRestarts")
 CONFIG = ("CONFIG_BPF", "CONFIG_BPF_SYSCALL", "CONFIG_BPF_JIT", "CONFIG_DEBUG_INFO_BTF",
