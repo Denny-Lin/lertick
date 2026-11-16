@@ -17,16 +17,37 @@ starts, replaces or retrains the other. [Automatic coordination](docs/INTEGRATIO
 
 | Test | Linux EEVDF | Lertick | Result |
 | --- | ---: | ---: | :--- |
-| hackbench, pipes | 0.83 s | 0.70 s | ✅ 15% faster |
-| hackbench, sockets | 1.63 s | 1.50 s | ✅ 8% faster |
-| schbench busy, wakeup latency | 121 µs | 47 µs | ✅ 61% lower |
-| schbench busy, request latency | 18.2 ms | 17.2 ms | ✅ 6% lower |
-| schbench light, request latency | 11.8 ms | 11.7 ms | ➖ Same |
-| schbench overloaded, wakeup latency | 8.9 ms | 8.1 ms | ✅ 9% lower |
-| schbench overloaded, request latency | 379 ms | 372 ms | ✅ 2% lower |
-| schbench overloaded, throughput | 125 req/s | 119 req/s | ❌ 4% fewer |
+| hackbench, pipes | 0.83 s | 0.70 s | **15% faster** |
+| hackbench, sockets | 1.63 s | 1.50 s | **8% faster** |
+| schbench busy, wakeup latency | 121 µs | 47 µs | **61% lower** |
+| schbench busy, request latency | 18.2 ms | 17.2 ms | **6% lower** |
+| schbench light, request latency | 11.8 ms | 11.7 ms | Same |
+| schbench overloaded, wakeup latency | 8.9 ms | 8.1 ms | **9% lower** |
+| schbench overloaded, request latency | 379 ms | 372 ms | **2% lower** |
+| schbench overloaded, throughput | 125 req/s | 119 req/s | 4% fewer |
 
-<sub>Lertick's learned (`online`) mode against Linux EEVDF on the same machine: the median of 10 runs on one ARM64 VM (Linux 7.0, 4 CPUs), with latency at p99. Fixed-slice mode is within 1% of the learned mode, so most of the gain comes from dispatch rather than from learning so far. The settings were tuned on these two benchmarks, and physical hardware is untested. [Method, commands and all runs →](results/deadline-ordering/README.md)</sub>
+<sub>Lertick's learned (`online`) mode against Linux EEVDF on the same machine: the median of 10 runs on one ARM64 VM (Linux 7.0, 4 CPUs), with latency at p99. Fixed-slice mode is within 1% of the learned mode, so most of the gain comes from dispatch rather than from learning so far. The settings were tuned on these two benchmarks (tests not used for tuning are below), and physical hardware is untested. [Method, commands and all runs →](results/deadline-ordering/README.md)</sub>
+
+### On tests not used for tuning
+
+These tests were never used to choose settings. The community sched_ext scheduler [scx_bpfland](https://github.com/sched-ext/scx) is included as a reference.
+
+| Test | Lertick vs Linux | scx_bpfland vs Linux |
+| --- | :--- | :--- |
+| perf bench sched messaging, processes | Same | 19% slower |
+| perf bench sched messaging, threads | Same | 25% slower |
+| perf bench sched pipe | **92% faster**\* | **91% faster**\* |
+| hackbench, threads | **33% faster** | **21% faster** |
+| hackbench, 16 groups | Same | 38% slower |
+| schbench, 1 thread, request latency | **25% lower** | **26% lower** |
+| schbench, 1 thread, wakeup latency | **7% lower** | **23% lower** |
+| schbench, 4 message threads, request latency | 2.3× higher | 5.5× higher |
+| schbench, 4 message threads, wakeup latency | 42% higher | 41% higher |
+| schbench, 4 message threads, throughput | Same | 6% lower |
+| Kernel compile (`kernel/sched`) | 9% slower | 18% slower |
+| **Total** | **4 better · 4 same · 3 worse** | **4 better · 7 worse** |
+
+<sub>Lertick here is its default learned (`online`) mode. Median of 5 runs on the same VM with 4 CPUs; "Same" means within 5%. scx_bpfland is the sched-ext/scx 1.1.2 build. scx_lavd 1.1.2 failed to load on this kernel. \*Linux takes 20 µs per pipe round trip in this VM, against about 1.6 µs for both sched_ext schedulers. This is probably an artefact of the VM, not a general result. Many message threads waking groups of workers remain Linux's strength. A run on 8 CPUs is in progress. [All runs →](results/deadline-ordering/README.md#held-out-result-on-4-cpus-2026-11-16)</sub>
 
 <p align="center">
   <a href="#get-started-on-linux">Get started →</a> &nbsp;&nbsp;

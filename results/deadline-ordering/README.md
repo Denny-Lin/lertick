@@ -262,3 +262,28 @@ Values are medians of 10 repetitions:
   - The model, accounting, concurrent-fork, fairness and recovery checks pass.
   - Cgroup weight 200:100 gives a 2.00 CPU-time ratio, equal-weight groups with 2:1 tasks give 1.00, and `nice` 0 against 5 gives 3.07; EEVDF gives 2.00, 1.00 and 3.05.
   - The setup-label check in the lifecycle suite fails intermittently on this 8-vCPU guest, for `ccfe5b3` as well.
+
+### Held-out result on 4 CPUs, 2026-11-16
+
+There are 20 runs (4 arms × 5 repetitions) with no fallbacks. `heldout-cpu4.tar.gz` holds the raw outputs; `heldout_judge.py heldout/cpu4` reproduces the table. Values are medians; the percentage is the change against EEVDF, where negative is better, and the verdict uses the 5% threshold.
+
+| Test | EEVDF | Lertick online | Lertick fixed | scx_bpfland |
+| --- | ---: | ---: | ---: | ---: |
+| perf bench messaging, processes (s) | 0.619 | 0.616 (same) | 0.676 (+9%, loss) | 0.735 (+19%, loss) |
+| perf bench messaging, threads (s) | 0.479 | 0.475 (same) | 0.455 (−5%, win) | 0.601 (+25%, loss) |
+| perf bench pipe (µs/op) | 20.38 | 1.606 (−92%, win) | 1.598 (−92%, win) | 1.854 (−91%, win) |
+| schbench `-m 4 -t 2` wakeup p99 (µs) | 3,780 | 5,384 (+42%, loss) | 4,984 (+32%, loss) | 5,336 (+41%, loss) |
+| schbench `-m 4 -t 2` request p99 (µs) | 70,270 | 161,500 (+130%, loss) | 145,200 (+107%, loss) | 385,500 (+449%, loss) |
+| schbench `-m 4 -t 2` RPS | 165 | 162 (same) | 167 (same) | 155 (+6%, loss) |
+| schbench `-m 1 -t 1` wakeup p99 (µs) | 92 | 86 (−7%, win) | 73 (−21%, win) | 71 (−23%, win) |
+| schbench `-m 1 -t 1` request p99 (µs) | 15,220 | 11,380 (−25%, win) | 9,744 (−36%, win) | 11,280 (−26%, win) |
+| hackbench threads `-T -g 4` (s) | 1.150 | 0.770 (−33%, win) | 0.768 (−33%, win) | 0.908 (−21%, win) |
+| hackbench `-g 16` (s) | 1.731 | 1.718 (same) | 1.891 (+9%, loss) | 2.381 (+38%, loss) |
+| kernel/sched rebuild (s) | 2.434 | 2.660 (+9%, loss) | 2.541 (+4%, same) | 2.875 (+18%, loss) |
+
+- **Lertick online wins 4, ties 4 and loses 3** of the 11 held-out measures. Fixed wins 5, ties 2 and loses 4. scx_bpfland wins 4 and loses 7.
+- **The tuned win partly carries over.** hackbench in thread mode, `perf bench pipe` and the light schbench case are clear wins, and messaging and `hackbench -g 16` are ties.
+- **schbench with 4 message threads is a large loss.** Request p99 is 2.3× EEVDF's and wakeup p99 is 42% higher. EEVDF also beats scx_bpfland there, so this load pattern, many message threads waking groups of workers, favours EEVDF's per-CPU wakeup handling.
+- **Kernel compilation is 9% slower in online mode.**
+- **Online against fixed:** online has fewer losses (3 against 4) but fewer wins. Neither mode dominates.
+- **perf bench pipe takes 20 µs per round trip under EEVDF in this guest, against about 1.6 µs for all three sched_ext schedulers.** This is probably an artefact of the guest that has not been investigated, for example EEVDF placing the two ends on different vCPUs and paying a cross-vCPU wakeup. It should not be read as a general result.
