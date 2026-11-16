@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="646" viewBox="0 0 1120 646" role="img" aria-labelledby="t d">
+<title id="t">Lertick compared with Linux EEVDF</title>
+<desc id="d">Percentage difference of Lertick (learned mode) against Linux EEVDF on hackbench and schbench, medians of 10 runs on one ARM64 VM. Green bars are better than EEVDF, red is worse, grey is within 2%.</desc>
+<rect width="1120" height="646" rx="24" fill="#f5f5f7"/>
+<text x="48" y="64" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="30" font-weight="700" fill="#1d1d1f">Lertick vs Linux default scheduler (EEVDF)</text>
+<text x="48" y="100" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#6e6e73">Bars to the right are better than Linux. Median of 10 runs, ARM64 VM, 4 CPUs.</text>
+<line x1="560" y1="142" x2="560" y2="566" stroke="#86868b" stroke-width="2"/>
+<text x="560" y="134" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" fill="#6e6e73">same as Linux</text>
+<text x="48" y="183" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">hackbench · pipes</text>
+<rect x="560.0" y="164" width="107.3" height="26" rx="6" fill="#34c759"/>
+<text x="677.3" y="183" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" fill="#34c759">15% faster</text>
+<text x="48" y="235" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">hackbench · sockets</text>
+<rect x="560.0" y="216" width="54.3" height="26" rx="6" fill="#34c759"/>
+<text x="624.3" y="235" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" fill="#34c759">8% faster</text>
+<text x="48" y="287" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">schbench busy · wakeup latency</text>
+<rect x="560.0" y="268" width="427.0" height="26" rx="6" fill="#34c759"/>
+<text x="997.0" y="287" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" fill="#34c759">61% lower</text>
+<text x="48" y="339" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">schbench busy · request latency</text>
+<rect x="560.0" y="320" width="41.8" height="26" rx="6" fill="#34c759"/>
+<text x="611.8" y="339" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" fill="#34c759">6% lower</text>
+<text x="48" y="391" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">schbench light · request latency</text>
+<rect x="560.0" y="372" width="3.0" height="26" rx="6" fill="#aeaeb2"/>
+<text x="573.0" y="391" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="17" font-weight="400" fill="#6e6e73">same</text>
+<text x="48" y="443" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">schbench overloaded · wakeup latency</text>
+<rect x="560.0" y="424" width="63.9" height="26" rx="6" fill="#34c759"/>
+<text x="633.9" y="443" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" fill="#34c759">9% lower</text>
+<text x="48" y="495" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">schbench overloaded · request latency</text>
+<rect x="560.0" y="476" width="14.2" height="26" rx="6" fill="#34c759"/>
+<text x="584.2" y="495" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" fill="#34c759">2% lower</text>
+<text x="48" y="547" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">schbench overloaded · throughput</text>
+<rect x="529.1" y="528" width="30.9" height="26" rx="6" fill="#ff3b30"/>
+<text x="570.0" y="547" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" fill="#ff3b30">4% fewer requests/s</text>
+<text x="48" y="616" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" fill="#86868b">schbench 6300b8f, hackbench rt-tests 2.5, Linux 7.0.0-38-generic on ARM64 QEMU/HVF. Details: results/deadline-ordering/README.md</text>
+</svg>
