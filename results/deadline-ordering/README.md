@@ -426,3 +426,11 @@ The p2dq and flash comparison from these sessions is kept here but not added to 
 **Second stress result (`stall/s2`): `guard2` fails too.** Each of `base` and `guard2` fell back once in 10 repetitions; the largest wake-to-run time was 470–730 ms for `base` and 460–740 ms for `guard2`, and `guard2` made `hackbench -g 16` and `-g 32` 12% and 18% slower than `base`. Limiting `sync_local` cut local enqueues from about 158,000 to 65,000 per run without shortening the longest wait, so the local queues were not the cause. Both changes were reverted.
 
 **Revised explanation.** With 640 or 1,280 hackbench tasks on 4 CPUs, a fair round alone takes several hundred milliseconds: `base` has a longest wake-to-run time of 470–760 ms in every one of its 20 stress runs, not only in the runs that fell back. The fallbacks are the tail of that distribution crossing Lertick's watchdog timeout, which is 1 s. The other sched_ext schedulers measured here use 5 s (scx_bpfland, scx_flash), 25 s (scx_p2dq) and 30 s (scx_lavd). The 1 s value dates from the project's first commit and has no recorded rationale.
+
+### Watchdog timeout 5 s, criteria fixed 2026-11-16 before the run
+
+The owner chose to raise the runnable-task watchdog timeout from 1 s to 5 s (`t5`), as in scx_bpfland and scx_flash. It changes no scheduling decision, so it can only remove fallbacks; it must still eject a scheduler that really stalls a task.
+
+- **Stall stress** (`stall-test.sh s3 10`, arms EEVDF, `base`, `t5`): `t5` passes with no fallback in 10 repetitions and median hackbench times within 5% of `base`.
+- **Watchdog still works:** `tests/validate_watchdog_flags.py` (expected and unexpected injected stalls) passes with `t5` in the VM.
+- **No regression:** the held-out suite and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions, against `base` and EEVDF; no measure worse than `base` by more than 5% (3% for the kernel compile) on either CPU count. Since scheduling is unchanged, a difference beyond that would point to noise and be rerun rather than accepted.
