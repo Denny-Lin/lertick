@@ -82,16 +82,6 @@ static u64 runnable_weight;
 /* Queued tasks examined, and the longest unbroken run, when prev may keep its CPU. */
 #define LERTICK_HEAD_SCAN 16
 #define LERTICK_KEEP_MAX_NS 20000000ULL
-/*
- * Experimental deadline order (off by default). The shared queue is keyed by
- * vtime plus the task's slice over its weight, as EEVDF orders by virtual
- * deadline; in online mode the slice is the model's predicted burst, so tasks
- * predicted to run briefly go first. The offset is removed when the task runs,
- * so fair accounting still charges only the CPU time actually used.
- */
-#ifndef LERTICK_AI_DEADLINE
-#define LERTICK_AI_DEADLINE 0
-#endif
 
 UEI_DEFINE(uei);
 
@@ -120,9 +110,6 @@ struct task_ctx {
 	u32 rq_weight;		/* weight counted in runnable_weight, 0 when not counted */
 	bool cg_counted;	/* rq_weight is also counted in its cgroup's sums */
 	u32 eff_weight;		/* weight of the last charge; dispatch() cannot look up cgroups */
-#if LERTICK_AI_DEADLINE
-	u64 dl_off;		/* deadline offset in dsq_vtime while queued */
-#endif
 	struct lertick_task_snapshot snapshot;
 };
 
@@ -846,13 +833,6 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	}
 	if (tctx)
 		refresh_tracking(p, tctx);
-#if LERTICK_AI_DEADLINE
-	/* Requeued without running: drop the previous offset first. */
-	if (tctx && tctx->dl_off) {
-		vtime -= tctx->dl_off;
-		tctx->dl_off = 0;
-	}
-#endif
 	slice = choose_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
 	/*
 	 * Sleeper credit is bounded independently of model output. Only a
@@ -863,14 +843,6 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	if ((enq_flags & SCX_ENQ_WAKEUP) && time_before(vtime, vtime_now - LERTICK_LAG_NS))
 		vtime = vtime_now - LERTICK_LAG_NS;
 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
-#if LERTICK_AI_DEADLINE
-	if (tctx) {
-		u32 w = tctx->eff_weight ? tctx->eff_weight : p->scx.weight ? p->scx.weight : 1;
-
-		tctx->dl_off = slice * 100 / w;
-		vtime += tctx->dl_off;
-	}
-#endif
 	scx_bpf_dsq_insert_vtime(p, SHARED_DSQ, slice, vtime, enq_flags);
 	if (tctx)
 		publish(tctx);
@@ -898,11 +870,6 @@ static __always_inline bool keep_prev(struct task_struct *prev, struct task_ctx 
 	if (ran >= LERTICK_KEEP_MAX_NS)
 		return false;
 	vtime += ran * 100 / weight;
-#if LERTICK_AI_DEADLINE
-	/* Compare deadlines: queued keys include their slice offset. */
-	if (tctx)
-		vtime += tctx->selected_slice_ns * 100 / weight;
-#endif
 	bpf_for_each(scx_dsq, q, SHARED_DSQ, 0) {
 		if (n++ >= LERTICK_HEAD_SCAN)
 			return false;
@@ -1036,12 +1003,6 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 	struct task_ctx *tctx = task_ctx(p);
 	u64 observed_slice = p->scx.slice;
 
-#if LERTICK_AI_DEADLINE
-	if (tctx && tctx->dl_off) {
-		p->scx.dsq_vtime -= tctx->dl_off;
-		tctx->dl_off = 0;
-	}
-#endif
 	/* As in scx_simple, this cross-CPU monotonic update tolerates small races. */
 	if (time_before(vtime_now, p->scx.dsq_vtime))
 		vtime_now = p->scx.dsq_vtime;
