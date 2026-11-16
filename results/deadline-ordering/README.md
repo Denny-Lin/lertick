@@ -342,6 +342,29 @@ scx_lavd 1.1.2 and 1.1.4 failed to load when built with the guest's clang 18: th
 - **Kernel compile:** `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions each, judged as before (3% threshold).
 - No other work runs on the host during the 8-CPU sets.
 
+## scx_lavd result, 2026-11-16
+
+`lavd-sets.tar.gz` holds the four sets (`heldout/cpu4-lavd`, `heldout/cpu8-lavd`, `kbuild-long/cpu4-lavd`, `kbuild-long/cpu8-lavd`); `heldout_judge.py` reproduces the held-out verdicts. All 60 runs completed with no fallbacks. Lertick against lavd, from the same sessions:
+
+| Measure | 4 CPUs | 8 CPUs |
+| --- | --- | --- |
+| perf messaging, processes | 8% faster | 8% faster |
+| perf messaging, threads | 17% faster | same (+5%) |
+| perf pipe | 93% faster | 87% faster |
+| hackbench threads | 18% faster | 9% slower |
+| hackbench `-g 16` | 14% faster | 8% faster |
+| schbench `-m 1 -t 1` request p99 | same | 21% higher |
+| schbench `-m 1 -t 1` wakeup p99 | 38% lower | 34% lower |
+| schbench `-m 4 -t 2` request p99 | 27% lower | 16% lower |
+| schbench `-m 4 -t 2` wakeup p99 | 84× higher (5,544 against 66 µs) | 21% lower |
+| schbench `-m 4 -t 2` RPS | same | same |
+| Kernel compile (`kernel/`) | same | same |
+| **Total** | **7 better, 3 same, 1 worse** | **6 better, 3 same, 2 worse** |
+
+- **lavd's 4-CPU wakeup p99 of 66 µs is the motivation for the wakeup preemption screening below.** On 8 CPUs, where there are spare CPUs, the gap disappears.
+- **EEVDF and lavd both take about 20 µs per `perf bench pipe` round trip, against 1.5 to 2.9 µs for Lertick and scx_bpfland.** A sched_ext scheduler is not fast here by itself, so the pipe gap is better explained by Lertick and bpfland keeping both ends on one CPU than by a VM artefact. The README footnote now states the measurement instead of calling it an artefact.
+- **Session-to-session variation is large.** In these sessions, Lertick against EEVDF on 8 CPUs won `perf messaging` processes (−9%) and tied threads, where the earlier 8-CPU session showed losses of 6% and 9%; EEVDF's schbench `-m 4 -t 2` wakeup p99 was 89 µs here against 171 µs earlier. The README keeps the earlier sessions for EEVDF and bpfland and these sessions for lavd, each compared within its own session.
+
 ## scx_p2dq and scx_flash as further references, criteria fixed 2026-11-16 before the run
 
 - **Arms:** EEVDF, Lertick online (release build), scx_p2dq 1.1.4 (Meta, server-oriented) and scx_flash 1.1.4 (latency-oriented), both built with LLVM 20.1.8 and run with default options.

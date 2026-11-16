@@ -44,5 +44,5 @@
 <text x="48" y="689" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">Kernel compile (kernel/)</text>
 <rect x="700.0" y="670" width="34.1" height="26" rx="6" fill="#34c759"/>
 <text x="744.1" y="689" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#34c759">6% faster</text>
-<text x="48" y="752" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" fill="#86868b">*Likely a VM artefact. perf bench sched, hackbench rt-tests 2.5, schbench 6300b8f; Linux 7.0 on an ARM64 VM. Bars past 40% are clipped.</text>
+<text x="48" y="752" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" fill="#86868b">*In this VM, EEVDF and scx_lavd take about 20 µs per pipe round trip. perf bench sched, hackbench rt-tests 2.5, schbench 6300b8f; Linux 7.0 on an ARM64 VM. Bars past 40% are clipped.</text>
 </svg>
