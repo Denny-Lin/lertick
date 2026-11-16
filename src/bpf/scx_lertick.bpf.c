@@ -602,6 +602,13 @@ static __always_inline bool sync_local(struct task_struct *p, s32 *cpu)
 
 	if (!bpf_cpumask_test_cpu(this, p->cpus_ptr))
 		return false;
+	/*
+	 * Only onto an empty local queue: other CPUs cannot take tasks from it,
+	 * so a chain of sync wakeups could otherwise pile tasks there and keep
+	 * the last one waiting for a second or more.
+	 */
+	if (scx_bpf_dsq_nr_queued(SCX_DSQ_LOCAL_ON | this))
+		return false;
 	if (time_before(vtime, vtime_now - LERTICK_LAG_NS))
 		vtime = vtime_now - LERTICK_LAG_NS;
 	if (bpf_iter_scx_dsq_new(&it, SHARED_DSQ, 0) == 0) {
