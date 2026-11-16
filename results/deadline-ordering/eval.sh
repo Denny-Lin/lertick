@@ -1,6 +1,7 @@
 #!/bin/bash
 # Screening on community benchmarks. Usage: eval.sh LABEL REPS ARM...
-# ARM is "default" (EEVDF) or NAME=BUILD_DIR:MODE, with BUILD_DIR under ~/lertick-exp/cur.
+# ARM is "default" (EEVDF) or NAME=BUILD_DIR:MODE[:EXTRA], with BUILD_DIR under ~/lertick-exp/cur
+# and EXTRA extra loader options with commas for spaces.
 # Arm order is shuffled per repetition; each arm runs every configuration under one attach.
 set -u
 cd ~/lertick-exp
@@ -18,8 +19,8 @@ for rep in $(seq 0 $((reps - 1))); do
     mkdir -p $d; pid=
     [ "$(state)" = disabled ] || { log "state not disabled before $rep-$name, stop"; exit 1; }
     if [ "$arm" != default ]; then
-      spec=${arm#*=}; build=${spec%%:*}; mode=${spec##*:}
-      sudo cur/$build/scx_lertick --mode $mode --track-all --duration 0 > $d/loader.log 2>&1 &
+      IFS=: read -r build mode extra <<< "${arm#*=}"
+      sudo cur/$build/scx_lertick --mode $mode --track-all --duration 0 ${extra//,/ } > $d/loader.log 2>&1 &
       pid=$!
       wait_state enabled || { log "FAIL attach $rep-$name"; sudo kill -INT $pid; wait $pid; exit 1; }
     fi

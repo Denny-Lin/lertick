@@ -1,0 +1,12 @@
+# Screening log (schbench, hackbench)
+
+Screening uses `eval.sh`: 15 s schbench runs after a 3 s warm-up, both hackbench modes and 5 repetitions per arm, with the arm order shuffled. `eval_judge.py eval/<round> <incumbent>` prints each metric's ratio to EEVDF and to the incumbent; below 1 is better, and RPS is inverted. Screening only finds candidates. A replacement is confirmed with 30 s runs and 10 repetitions before it counts.
+
+| Round | Arms | Geomean vs EEVDF | Decision |
+| --- | --- | --- | --- |
+| r1 (3 reps) | base online, base fixed, clock fix (clk) online and fixed, clk + wakeup preemption (always, or for AI-predicted short bursts) | base-on 0.930, clk-on 0.872, pre2-on 0.895, pre1-on 0.994, clk-fx 1.010 | The clock fix helps online (hackbench pipe −35%, socket −17% against base online). Preemption does not help. |
+| r2 | base-on, clk-on, cg-on (clk + cgroup weights + wakeup-only lag clamp + fair-order continuation), cg-fx | base-on 1.072, clk-on 0.995, cg-on 1.031, cg-fx 1.002 | clk-on is confirmed better than base-on. cg-on performs like clk-on and fixes `nice` and cgroup weights, so it becomes the incumbent. |
+| r3 | cg-on, cache-affine pick with a 0.5 ms or 2 ms window (aff05, aff2), 3 ms fixed slice (s3) | aff2-on 0.910, cg-on 1.030, aff05-on 1.072, s3-on 1.047 | aff2-on is the candidate: geomean 0.884 against cg-on, and schbench overload RPS gap to EEVDF down from −18% to −4%. |
+| r4 | cg-on, aff2-on, aff4-on, deadline from the AI-predicted burst + aff2 (dlaff2) online and fixed | aff2-on 0.820, aff4-on 0.823, cg-on 0.846, dlaff2-fx 0.874, dlaff2-on 0.898 | aff2 wins again (1.032 cg-on/aff2), so it replaces cg-on. A 4 ms window adds nothing. Deadline ordering hurts (hackbench pipe 1.72× aff2) and is dropped. |
+| r5 | aff2-on, aff2-fx, sync wakeup to the waker's CPU within 0.5 ms or 2 ms of the queue head (sync05, sync2), on aff2 | sync2-on 0.889, aff2-fx 0.892, sync05-on 0.899, aff2-on 0.921 | sync2 beats EEVDF on hackbench (pipe 0.84, socket 0.90) and is the next candidate. aff2-fx beats aff2-on (0.969), so online does not yet beat fixed. |
+| r6 | aff2-on, sync2-on and -fx, AI-gated wakeup preemption on sync2 (spre: gap 1 ms, burst ≤ 1 ms; spreb: gap 2 ms, burst ≤ 0.5 ms) | sync2-on 0.890, sync2-fx 0.911, spre-on 0.913, spreb-on 0.925, aff2-on 0.944 | sync2 wins again (1.060 aff2/sync2) and replaces aff2. Online now beats fixed (1.023 fx/on). AI-gated preemption does not help and is dropped. Remaining loss: schbench overload (request p99 1.23, RPS 1.08). |
