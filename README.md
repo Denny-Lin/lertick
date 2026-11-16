@@ -9,51 +9,20 @@ starts, replaces or retrains the other. [Automatic coordination](docs/INTEGRATIO
 
 ## Performance at a glance
 
-**Better than Linux's default scheduler (EEVDF) on 6 of 8 hackbench and schbench measures, including 15% faster hackbench and 61% lower wakeup latency on a busy machine.** One is the same and one is worse: 4% lower throughput when overloaded.
+**Better than Linux's default scheduler (EEVDF) on 6 of 11 standard kernel scheduler benchmarks with 8 CPUs, and on 4 with 4 CPUs.** It is worse on 3 in each case, mostly when many message threads wake groups of workers.
 
 <p align="center">
-  <img src="docs/assets/lertick-vs-eevdf.svg" alt="Bar chart of Lertick against Linux EEVDF: hackbench pipes 15% faster, sockets 8% faster; schbench busy wakeup latency 61% lower and request latency 6% lower; light load the same; overloaded wakeup latency 9% lower, request latency 2% lower, and 4% fewer requests per second." width="1120" />
+  <img src="docs/assets/lertick-vs-eevdf.svg" alt="Bar chart of Lertick against Linux EEVDF on 11 benchmarks with 4 and 8 CPUs. Better: perf pipe, hackbench threads, schbench 1-thread request and wakeup latency, and with 8 CPUs hackbench 16 groups and schbench throughput. Worse: schbench 4 message threads wakeup latency, request latency with 4 CPUs, kernel compile with 4 CPUs, and perf messaging with 8 CPUs." width="1120" />
 </p>
-
-| Test | Linux EEVDF | Lertick | Result |
-| --- | ---: | ---: | :--- |
-| hackbench, pipes | 0.83 s | 0.70 s | **15% faster** |
-| hackbench, sockets | 1.63 s | 1.50 s | **8% faster** |
-| schbench busy, wakeup latency | 121 µs | 47 µs | **61% lower** |
-| schbench busy, request latency | 18.2 ms | 17.2 ms | **6% lower** |
-| schbench light, request latency | 11.8 ms | 11.7 ms | Same |
-| schbench overloaded, wakeup latency | 8.9 ms | 8.1 ms | **9% lower** |
-| schbench overloaded, request latency | 379 ms | 372 ms | **2% lower** |
-| schbench overloaded, throughput | 125 req/s | 119 req/s | 4% fewer |
-
-<sub>Lertick's learned (`online`) mode against Linux EEVDF on the same machine: the median of 10 runs on one ARM64 VM (Linux 7.0, 4 CPUs), with latency at p99. Fixed-slice mode is within 1% of the learned mode, so most of the gain comes from dispatch rather than from learning so far. The settings were tuned on these two benchmarks (tests not used for tuning are below), and physical hardware is untested. [Method, commands and all runs →](results/deadline-ordering/README.md)</sub>
-
-### On tests not used for tuning
-
-These tests were never used to choose settings. The community sched_ext scheduler [scx_bpfland](https://github.com/sched-ext/scx) is included as a reference.
 
 | Against Linux EEVDF | Better | Same | Worse |
 | --- | ---: | ---: | ---: |
 | **Lertick, 8 CPUs** | **6** | 2 | 3 |
 | **Lertick, 4 CPUs** | **4** | 4 | 3 |
-| scx_bpfland, 8 CPUs | 5 | 1 | 5 |
-| scx_bpfland, 4 CPUs | 4 | 0 | 7 |
+| [scx_bpfland](https://github.com/sched-ext/scx), 8 CPUs | 5 | 1 | 5 |
+| [scx_bpfland](https://github.com/sched-ext/scx), 4 CPUs | 4 | 0 | 7 |
 
-| Test | Lertick, 4 CPUs | Lertick, 8 CPUs |
-| --- | :--- | :--- |
-| perf bench sched messaging, processes | Same | 6% slower |
-| perf bench sched messaging, threads | Same | 9% slower |
-| perf bench sched pipe | **92% faster**\* | **89% faster**\* |
-| hackbench, threads | **33% faster** | **29% faster** |
-| hackbench, 16 groups | Same | **17% faster** |
-| schbench, 1 thread, request latency | **25% lower** | **22% lower** |
-| schbench, 1 thread, wakeup latency | **7% lower** | **32% lower** |
-| schbench, 4 message threads, request latency | 2.3× higher | Same |
-| schbench, 4 message threads, wakeup latency | 42% higher | 27% higher |
-| schbench, 4 message threads, throughput | Same | **5% higher** |
-| Kernel compile (`kernel/sched`) | 9% slower | Same |
-
-<sub>Lertick here is its default learned (`online`) mode. Median of 5 runs on the same VM with 4 or 8 CPUs; "Same" means within 5%. scx_bpfland is the sched-ext/scx 1.1.2 build; its per-test numbers are in the full results. scx_lavd 1.1.2 failed to load on this kernel. \*Linux takes about 20 µs per pipe round trip in this VM, against 1.6 to 2.9 µs for the sched_ext schedulers. This is probably an artefact of the VM, not a general result. Many message threads waking groups of workers remain Linux's strength. [All runs →](results/deadline-ordering/README.md#held-out-result-on-8-cpus-2026-11-16)</sub>
+<sub>Lertick in its default learned (`online`) mode. None of these benchmarks was used to choose its settings. Median of 5 runs on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "Same" means within 5%. scx_bpfland is the community sched_ext scheduler, version 1.1.2. \*Linux takes about 20 µs per pipe round trip in this VM against 1.6 to 2.3 µs for Lertick, which is probably an artefact of the VM. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#held-out-result-on-8-cpus-2026-11-16)</sub>
 
 <p align="center">
   <a href="#get-started-on-linux">Get started →</a> &nbsp;&nbsp;
