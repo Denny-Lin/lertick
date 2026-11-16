@@ -341,3 +341,9 @@ scx_lavd 1.1.2 and 1.1.4 failed to load when built with the guest's clang 18: th
 - **Held-out:** `heldout.sh` on 4 CPUs and on 8 CPUs, 5 repetitions each, judged as before (5% threshold).
 - **Kernel compile:** `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions each, judged as before (3% threshold).
 - No other work runs on the host during the 8-CPU sets.
+
+## scx_p2dq and scx_flash as further references, criteria fixed 2026-11-16 before the run
+
+- **Arms:** EEVDF, Lertick online (release build), scx_p2dq 1.1.4 (Meta, server-oriented) and scx_flash 1.1.4 (latency-oriented), both built with LLVM 20.1.8 and run with default options.
+- **Sets and verdicts:** the same as for scx_lavd: `heldout.sh` and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions each, 5% and 3% thresholds. `more-run.sh` starts them after the lavd sets finish and stops if either scheduler fails a 10-second load test.
+- **README comparison:** each scheduler is compared with Lertick within the same session.
