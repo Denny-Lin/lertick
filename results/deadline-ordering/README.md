@@ -829,3 +829,19 @@ A wider sync window lets more wakees go straight to the waker's local queue and 
 ### Pinned-task guard, hypothesis fixed 2026-11-17 before the run
 
 Every stall seen so far is a task that can run on one CPU only (a per-CPU kworker) waiting behind tasks that lag the clock. `LERTICK_PIN_GUARD`: such a task waits on its CPU's own queue; the CPU runs it when it is ahead of the LLC queue's head in fair order or once it has waited 10 ms (`PIN_WAIT_NS`), and `keep_prev` does not continue past it then. Pinned tasks cannot migrate anyway, so this costs no balance; it bounds their wait to about 10 ms plus one slice. Builds: `G` (guard alone), `GO1` (guard and the 1 ms overrun slice), `GSW8` (guard and the 8 ms sync window). The guard is accepted only if `G` passes the nice mix 10 of 10, keeps weighting and then passes screening against `b7`; `GO1` and `GSW8` test whether it removes those candidates' stalls.
+
+### Pinned-task guard result: rejected, 2026-11-17
+
+`gate.sh` with 10 then 12 runs of the nice mix: `G` (guard alone) 21 of 22, with nice 19 at 1,718 and then 21,971 bogo ops; `GO1` 10 of 10; `GSW8` 10 of 10. The baseline `b7` passed 12 of 12 more (25 of 25 in all), so it needs no guard, and the guard both stalled once and disturbed weighting once. Rejected; `GO1` and `GSW8` rest on it and are not taken further. `gate.sh` now keeps the full kernel log of any failed run in `gate-fail/`.
+
+## Round 8: slice bounds and a wider window, hypothesis fixed 2026-11-17 before the run
+
+Lertick switches contexts 5 to 10 times less than EEVDF in perf messaging, and schbench -m4 -t2 wakeup p99 on 4 CPUs is still about 20% above EEVDF's. Shorter slices should let woken tasks reach a CPU sooner. Candidates, gate results (6 nice-mix runs each, all passed):
+
+| Arm | Change | nice 19 bogo ops | -m4 -t2 wakeup / request p99 (us) | migrations |
+|---|---|---|---|---|
+| `W16` | `AFFINE_WINDOW_NS` 16 ms | 1,959 | 4,984 / 54,080 | 1,015 |
+| `M3` | `--slice-max-us 3000` (was 5,000) | 1,882 | 4,004 / 53,440 | 992 |
+| `M3s1` | also `--slice-us 1000` (fixed and fallback slice, was 2,000) | 2,371 | 3,084 / 54,848 | 1,158 |
+
+**Screening** (`r8-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `b7`, `W16`, `M3` and `M3s1`. A candidate goes on if, against `b7`, -m4 -t2 wakeup or request p99 on 4 CPUs or perf messaging on either CPU count is better by more than 10%, and no measure is worse by more than 10% on either CPU count.
