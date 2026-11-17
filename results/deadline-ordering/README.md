@@ -877,3 +877,20 @@ Kernel compile (`kbuild-long.sh`, median of 5, seconds): 4 CPUs `b7` 26.85, `M3`
 ## Round 9: slice bounds around 3 ms, hypothesis fixed 2026-11-17 before the run
 
 The 3 ms cap helped and the 1 ms fixed slice helped 4-CPU wakeup latency further but cost perf messaging processes on 8 CPUs. The remaining losses against EEVDF are all on 4 CPUs (perf messaging processes and schbench -m4 -t2 latency, 6 to 7% each). Candidates on top of `b8` (the 3 ms cap): `M2` (`--slice-max-us 2000`), `M25` (2,500), `s15` (`--slice-us 1500`, fixed and fallback slice) and `M2s15` (both). Each runs `gate.sh` 3 times first; `r9-run.sh` then screens them with 3 repetitions on 4 and 8 CPUs. A candidate goes on if, against `b8`, any of the three 4-CPU losses improves by more than 5% and no measure is worse by more than 7% on either CPU count.
+
+### Round 9 result: all four rejected, 2026-11-17
+
+All four passed `gate.sh` 3 of 3. Screening (`r9-run.sh`, 15:45 to 16:45 UTC, no fallbacks), against `b8`, the three 4-CPU losses (perf messaging processes, -m4 -t2 request, -m4 -t2 wakeup) and the worst other measure:
+
+| Arm | 4 CPUs: mproc / m4 req / m4 wake | worst measure |
+|---|---|---|
+| `M2` | -0 / -4 / -1 | -6 (4 CPUs, hackbench) |
+| `M25` | +1 / -4 / +10 | -8 (8 CPUs, perf messaging processes) |
+| `s15` | +6 / -9 / +24 | -11 (8 CPUs, -m1 wakeup), -92 on 4-CPU pipe |
+| `M2s15` | -3 / +1 / +30 | -19 (8 CPUs, perf messaging processes), -17 on 8-CPU -m4 wakeup |
+
+`M2` improves nothing it targets; the others each cost more than 7% somewhere. A shorter fixed slice keeps helping 4-CPU wakeup latency but every time at the cost of 8-CPU perf messaging or wakeup. The 3 ms cap stays.
+
+## Round 10: policy constants, hypothesis fixed 2026-11-17 before the run
+
+Builds on top of `b8`: `SW1` and `SW0` (`SYNC_WINDOW_NS` 1 ms and 0: sync wakeups queue on the waker's CPU only when closer to the head; fewer wakees stack behind the waker, which may help perf messaging processes on 4 CPUs), `H8` (`HEAD_SCAN` 8: `keep_prev` gives up sooner when the CPU's next eligible task is deep in the queue) and `D32` (`AFFINE_DEPTH` 32). Same gate and screening rule as round 9 (`r10-run.sh`).
