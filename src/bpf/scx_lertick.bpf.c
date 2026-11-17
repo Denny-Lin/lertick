@@ -600,6 +600,7 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	 */
 	if ((enq_flags & SCX_ENQ_WAKEUP) && time_before(vtime, vtime_now - LAG_NS))
 		vtime = vtime_now - LAG_NS;
+	vtime = clamp_ahead(p, vtime);
 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
 	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice, vtime, enq_flags);
 	if (tctx)
