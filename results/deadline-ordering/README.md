@@ -873,3 +873,7 @@ Kernel compile (`kbuild-long.sh`, median of 5, seconds): 4 CPUs `b7` 26.85, `M3`
 ### README numbers for the 3 ms slice cap, 2026-11-17
 
 `pool_ratio.py` with `LERTICK_SESSION=r8,r8c LERTICK_ARM=M3` (kernel compile from `r8c` only). Better/same/worse, 4 CPUs then 8 CPUs: EEVDF 6/2/3 and 4/7/0, scx_bpfland 8/1/2 and 7/4/0, scx_lavd 7/2/2 and 4/6/1, scx_p2dq 7/2/2 and 7/3/1, scx_flash 7/2/2 and 7/4/0. On 4 CPUs scx_bpfland moves from 10/1/0 to 8/1/2: Lertick's schbench -m1 request p99 is level with EEVDF's in these two sessions (17% better in the previous two), which puts it 16% behind scx_bpfland's ratio from its own sessions, and the kernel compile reads 5.5% behind.
+
+## Round 9: slice bounds around 3 ms, hypothesis fixed 2026-11-17 before the run
+
+The 3 ms cap helped and the 1 ms fixed slice helped 4-CPU wakeup latency further but cost perf messaging processes on 8 CPUs. The remaining losses against EEVDF are all on 4 CPUs (perf messaging processes and schbench -m4 -t2 latency, 6 to 7% each). Candidates on top of `b8` (the 3 ms cap): `M2` (`--slice-max-us 2000`), `M25` (2,500), `s15` (`--slice-us 1500`, fixed and fallback slice) and `M2s15` (both). Each runs `gate.sh` 3 times first; `r9-run.sh` then screens them with 3 repetitions on 4 and 8 CPUs. A candidate goes on if, against `b8`, any of the three 4-CPU losses improves by more than 5% and no measure is worse by more than 7% on either CPU count.
