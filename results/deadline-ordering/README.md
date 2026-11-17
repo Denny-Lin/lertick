@@ -845,3 +845,9 @@ Lertick switches contexts 5 to 10 times less than EEVDF in perf messaging, and s
 | `M3s1` | also `--slice-us 1000` (fixed and fallback slice, was 2,000) | 2,371 | 3,084 / 54,848 | 1,158 |
 
 **Screening** (`r8-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `b7`, `W16`, `M3` and `M3s1`. A candidate goes on if, against `b7`, -m4 -t2 wakeup or request p99 on 4 CPUs or perf messaging on either CPU count is better by more than 10%, and no measure is worse by more than 10% on either CPU count.
+
+### Round 8 result: `M3` and `M3s1` go on, 2026-11-17
+
+`r8-run.sh` ran 14:13 to 14:37 UTC with no fallbacks; raw sets in `r8-sets.tar.gz`. Against `b7` (EEVDF in brackets), 4 CPUs: `M3s1` -m4 -t2 wakeup p99 +37 (+16), perf messaging threads +15 (+11), RPS -9; `M3` wakeup p99 +20 (-6), messaging threads +11. On 8 CPUs neither is worse than 8% on any measure. `W16` costs perf messaging threads 18% on 8 CPUs and stops here.
+
+**Confirmation** (`r8c-run.sh`): held-out and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions, arms EEVDF, `b7`, `M3` and `M3s1`, then `stress-run.sh` and `gate.sh` for each. The better candidate that has no measure more than 10% worse than `b7`, the kernel compile within 3%, and passes the battery and the gate becomes the default slice bounds.
