@@ -812,3 +812,20 @@ The window, not the depth, is what matters.
 ### README numbers for the wider affine pick, 2026-11-17
 
 The README charts show this version. Against EEVDF: `pool_ratio.py` with `LERTICK_SESSION=d16w8,aff`, the median of the two sessions that ran it with EEVDF (kernel compile from `d16w8` only). Against the sched_ext schedulers: through EEVDF, as before. Better/same/worse, 4 CPUs then 8 CPUs: EEVDF 5/2/4 and 3/6/2, scx_bpfland 10/1/0 and 7/3/1, scx_lavd 6/4/1 and 3/6/2, scx_p2dq 8/1/2 and 6/3/2, scx_flash 9/1/1 and 7/3/1. The 8-CPU kernel compile reads -6%, from one session in which EEVDF's compile was itself faster than in any earlier session.
+
+## Round 7 on top of the wider affine pick (`b7`), 2026-11-17
+
+All candidates go through `gate.sh` first. `b7` itself passed the nice mix 6 of 6 (13 of 13 counting the confirmation runs), with nice 19 at 1,284 bogo ops.
+
+| Build | Change | nice mix | nice 19 bogo ops | -m4 -t2 wakeup / request p99 (us) |
+|---|---|---|---|---|
+| `SW8` | `SYNC_WINDOW_NS` 8 ms | 1 of 2 | 1,603 | 4,984 / 69,760 |
+| `L4` | `LAG_NS` 4 ms | 2 of 2, but disabled during the fairness run | 58,565 | 3,772 / 62,912 |
+| `SW8L4` | both | 2 of 2 | 1,595 | 3,980 / 51,264 |
+| `O1` | 1 ms slice past the prediction (`LERTICK_OVERRUN_SLICE_NS`, as `W2`) | 9 of 10 (one 6.4 s kworker stall) | 1,223 | 4,920 / 156,416 |
+
+A wider sync window lets more wakees go straight to the waker's local queue and can shut out a task pinned to that CPU; a larger lag let the watchdog fire and broke weighting; the overrun slice stalls about once in ten runs. All four are rejected (`SW8L4` contains both failing parts).
+
+### Pinned-task guard, hypothesis fixed 2026-11-17 before the run
+
+Every stall seen so far is a task that can run on one CPU only (a per-CPU kworker) waiting behind tasks that lag the clock. `LERTICK_PIN_GUARD`: such a task waits on its CPU's own queue; the CPU runs it when it is ahead of the LLC queue's head in fair order or once it has waited 10 ms (`PIN_WAIT_NS`), and `keep_prev` does not continue past it then. Pinned tasks cannot migrate anyway, so this costs no balance; it bounds their wait to about 10 ms plus one slice. Builds: `G` (guard alone), `GO1` (guard and the 1 ms overrun slice), `GSW8` (guard and the 8 ms sync window). The guard is accepted only if `G` passes the nice mix 10 of 10, keeps weighting and then passes screening against `b7`; `GO1` and `GSW8` test whether it removes those candidates' stalls.
