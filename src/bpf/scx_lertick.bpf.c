@@ -59,29 +59,7 @@ const volatile u8 cpu_cluster[LERTICK_MAX_CPUS];
 /* Nonzero replaces scx_bpf_cpuperf_cap(), e.g. a simulated board's capacity. */
 const volatile u16 cpu_cap_override[LERTICK_MAX_CPUS];
 
-#define SHARED_DSQ 0
 #define LERTICK_QUEUE_REFERENCE 16U
-
-static u64 vtime_now;
-/* Sum of runnable tasks' weights: the virtual clock advances by service / weight. */
-static u64 runnable_weight;
-/*
- * Sleeper credit: a woken task is placed at most this far behind the clock,
- * about one fixed slice, as EEVDF bounds lag to about one slice.
- */
-#define LERTICK_LAG_NS 2000000ULL
-/*
- * When taking the next task, prefer one that last ran on this CPU among the
- * first LERTICK_AFFINE_DEPTH queued tasks within LERTICK_AFFINE_WINDOW_NS of
- * the head in vtime.
- */
-#define LERTICK_AFFINE_WINDOW_NS 2000000ULL
-#define LERTICK_AFFINE_DEPTH 8
-/* A sync wakeup may queue on the waker's CPU if within this much vtime of the queue head. */
-#define LERTICK_SYNC_WINDOW_NS 2000000ULL
-/* Queued tasks examined, and the longest unbroken run, when prev may keep its CPU. */
-#define LERTICK_HEAD_SCAN 16
-#define LERTICK_KEEP_MAX_NS 20000000ULL
 
 UEI_DEFINE(uei);
 
@@ -426,6 +404,10 @@ static __always_inline struct task_ctx *task_ctx(struct task_struct *p)
 	return bpf_task_storage_get(&task_ctx_stor, p, 0, 0);
 }
 
+#define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq)
+#define LERTICK_TASK_CGROUP(p) __COMPAT_scx_bpf_task_cgroup(p)
+#include "policy.h"
+
 static __always_inline void refresh_tracking(struct task_struct *p,
 					    struct task_ctx *tctx)
 {
@@ -477,7 +459,7 @@ static __always_inline void begin_episode(struct task_struct *p,
 {
 	u64 now = bpf_ktime_get_ns();
 	u64 sleep_ns = tctx->last_sleep_ns ? now - tctx->last_sleep_ns : 0;
-	u64 queued = scx_bpf_dsq_nr_queued(SHARED_DSQ);
+	u64 queued = nr_queued_all();
 
 	tctx->episode_active = true;
 	tctx->episode_valid = tctx->has_slept && (enq_flags & SCX_ENQ_WAKEUP);
@@ -567,35 +549,6 @@ static __always_inline u64 choose_slice(struct task_ctx *tctx, u64 consumed_ns)
 	return slice;
 }
 
-/*
- * A sync waker is about to sleep, so its CPU is the next free one and its
- * cache holds what the wakee will read. Queue the wakee there, unless that
- * would put it well ahead of tasks already waiting in fair order.
- */
-static __always_inline bool sync_local(struct task_struct *p, s32 *cpu)
-{
-	struct bpf_iter_scx_dsq it;
-	struct task_struct *head;
-	s32 this = bpf_get_smp_processor_id();
-	u64 vtime = p->scx.dsq_vtime;
-	bool ok = true;
-
-	if (!bpf_cpumask_test_cpu(this, p->cpus_ptr))
-		return false;
-	if (time_before(vtime, vtime_now - LERTICK_LAG_NS))
-		vtime = vtime_now - LERTICK_LAG_NS;
-	if (bpf_iter_scx_dsq_new(&it, SHARED_DSQ, 0) == 0) {
-		head = bpf_iter_scx_dsq_next(&it);
-		ok = !head || !time_before(head->scx.dsq_vtime + LERTICK_SYNC_WINDOW_NS, vtime);
-	}
-	bpf_iter_scx_dsq_destroy(&it);
-	if (!ok)
-		return false;
-	p->scx.dsq_vtime = vtime;
-	*cpu = this;
-	return true;
-}
-
 s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		   u64 wake_flags)
 {
@@ -624,203 +577,6 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 	return cpu;
 }
 
-/*
- * cgroup CPU weights (cpu.weight, systemd CPUWeight=). The hierarchy is
- * flattened as in the sched_ext scx_flatcg example (Tejun Heo, GPL-2.0): a
- * cgroup's hierarchical share (hweight) is the product, at each level, of
- * its weight over the weights of its active siblings. Lertick keeps one
- * global vtime queue, so the share becomes a per-task effective weight:
- * the task's part of its cgroup's runnable weight times the cgroup's share
- * of all runnable weight. With every cgroup at the default weight, and
- * runnable tasks in one cgroup, this equals the task weight.
- */
-#define LERTICK_HWEIGHT_ONE (1ULL << 16)
-
-struct lertick_cgrp {
-	u32 nr_active;		/* this cgroup or a descendant has runnable tasks */
-	u32 nr_runnable;	/* runnable tasks directly in this cgroup */
-	u32 weight;
-	u32 hweight;		/* share of the whole machine, LERTICK_HWEIGHT_ONE = all */
-	u64 child_weight_sum;	/* weights of active children */
-	u64 hweight_gen;
-	u64 task_weight_sum;	/* weights of runnable tasks directly in this cgroup */
-};
-
-struct {
-	__uint(type, BPF_MAP_TYPE_CGRP_STORAGE);
-	__uint(map_flags, BPF_F_NO_PREALLOC);
-	__type(key, int);
-	__type(value, struct lertick_cgrp);
-} cgrp_ctx_stor SEC(".maps");
-
-private(LERTICK_CGRP) struct bpf_spin_lock cgrp_lock;
-static u64 hweight_gen = 1;
-
-static __always_inline struct lertick_cgrp *cgrp_ctx(struct cgroup *cgrp)
-{
-	return bpf_cgrp_storage_get(&cgrp_ctx_stor, cgrp, 0, 0);
-}
-
-static struct lertick_cgrp *cgrp_ancestor_ctx(struct cgroup *cgrp, int level)
-{
-	struct lertick_cgrp *cgc;
-
-	cgrp = bpf_cgroup_ancestor(cgrp, level);
-	if (!cgrp)
-		return NULL;
-	cgc = cgrp_ctx(cgrp);
-	bpf_cgroup_release(cgrp);
-	return cgc;
-}
-
-static void cgrp_refresh_hweight(struct cgroup *cgrp, struct lertick_cgrp *cgc)
-{
-	int level;
-
-	if (!cgc->nr_active || cgc->hweight_gen == hweight_gen)
-		return;
-	bpf_for(level, 0, cgrp->level + 1) {
-		struct lertick_cgrp *c, *pc;
-		bool active;
-
-		c = cgrp_ancestor_ctx(cgrp, level);
-		if (!c)
-			break;
-		if (!level) {
-			c->hweight = LERTICK_HWEIGHT_ONE;
-			c->hweight_gen = hweight_gen;
-			continue;
-		}
-		pc = cgrp_ancestor_ctx(cgrp, level - 1);
-		if (!pc)
-			break;
-		bpf_spin_lock(&cgrp_lock);
-		active = c->nr_active;
-		if (active && pc->child_weight_sum) {
-			c->hweight_gen = pc->hweight_gen;
-			c->hweight = (u64)pc->hweight * c->weight / pc->child_weight_sum;
-			if (!c->hweight)
-				c->hweight = 1;
-		}
-		bpf_spin_unlock(&cgrp_lock);
-		if (!active)
-			break;
-	}
-}
-
-/* A cgroup gains or loses its first or last runnable task: update active sums upward. */
-static void cgrp_update_active(struct cgroup *cgrp, struct lertick_cgrp *cgc, bool runnable)
-{
-	bool updated = false;
-	int idx;
-
-	if (runnable) {
-		if (__sync_fetch_and_add(&cgc->nr_runnable, 1))
-			return;
-	} else {
-		if (__sync_sub_and_fetch(&cgc->nr_runnable, 1))
-			return;
-		cgrp_refresh_hweight(cgrp, cgc);
-	}
-	bpf_for(idx, 0, cgrp->level) {
-		int level = cgrp->level - idx;
-		struct lertick_cgrp *c, *pc = NULL;
-		bool propagate = false;
-
-		c = cgrp_ancestor_ctx(cgrp, level);
-		if (!c)
-			break;
-		if (level) {
-			pc = cgrp_ancestor_ctx(cgrp, level - 1);
-			if (!pc)
-				break;
-		}
-		bpf_spin_lock(&cgrp_lock);
-		if (runnable) {
-			if (!c->nr_active++) {
-				updated = true;
-				if (pc) {
-					propagate = true;
-					pc->child_weight_sum += c->weight;
-				}
-			}
-		} else if (c->nr_active) {
-			if (!--c->nr_active) {
-				updated = true;
-				if (pc) {
-					propagate = true;
-					pc->child_weight_sum -= c->weight;
-				}
-			}
-		}
-		bpf_spin_unlock(&cgrp_lock);
-		if (!propagate)
-			break;
-	}
-	if (updated)
-		__sync_fetch_and_add(&hweight_gen, 1);
-	if (runnable)
-		cgrp_refresh_hweight(cgrp, cgc);
-}
-
-static void cgrp_account(struct cgroup *cgrp, struct task_ctx *tctx, bool runnable)
-{
-	struct lertick_cgrp *cgc = cgrp_ctx(cgrp);
-
-	if (!cgc)
-		return;
-	if (runnable)
-		__sync_fetch_and_add(&cgc->task_weight_sum, tctx->rq_weight);
-	else
-		__sync_fetch_and_sub(&cgc->task_weight_sum, tctx->rq_weight);
-	cgrp_update_active(cgrp, cgc, runnable);
-	tctx->cg_counted = runnable;
-}
-
-static void cgrp_task_runnable(struct task_struct *p, struct task_ctx *tctx, bool runnable)
-{
-	struct cgroup *cgrp;
-
-	if (runnable == tctx->cg_counted)
-		return;
-	cgrp = __COMPAT_scx_bpf_task_cgroup(p);
-	if (!cgrp)
-		return;
-	cgrp_account(cgrp, tctx, runnable);
-	bpf_cgroup_release(cgrp);
-}
-
-/* Weight to charge service against: the task's share of its cgroup's share. */
-static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx, u32 weight)
-{
-	struct lertick_cgrp *cgc;
-	struct cgroup *cgrp;
-	u64 eff, tws, rw = runnable_weight;
-
-	if (!tctx || !tctx->cg_counted)
-		return weight;
-	cgrp = __COMPAT_scx_bpf_task_cgroup(p);
-	if (!cgrp)
-		return weight;
-	cgc = cgrp_ctx(cgrp);
-	if (!cgc) {
-		bpf_cgroup_release(cgrp);
-		return weight;
-	}
-	cgrp_refresh_hweight(cgrp, cgc);
-	tws = cgc->task_weight_sum;
-	eff = (u64)weight * cgc->hweight / LERTICK_HWEIGHT_ONE;
-	bpf_cgroup_release(cgrp);
-	if (!tws || !rw)
-		return weight;
-	eff = eff * rw / tws;
-	if (eff < 1)
-		eff = 1;
-	if (eff > 1000000)
-		eff = 1000000;
-	return eff;
-}
-
 void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 {
 	struct task_ctx *tctx = task_ctx(p);
@@ -840,67 +596,12 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	 * or tasks with larger weights would be pulled back to the clock and
 	 * lose their share.
 	 */
-	if ((enq_flags & SCX_ENQ_WAKEUP) && time_before(vtime, vtime_now - LERTICK_LAG_NS))
-		vtime = vtime_now - LERTICK_LAG_NS;
+	if ((enq_flags & SCX_ENQ_WAKEUP) && time_before(vtime, vtime_now - LAG_NS))
+		vtime = vtime_now - LAG_NS;
 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
-	scx_bpf_dsq_insert_vtime(p, SHARED_DSQ, slice, vtime, enq_flags);
+	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice, vtime, enq_flags);
 	if (tctx)
 		publish(tctx);
-}
-
-/*
- * Whether prev should keep its CPU instead of taking the next queued task.
- * A task whose slice ends otherwise always yields, so two tasks sharing a
- * CPU alternate and get equal time whatever their weights. prev stays while
- * it is ahead in vtime (its current run included) of the first queued task
- * that can run here. It yields after LERTICK_KEEP_MAX_NS without a break, and when
- * no such task is within the first LERTICK_HEAD_SCAN queued: a task that can
- * run only here must not wait behind prev indefinitely.
- */
-static __always_inline bool keep_prev(struct task_struct *prev, struct task_ctx *tctx, s32 cpu)
-{
-	struct task_struct *q;
-	u64 vtime = prev->scx.dsq_vtime, ran = 0;
-	u32 weight = tctx && tctx->eff_weight ? tctx->eff_weight :
-		     prev->scx.weight ? prev->scx.weight : 1;
-	int n = 0;
-
-	if (tctx && tctx->running && prev->se.sum_exec_runtime > tctx->runtime_start_ns)
-		ran = prev->se.sum_exec_runtime - tctx->runtime_start_ns;
-	if (ran >= LERTICK_KEEP_MAX_NS)
-		return false;
-	vtime += ran * 100 / weight;
-	bpf_for_each(scx_dsq, q, SHARED_DSQ, 0) {
-		if (n++ >= LERTICK_HEAD_SCAN)
-			return false;
-		if (bpf_cpumask_test_cpu(cpu, q->cpus_ptr))
-			return !time_before(q->scx.dsq_vtime, vtime);
-	}
-	return true;
-}
-
-/*
- * Take the next task for this CPU. Among the first few queued tasks whose
- * vtime is within a small window of the head, prefer one that last ran here
- * and may still have a warm cache; fair order moves by at most the window.
- */
-static __always_inline bool take_next(s32 cpu)
-{
-	struct task_struct *q;
-	u64 head = 0;
-	int n = 0;
-
-	bpf_for_each(scx_dsq, q, SHARED_DSQ, 0) {
-		if (!n)
-			head = q->scx.dsq_vtime;
-		if (n >= LERTICK_AFFINE_DEPTH || time_before(head + LERTICK_AFFINE_WINDOW_NS, q->scx.dsq_vtime))
-			break;
-		if (scx_bpf_task_cpu(q) == cpu &&
-		    scx_bpf_dsq_move(BPF_FOR_EACH_ITER, q, SCX_DSQ_LOCAL, 0))
-			return true;
-		n++;
-	}
-	return scx_bpf_dsq_move_to_local(SHARED_DSQ);
 }
 
 void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
@@ -1261,11 +962,15 @@ void BPF_STRUCT_OPS(lertick_tick, struct task_struct *p)
 s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 {
 	struct lertick_idle_timer *t;
-	u32 zero = 0;
-	s32 ret;
+	u32 zero = 0, d;
+	s32 ret = 0;
 
-	ret = scx_bpf_create_dsq(SHARED_DSQ, -1);
-	if (ret || cpuperf_mode != LERTICK_CPUPERF_UTIL)
+	bpf_for(d, 0, domain_count()) {
+		ret = scx_bpf_create_dsq(d, -1);
+		if (ret)
+			return ret;
+	}
+	if (cpuperf_mode != LERTICK_CPUPERF_UTIL)
 		return ret;
 	t = bpf_map_lookup_elem(&idle_timer_map, &zero);
 	if (!t)
@@ -1286,19 +991,19 @@ void BPF_STRUCT_OPS(lertick_exit, struct scx_exit_info *ei)
 s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_cgroup_init, struct cgroup *cgrp,
 			     struct scx_cgroup_init_args *args)
 {
-	struct lertick_cgrp *cgc = bpf_cgrp_storage_get(&cgrp_ctx_stor, cgrp, 0,
+	struct cgrp_ctx *cgc = bpf_cgrp_storage_get(&cgrp_ctx_stor, cgrp, 0,
 						       BPF_LOCAL_STORAGE_GET_F_CREATE);
 
 	if (!cgc)
 		return -ENOMEM;
 	cgc->weight = args->weight;
-	cgc->hweight = LERTICK_HWEIGHT_ONE;
+	cgc->hweight = HWEIGHT_ONE;
 	return 0;
 }
 
 void BPF_STRUCT_OPS(lertick_cgroup_set_weight, struct cgroup *cgrp, u32 weight)
 {
-	struct lertick_cgrp *cgc = cgrp_ctx(cgrp), *pc = NULL;
+	struct cgrp_ctx *cgc = cgrp_ctx(cgrp), *pc = NULL;
 
 	if (!cgc)
 		return;

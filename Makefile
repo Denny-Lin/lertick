@@ -21,7 +21,7 @@ BPF_CFLAGS ?= -O2 -g -target bpf -mcpu=v3 -Wall -Wno-compare-distinct-pointer-ty
 # Experiment switches, for example BPF_DEFS="-DLERTICK_AI_KEEP=1".
 BPF_DEFS ?=
 BPF_CFLAGS += -D__TARGET_ARCH_$(TARGET_ARCH) -Ivendor/bpf-compat -I/usr/include/$(MULTIARCH)
-BPF_HEADERS := $(wildcard vendor/scx/*.h) $(wildcard vendor/lerwatt/*.h) $(wildcard src/shared/*.h)
+BPF_HEADERS := src/bpf/policy.h $(wildcard vendor/scx/*.h) $(wildcard vendor/lerwatt/*.h) $(wildcard src/shared/*.h)
 
 .PHONY: all native install uninstall clean preflight test-model test-accounting test-burst-profiles test-cpuperf test-lerwatt test-deployment test-integration-abi test-report workload reference
 all: $(BUILD)/scx_lertick $(BUILD)/burst_workload $(BUILD)/phase2_workload $(BUILD)/lifecycle_workload

@@ -558,3 +558,46 @@ What the learned slice adds today (`base` online against `base` fixed, same sess
 `pool_all.py` adds the evening session to the pool and pools the other schedulers the same way: per session, Lertick's median against the other scheduler's median from the same session (fallback repetitions dropped, kernel compile from `kbuild-long`), then the median over sessions. EEVDF has 7 sessions (6 for kernel compile); scx_bpfland, scx_lavd, scx_p2dq and scx_flash have 2 each (the first bpfland or lavd or p2dq/flash session, and the evening session). The README charts use these numbers (`make_chart.py`).
 
 Better/same/worse at 5%, 4 CPUs then 8 CPUs: EEVDF 3/6/2 and 3/5/3, scx_bpfland 7/3/1 and 8/2/1, scx_lavd 7/3/1 and 5/2/4, scx_p2dq 7/2/2 and 3/6/2, scx_flash 7/2/2 and 6/5/0. Against EEVDF the losses that remain are schbench -m 4 -t 2 (request p99 2.4 times higher and wakeup p99 47% higher on 4 CPUs, wakeup p99 31% higher on 8 CPUs) and, on 8 CPUs, perf messaging processes (6%) and schbench -m 1 -t 1 request p99 (10%).
+
+## One queue per last-level cache (`llc`), hypothesis fixed 2026-11-16 before the run
+
+**Why.** Every CPU takes work from one shared queue, so its lock is taken on every enqueue and dispatch, and a vCPU that the host pauses while holding it stalls the rest. The consistent loss, schbench `-m 4 -t 2` wakeup and request p99, is the test with the most wakeups per second across CPUs. Most sched_ext schedulers (scx_bpfland, scx_lavd, scx_p2dq) keep a queue per cache domain, and real machines with several LLCs need one anyway.
+
+**Change.** One vtime-ordered queue per LLC domain, read from `/sys/devices/system/cpu/cpu*/cache` by the loader; all queues keep one virtual clock. A task is queued in the domain of its CPU; a CPU takes from its own domain and steals the head of another when that is empty; `keep_prev` also compares prev with the head of the other domains. With one domain the behaviour is the previous one.
+
+**VM limit.** The test VM reports every cache, L1 included, as shared by all 8 CPUs, so the real topology gives one domain there and no difference. Screening therefore uses builds with `-DLERTICK_DOMAIN_SPLIT=N`, which splits CPUs into consecutive groups of N: N=2 for the 4-CPU run (two domains on CPUs 0-3) and N=4 for the 8-CPU run (two domains).
+
+**Screening** (`llc-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `base` (the current build), `one` (the new code with the VM's one domain) and `split`. `split` goes on to the full confirmation if schbench `-m 4 -t 2` wakeup p99 is lower than `base` by more than 10% on both CPU counts and no other measure is worse than `base` by more than 10%. `one` must stay within 10% of `base` on every measure, since it should behave the same.
+
+### Screening result: forced split rejected, 2026-11-16
+
+`llc-run.sh` ran 01:51 to 02:10 UTC with no fallbacks; raw sets in `llc-sets.tar.gz`. Against `base` (positive is better):
+
+| Test | `split` 4 CPUs | `split` 8 CPUs | `one` 4 CPUs | `one` 8 CPUs |
+|---|---|---|---|---|
+| schbench -m4 -t2 wakeup p99 (target) | -31 | -11 | +0 | -33 |
+| schbench -m4 -t2 request p99 | +16 | -1 | -1 | -5 |
+| schbench -m1 -t1 wakeup p99 | -2 | +34 | +5 | +34 |
+| perf messaging threads | -14 | +5 | +4 | -29 |
+| perf pipe | +50 | +51 | +51 | -2 |
+| hackbench pipe threads | +23 | -1 | +18 | +2 |
+| kernel compile | -9 | -0 | -3 | -1 |
+
+Splitting the queue made the target worse on both CPU counts, so two-way queues do not help this test here; the loss is not contention on the shared queue. `split` is rejected and the `LERTICK_DOMAIN_SPLIT` screening switch is removed.
+
+`one` schedules exactly as `base` on this VM (one domain), yet differs by up to 33% on single measures in 3 repetitions, in both directions; `base` also measured perf pipe 50% slower than usual in this session. That is the session noise already seen between identical builds. The criterion for `one` (within 10% everywhere) is not met at 3 repetitions, so the final build is confirmed separately below before it replaces `base`.
+
+## Shared policy header and the scx export, 2026-11-16
+
+The policy (queues per LLC, continuation, affine pick, sync wakeup, cgroup weights) moved from `scx_lertick.bpf.c` into `src/bpf/policy.h`, which the product and `upstream/scx_lertick` both include. `scripts/export_scx.py` copies it and `src/shared/model.h` (without the product-only regions marked `LERTICK_UPSTREAM`) into the port; CI runs it with `--check`. Built in the VM: the product (`pol`) attaches and runs hackbench; the port builds in the scx 1.1.4 workspace, passes `cargo fmt --check`, attaches and reports `8 CPUs, 1 queue(s)`.
+
+**Confirmation** (`pol-run.sh`): held-out on 4 and 8 CPUs, 5 repetitions, arms EEVDF, `base` and `pol`. `pol` replaces `base` if no measure is worse than `base` by more than 10% on either CPU count.
+
+### Confirmation result: shared-policy build accepted, 2026-11-16
+
+`pol-run.sh` ran 02:12 to 02:35 UTC with no fallbacks; raw sets in `pol-sets.tar.gz`. `pol` against `base` (positive is better), 5 repetitions:
+
+- 4 CPUs: perf messaging processes -8, threads +3, perf pipe -5, schbench -m4 -t2 wakeup p99 +0, request p99 +3, RPS -1, -m1 -t1 wakeup p99 +9, request p99 -1, hackbench threads -0, 16 groups -1, kernel compile -3.
+- 8 CPUs: perf messaging processes +1, threads +7, perf pipe +40, schbench -m4 -t2 wakeup p99 +16, request p99 -5, RPS -0, -m1 -t1 wakeup and request p99 +0, hackbench threads +1, 16 groups -4, kernel compile -1.
+
+No measure is more than 10% worse on either CPU count, so the shared-policy build with one queue per LLC replaces `base`. After the screening switch was removed, the final source was rebuilt in the VM: the product attaches in online and fixed mode and runs hackbench, and the port builds in the scx 1.1.4 workspace, passes `cargo fmt --check` and does the same with and without `--fixed`.

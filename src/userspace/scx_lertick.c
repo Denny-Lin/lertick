@@ -418,6 +418,52 @@ finish_tasks:
 	return fflush(out) || ferror(out) ? -1 : 0;
 }
 
+/*
+ * Last-level cache domains: CPUs sharing their highest-level cache share one
+ * queue. Any CPU without readable cache topology leaves one domain for all.
+ */
+static void llc_domains(struct scx_lertick *skel, unsigned ncpus)
+{
+	int first_cpu[LERTICK_MAX_DOMAINS];
+	unsigned n = 0;
+
+	for (unsigned cpu = 0; cpu < ncpus; cpu++) {
+		int best_level = -1, first = -1;
+
+		for (unsigned idx = 0; idx < 10; idx++) {
+			char path[128], buf[256];
+			int level;
+
+			snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%u/cache/index%u/level", cpu, idx);
+			if (!read_text(path, buf, sizeof(buf)))
+				break;
+			level = atoi(buf);
+			snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%u/cache/index%u/shared_cpu_list", cpu, idx);
+			if (level > best_level && read_text(path, buf, sizeof(buf))) {
+				best_level = level;
+				first = atoi(buf);
+			}
+		}
+		if (first < 0)
+			goto single;
+		unsigned d = 0;
+		while (d < n && first_cpu[d] != first)
+			d++;
+		if (d == n) {
+			if (n == LERTICK_MAX_DOMAINS)
+				goto single;
+			first_cpu[n++] = first;
+		}
+		skel->rodata->cpu_domain[cpu] = d;
+	}
+	skel->rodata->nr_domains = n ? n : 1;
+	return;
+single:
+	for (unsigned cpu = 0; cpu < LERTICK_MAX_CPUS; cpu++)
+		skel->rodata->cpu_domain[cpu] = 0;
+	skel->rodata->nr_domains = 1;
+}
+
 static unsigned parse_uint(const char *text, unsigned min, unsigned max)
 {
 	char *end;
@@ -778,6 +824,7 @@ int main(int argc, char **argv)
 	skel->rodata->cpuperf_mode = cpuperf;
 	skel->rodata->lerwatt_enabled = lerwatt;
 	skel->rodata->nr_cpus = ncpus < (int)LERTICK_MAX_CPUS ? (unsigned)ncpus : LERTICK_MAX_CPUS;
+	llc_domains(skel, skel->rodata->nr_cpus);
 	if (lerwatt) {
 		skel->rodata->lerwatt_session_id = topo.session_id;
 		for (unsigned i = 0; i < LW_CONTRACT_MAX_CLUSTERS; i++)
