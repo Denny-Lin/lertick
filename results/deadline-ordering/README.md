@@ -497,6 +497,8 @@ Lertick (`t5`) against EEVDF in this session (positive is better for Lertick; po
 
 Better/same/worse at a 5% threshold: 3/6/2 on 4 CPUs and 4/7/0 on 8 CPUs. Against the other schedulers in the same session: scx_bpfland 7/4/0 and 6/4/1, scx_lavd 7/3/1 and 2/6/3, scx_p2dq 7/2/2 and 3/6/2, scx_flash 7/2/2 and 7/4/0.
 
+Raw sets: `eve-sets.tar.gz` (held-out, kernel compile, guest `/proc/stat` log).
+
 Verdict: the evening session agrees with the pooled daytime results within the known session-to-session swing. The 4-CPU schbench -m4 -t2 losses are as large as before, so host use did not cause them. The small daytime losses on 8-CPU messaging processes and on schbench -m1 -t1 request p99 did not appear in this session and may have been partly host noise; the 8-CPU -m4 -t2 wakeup win is a single session against a pooled loss and is not taken as a change. One round is not enough to replace the pooled basis, so the README keeps the pooled numbers.
 
 ## AI deadline order (`dl`), hypothesis fixed 2026-11-16 before the run
@@ -535,7 +537,7 @@ Positive is worse for `dl`. The target measure does not improve and several othe
 
 ### Screening result: learned continuation rejected, 2026-11-16
 
-`ek-run.sh` ran 16:47 to 17:06 host time with no fallbacks. Change against `base` online (positive is better for `ek`):
+`ek-run.sh` ran 16:47 to 17:06 host time with no fallbacks; raw sets in `ek-sets.tar.gz`. Change against `base` online (positive is better for `ek`):
 
 | Test | 4 CPUs | 8 CPUs |
 |---|---|---|
