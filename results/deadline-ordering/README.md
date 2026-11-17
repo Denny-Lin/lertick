@@ -558,3 +558,13 @@ What the learned slice adds today (`base` online against `base` fixed, same sess
 `pool_all.py` adds the evening session to the pool and pools the other schedulers the same way: per session, Lertick's median against the other scheduler's median from the same session (fallback repetitions dropped, kernel compile from `kbuild-long`), then the median over sessions. EEVDF has 7 sessions (6 for kernel compile); scx_bpfland, scx_lavd, scx_p2dq and scx_flash have 2 each (the first bpfland or lavd or p2dq/flash session, and the evening session). The README charts use these numbers (`make_chart.py`).
 
 Better/same/worse at 5%, 4 CPUs then 8 CPUs: EEVDF 3/6/2 and 3/5/3, scx_bpfland 7/3/1 and 8/2/1, scx_lavd 7/3/1 and 5/2/4, scx_p2dq 7/2/2 and 3/6/2, scx_flash 7/2/2 and 6/5/0. Against EEVDF the losses that remain are schbench -m 4 -t 2 (request p99 2.4 times higher and wakeup p99 47% higher on 4 CPUs, wakeup p99 31% higher on 8 CPUs) and, on 8 CPUs, perf messaging processes (6%) and schbench -m 1 -t 1 request p99 (10%).
+
+## One queue per last-level cache (`llc`), hypothesis fixed 2026-11-16 before the run
+
+**Why.** Every CPU takes work from one shared queue, so its lock is taken on every enqueue and dispatch, and a vCPU that the host pauses while holding it stalls the rest. The consistent loss, schbench `-m 4 -t 2` wakeup and request p99, is the test with the most wakeups per second across CPUs. Most sched_ext schedulers (scx_bpfland, scx_lavd, scx_p2dq) keep a queue per cache domain, and real machines with several LLCs need one anyway.
+
+**Change.** One vtime-ordered queue per LLC domain, read from `/sys/devices/system/cpu/cpu*/cache` by the loader; all queues keep one virtual clock. A task is queued in the domain of its CPU; a CPU takes from its own domain and steals the head of another when that is empty; `keep_prev` also compares prev with the head of the other domains. With one domain the behaviour is the previous one.
+
+**VM limit.** The test VM reports every cache, L1 included, as shared by all 8 CPUs, so the real topology gives one domain there and no difference. Screening therefore uses builds with `-DLERTICK_DOMAIN_SPLIT=N`, which splits CPUs into consecutive groups of N: N=2 for the 4-CPU run (two domains on CPUs 0-3) and N=4 for the 8-CPU run (two domains).
+
+**Screening** (`llc-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `base` (the current build), `one` (the new code with the VM's one domain) and `split`. `split` goes on to the full confirmation if schbench `-m 4 -t 2` wakeup p99 is lower than `base` by more than 10% on both CPU counts and no other measure is worse than `base` by more than 10%. `one` must stay within 10% of `base` on every measure, since it should behave the same.

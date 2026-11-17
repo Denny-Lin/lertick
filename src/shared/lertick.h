@@ -8,6 +8,8 @@
 #define LERTICK_COMM_LEN 16
 /* CPUs covered by per-CPU loader configuration (cluster and capacity maps). */
 #define LERTICK_MAX_CPUS 512U
+/* Queues, one per last-level cache domain. */
+#define LERTICK_MAX_DOMAINS 64U
 #define LERTICK_NO_CLUSTER 0xffU
 #define LERTICK_REFERENCE_NS 10000000ULL
 #define LERTICK_DEFAULT_SLICE_NS 2000000ULL

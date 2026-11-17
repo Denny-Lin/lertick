@@ -59,8 +59,58 @@ const volatile u8 cpu_cluster[LERTICK_MAX_CPUS];
 /* Nonzero replaces scx_bpf_cpuperf_cap(), e.g. a simulated board's capacity. */
 const volatile u16 cpu_cap_override[LERTICK_MAX_CPUS];
 
-#define SHARED_DSQ 0
 #define LERTICK_QUEUE_REFERENCE 16U
+
+/*
+ * One vtime-ordered queue per last-level cache domain; DSQ id d serves domain
+ * d. The loader fills cpu_domain from the cache topology; with one domain (the
+ * default, or an unknown topology) this is a single shared queue. All queues
+ * share one virtual clock, so vtimes compare across domains. A CPU takes work
+ * from its own domain first and steals from the others when that is empty.
+ */
+const volatile u32 nr_domains = 1;
+const volatile u8 cpu_domain[LERTICK_MAX_CPUS];
+/* Screening builds only: split CPUs into consecutive groups of this size. */
+#ifndef LERTICK_DOMAIN_SPLIT
+#define LERTICK_DOMAIN_SPLIT 0
+#endif
+
+static __always_inline u32 domain_count(void)
+{
+	u32 n = nr_domains;
+
+	if (LERTICK_DOMAIN_SPLIT)
+		n = (nr_cpus + LERTICK_DOMAIN_SPLIT - 1) / LERTICK_DOMAIN_SPLIT;
+	if (n < 1)
+		n = 1;
+	return n < LERTICK_MAX_DOMAINS ? n : LERTICK_MAX_DOMAINS;
+}
+
+static __always_inline u32 domain_of(s32 cpu)
+{
+	u32 idx = cpu, d;
+
+	if (LERTICK_DOMAIN_SPLIT)
+		d = idx / (LERTICK_DOMAIN_SPLIT ?: 1);
+	else if (idx < LERTICK_MAX_CPUS) {
+		/* Keep the mask: clang may bound one copy of idx and index with another. */
+		barrier_var(idx);
+		d = cpu_domain[idx & (LERTICK_MAX_CPUS - 1)];
+	} else
+		d = 0;
+	return d < domain_count() ? d : 0;
+}
+
+/* Tasks queued in all domains. */
+static __always_inline u64 nr_queued_all(void)
+{
+	u64 sum = 0;
+	u32 d;
+
+	bpf_for(d, 0, domain_count())
+		sum += scx_bpf_dsq_nr_queued(d);
+	return sum;
+}
 
 static u64 vtime_now;
 /* Sum of runnable tasks' weights: the virtual clock advances by service / weight. */
@@ -477,7 +527,7 @@ static __always_inline void begin_episode(struct task_struct *p,
 {
 	u64 now = bpf_ktime_get_ns();
 	u64 sleep_ns = tctx->last_sleep_ns ? now - tctx->last_sleep_ns : 0;
-	u64 queued = scx_bpf_dsq_nr_queued(SHARED_DSQ);
+	u64 queued = nr_queued_all();
 
 	tctx->episode_active = true;
 	tctx->episode_valid = tctx->has_slept && (enq_flags & SCX_ENQ_WAKEUP);
@@ -584,7 +634,7 @@ static __always_inline bool sync_local(struct task_struct *p, s32 *cpu)
 		return false;
 	if (time_before(vtime, vtime_now - LERTICK_LAG_NS))
 		vtime = vtime_now - LERTICK_LAG_NS;
-	if (bpf_iter_scx_dsq_new(&it, SHARED_DSQ, 0) == 0) {
+	if (bpf_iter_scx_dsq_new(&it, domain_of(this), 0) == 0) {
 		head = bpf_iter_scx_dsq_next(&it);
 		ok = !head || !time_before(head->scx.dsq_vtime + LERTICK_SYNC_WINDOW_NS, vtime);
 	}
@@ -629,7 +679,7 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
  * flattened as in the sched_ext scx_flatcg example (Tejun Heo, GPL-2.0): a
  * cgroup's hierarchical share (hweight) is the product, at each level, of
  * its weight over the weights of its active siblings. Lertick keeps one
- * global vtime queue, so the share becomes a per-task effective weight:
+ * virtual clock for all queues, so the share becomes a per-task effective weight:
  * the task's part of its cgroup's runnable weight times the cgroup's share
  * of all runnable weight. With every cgroup at the default weight, and
  * runnable tasks in one cgroup, this equals the task weight.
@@ -843,7 +893,7 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	if ((enq_flags & SCX_ENQ_WAKEUP) && time_before(vtime, vtime_now - LERTICK_LAG_NS))
 		vtime = vtime_now - LERTICK_LAG_NS;
 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
-	scx_bpf_dsq_insert_vtime(p, SHARED_DSQ, slice, vtime, enq_flags);
+	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice, vtime, enq_flags);
 	if (tctx)
 		publish(tctx);
 }
@@ -855,14 +905,37 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
  * it is ahead in vtime (its current run included) of the first queued task
  * that can run here. It yields after LERTICK_KEEP_MAX_NS without a break, and when
  * no such task is within the first LERTICK_HEAD_SCAN queued: a task that can
- * run only here must not wait behind prev indefinitely.
+ * run only here must not wait behind prev indefinitely. The own domain is
+ * scanned; when it holds nothing for this CPU, the head of each other domain
+ * is compared too, since this CPU would steal from it.
  */
+static __always_inline bool other_head_before(u32 home, s32 cpu, u64 vtime)
+{
+	struct task_struct *q;
+	u32 n = domain_count(), i;
+
+	bpf_for(i, 1, n) {
+		u32 d = home + i;
+
+		if (d >= n)
+			d -= n;
+		bpf_for_each(scx_dsq, q, d, 0) {
+			if (bpf_cpumask_test_cpu(cpu, q->cpus_ptr) &&
+			    time_before(q->scx.dsq_vtime, vtime))
+				return true;
+			break;
+		}
+	}
+	return false;
+}
+
 static __always_inline bool keep_prev(struct task_struct *prev, struct task_ctx *tctx, s32 cpu)
 {
 	struct task_struct *q;
 	u64 vtime = prev->scx.dsq_vtime, ran = 0;
 	u32 weight = tctx && tctx->eff_weight ? tctx->eff_weight :
 		     prev->scx.weight ? prev->scx.weight : 1;
+	u32 home = domain_of(cpu);
 	int n = 0;
 
 	if (tctx && tctx->running && prev->se.sum_exec_runtime > tctx->runtime_start_ns)
@@ -870,27 +943,44 @@ static __always_inline bool keep_prev(struct task_struct *prev, struct task_ctx 
 	if (ran >= LERTICK_KEEP_MAX_NS)
 		return false;
 	vtime += ran * 100 / weight;
-	bpf_for_each(scx_dsq, q, SHARED_DSQ, 0) {
+	bpf_for_each(scx_dsq, q, home, 0) {
 		if (n++ >= LERTICK_HEAD_SCAN)
 			return false;
 		if (bpf_cpumask_test_cpu(cpu, q->cpus_ptr))
 			return !time_before(q->scx.dsq_vtime, vtime);
 	}
-	return true;
+	return !other_head_before(home, cpu, vtime);
 }
 
 /*
  * Take the next task for this CPU. Among the first few queued tasks whose
  * vtime is within a small window of the head, prefer one that last ran here
  * and may still have a warm cache; fair order moves by at most the window.
+ * With the own domain empty, steal the head of the next domain that has work.
  */
+static __always_inline bool steal(u32 home)
+{
+	u32 n = domain_count(), i;
+
+	bpf_for(i, 1, n) {
+		u32 d = home + i;
+
+		if (d >= n)
+			d -= n;
+		if (scx_bpf_dsq_move_to_local(d))
+			return true;
+	}
+	return false;
+}
+
 static __always_inline bool take_next(s32 cpu)
 {
 	struct task_struct *q;
+	u32 home = domain_of(cpu);
 	u64 head = 0;
 	int n = 0;
 
-	bpf_for_each(scx_dsq, q, SHARED_DSQ, 0) {
+	bpf_for_each(scx_dsq, q, home, 0) {
 		if (!n)
 			head = q->scx.dsq_vtime;
 		if (n >= LERTICK_AFFINE_DEPTH || time_before(head + LERTICK_AFFINE_WINDOW_NS, q->scx.dsq_vtime))
@@ -900,7 +990,7 @@ static __always_inline bool take_next(s32 cpu)
 			return true;
 		n++;
 	}
-	return scx_bpf_dsq_move_to_local(SHARED_DSQ);
+	return scx_bpf_dsq_move_to_local(home) || steal(home);
 }
 
 void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
@@ -1261,11 +1351,15 @@ void BPF_STRUCT_OPS(lertick_tick, struct task_struct *p)
 s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 {
 	struct lertick_idle_timer *t;
-	u32 zero = 0;
-	s32 ret;
+	u32 zero = 0, d;
+	s32 ret = 0;
 
-	ret = scx_bpf_create_dsq(SHARED_DSQ, -1);
-	if (ret || cpuperf_mode != LERTICK_CPUPERF_UTIL)
+	bpf_for(d, 0, domain_count()) {
+		ret = scx_bpf_create_dsq(d, -1);
+		if (ret)
+			return ret;
+	}
+	if (cpuperf_mode != LERTICK_CPUPERF_UTIL)
 		return ret;
 	t = bpf_map_lookup_elem(&idle_timer_map, &zero);
 	if (!t)
