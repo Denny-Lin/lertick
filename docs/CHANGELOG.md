@@ -9,8 +9,9 @@
   -g 32) a fair round can take most of a second, and the 1 s timeout ejected
   Lertick in about one run in ten. Scheduling decisions are unchanged; injected
   stalls still eject it. See results/deadline-ordering/README.md.
-- The README now reports Lertick against EEVDF as the median over several
-  sessions instead of one session.
+- The README now reports every comparison as the median over all sessions
+  that ran both schedulers (7 against EEVDF, 2 against each sched_ext
+  scheduler) instead of one session.
 
 ## Unreleased — 2026-11-02
 

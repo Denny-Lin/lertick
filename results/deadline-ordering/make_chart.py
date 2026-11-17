@@ -15,44 +15,26 @@ ROWS = [  # label, higher_is_better, kind
     ("schbench 4 msg threads, throughput", True, "rps"),
     ("Kernel compile (kernel/)", False, "time"),
 ]
-# Against EEVDF: median over the six sessions pooled by pool.py (held-out) and
-# over the five kbuild-long sessions (kernel compile), in ROWS order.
-EEVDF = {
-    4: [-1.3, 1.2, 92.8, 28.7, 1.0, -7.3, 4.9, -136.3, -47.2, 3.5, 1.9],
-    8: [-6.7, -3.0, 88.5, 10.9, 4.4, -11.6, 4.6, -6.0, -32.4, 0.5, 0.6],
+# Median over every session that ran both schedulers, from pool_all.py
+# (held-out tests; kernel compile from kbuild-long), in ROWS order.
+EEVDF = {  # 7 sessions (6 for kernel compile)
+    4: [-0.2, 1.6, 92.8, 28.6, 1.2, -0.3, 6.5, -142.7, -47.1, 2.2, 1.1],
+    8: [-5.6, -4.6, 88.9, 11.6, 4.1, -9.5, 5.3, -3.7, -31.1, 0.2, 0.3],
 }
-# Against other schedulers: one session each, compared within that session
-# (h2h.py for p2dq and flash; the medians below for bpfland and lavd).
-FIRST = {  # Lertick in the first held-out sessions (heldout-cpu4/cpu8, kbuild-long)
-    4: [0.616, 0.475, 1.606, 0.770, 1.718, 11380, 86, 161500, 5384, 162, 28.41],
-    8: [0.562, 0.473, 2.347, 0.835, 1.271, 10256, 71, 35904, 217, 373, 25.68],
-}
-BPFLAND = {  # scx_bpfland 1.1.2 in the same sessions
-    4: [0.735, 0.601, 1.854, 0.908, 2.381, 11280, 71, 385500, 5336, 155, 28.95],
-    8: [0.691, 0.628, 2.858, 0.940, 2.057, 12208, 89, 41664, 498, 375, 26.44],
-}
-LAVD = {  # (Lertick, scx_lavd 1.1.4) in the lavd sessions
-    4: list(zip([0.617, 0.429, 1.450, 0.727, 1.733, 9648, 59, 130432, 5544, 199, 28.24],
-                [0.668, 0.516, 20.774, 0.884, 2.015, 9936, 95, 177920, 66, 197, 28.06])),
-    8: list(zip([0.466, 0.392, 2.647, 0.801, 1.274, 11824, 68, 27104, 119, 422, 22.91],
-                [0.504, 0.375, 20.091, 0.732, 1.385, 9808, 103, 32160, 151, 419, 23.33])),
-}
-P2DQ = {  # h2h.py, p2dq/flash sessions, fallback repetitions dropped
-    4: [13.0, 10.9, 86.6, 18.0, 21.9, 4.2, -51.4, 24.4, -86.0, 11.5, 3.2],
-    8: [-7.3, -0.5, 87.0, -7.5, 18.6, 3.8, 9.0, -0.2, -1.7, -5.2, 1.0],
-}
-FLASH = {
-    4: [14.7, 26.3, 93.0, 39.3, 39.0, -3.8, 5.1, 27.5, -234.9, 8.4, 1.7],
-    8: [21.6, 35.4, 88.9, 38.0, 47.9, -10.1, -4.4, -12.0, 25.7, -4.3, 0.0],
+OTHERS = {  # 2 sessions each
+    "scx_bpfland": {4: [18.8, 25.8, 28.3, 19.6, 25.8, 0.9, -12.2, 60.0, 1.3, 9.8, 0.2],
+                    8: [23.9, 29.2, -5.9, 13.0, 33.8, 8.2, 11.0, 10.4, 55.3, 0.2, 0.7]},
+    "scx_lavd": {4: [11.0, 19.8, 92.7, 19.3, 16.3, 3.1, 34.3, 25.8, -12886.7, -0.6, -1.6],
+                 8: [5.6, -6.2, 89.4, -8.2, 6.4, -9.1, 33.9, 8.3, -14.4, 0.2, 1.7]},
+    "scx_p2dq": {4: [19.7, 17.5, 86.4, 19.4, 20.5, 3.1, -54.4, 21.2, -82.2, 14.0, 0.8],
+                 8: [4.7, -0.6, 89.4, -9.0, 15.4, 2.6, 5.3, -1.2, -8.9, -2.5, 0.3]},
+    "scx_flash": {4: [17.7, 29.0, 92.7, 38.6, 37.3, -2.4, -10.5, 25.1, -228.0, 9.3, -0.7],
+                  8: [27.9, 38.9, 90.5, 38.0, 47.2, -4.8, -4.0, -2.7, 36.8, 0.3, -0.8]},
 }
 SAME = 5.0  # percent; matches the held-out verdict
 CAP = 40.0  # bars longer than this are clipped and marked with an arrow
 LABEL_END = 400  # right edge of the longest benchmark label
 FONT = "-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif"
-
-
-def pct(lertick, other, hib):
-    return ((lertick / other - 1) if hib else (1 - lertick / other)) * 100
 
 
 def describe(p, hib, kind):
@@ -80,7 +62,7 @@ def draw(cpus, path):
            'Green is better than EEVDF, red is worse, grey is within 5%.</desc>',
            f'<rect width="{W}" height="{H}" rx="24" fill="#f5f5f7"/>',
            f'<text x="48" y="64" font-family="{FONT}" font-size="30" font-weight="700" fill="#1d1d1f">{cpus} CPUs: better on {wins}, worse on {losses}</text>',
-           f'<text x="48" y="100" font-family="{FONT}" font-size="18" fill="#6e6e73">Lertick vs Linux default scheduler (EEVDF). Right is better. Median over 5–6 sessions.</text>',
+           f'<text x="48" y="100" font-family="{FONT}" font-size="18" fill="#6e6e73">Lertick vs Linux default scheduler (EEVDF). Right is better. Median over 7 sessions.</text>',
            f'<line x1="{zero_x}" y1="{top - 18}" x2="{zero_x}" y2="{top + rh * len(ROWS) - 10}" stroke="#86868b" stroke-width="2"/>',
            f'<text x="{zero_x}" y="{top - 28}" text-anchor="middle" font-family="{FONT}" font-size="14" fill="#6e6e73">same as Linux</text>',
            f'<text x="{zero_x - 110}" y="{top - 28}" text-anchor="end" font-family="{FONT}" font-size="14" fill="#ff3b30">← worse</text>',
@@ -117,14 +99,8 @@ def tally(pcts):
 
 
 def scoreboard(cpus, path):
-    hib = [r[1] for r in ROWS]
-    rows = [
-        ("Linux EEVDF", "default · median of 5–6 sessions", tally(EEVDF[cpus])),
-        ("scx_bpfland", "sched_ext 1.1.2 · one session", tally([pct(l, o, h) for l, o, h in zip(FIRST[cpus], BPFLAND[cpus], hib)])),
-        ("scx_lavd", "sched_ext 1.1.4 · one session", tally([pct(l, o, h) for (l, o), h in zip(LAVD[cpus], hib)])),
-        ("scx_p2dq", "sched_ext 1.1.4 · one session", tally(P2DQ[cpus])),
-        ("scx_flash", "sched_ext 1.1.4 · one session", tally(FLASH[cpus])),
-    ]
+    rows = [("Linux EEVDF", "default · median of 7 sessions", tally(EEVDF[cpus]))]
+    rows += [(name, f"sched_ext {'1.1.2' if name == 'scx_bpfland' else '1.1.4'} · median of 2 sessions", tally(p[cpus])) for name, p in OTHERS.items()]
     W, top, rh, bh = 1120, 150, 84, 40
     x0, bar_w = 330, 520
     H = top + rh * len(rows) + 40

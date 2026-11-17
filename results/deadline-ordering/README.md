@@ -552,3 +552,9 @@ Positive is worse for `dl`. The target measure does not improve and several othe
 The target moved by +2% and -16%, not by more than 10% on both CPU counts, and schbench -m1 -t1 wakeup p99 was 15% worse on 4 CPUs. `ek` is rejected and the `LERTICK_AI_KEEP` switch is removed from the source; `BPF_DEFS` stays in the Makefile for later screening builds.
 
 What the learned slice adds today (`base` online against `base` fixed, same session): on 4 CPUs perf pipe +24% but schbench -m4 -t2 wakeup p99 -18%, hackbench msg processes -12% and 16 groups -10%; on 8 CPUs schbench -m1 -t1 wakeup p99 +18% and hackbench pipe threads +6%, the rest within 3%. The signs disagree between CPU counts and with earlier sessions, so with 3 repetitions this is still noise rather than a measured gain or loss from learning.
+
+## Pooled comparison with every scheduler, 2026-11-16
+
+`pool_all.py` adds the evening session to the pool and pools the other schedulers the same way: per session, Lertick's median against the other scheduler's median from the same session (fallback repetitions dropped, kernel compile from `kbuild-long`), then the median over sessions. EEVDF has 7 sessions (6 for kernel compile); scx_bpfland, scx_lavd, scx_p2dq and scx_flash have 2 each (the first bpfland or lavd or p2dq/flash session, and the evening session). The README charts use these numbers (`make_chart.py`).
+
+Better/same/worse at 5%, 4 CPUs then 8 CPUs: EEVDF 3/6/2 and 3/5/3, scx_bpfland 7/3/1 and 8/2/1, scx_lavd 7/3/1 and 5/2/4, scx_p2dq 7/2/2 and 3/6/2, scx_flash 7/2/2 and 6/5/0. Against EEVDF the losses that remain are schbench -m 4 -t 2 (request p99 2.4 times higher and wakeup p99 47% higher on 4 CPUs, wakeup p99 31% higher on 8 CPUs) and, on 8 CPUs, perf messaging processes (6%) and schbench -m 1 -t 1 request p99 (10%).
