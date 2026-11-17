@@ -733,3 +733,9 @@ Short load tests (one run, 4 CPUs, wakeup p99 / request p99 us): `W1` 3,924 / 74
 - Kernel compile (`kbuild-long`): 26.61 s against 26.43 s for `b1` and 26.67 s for EEVDF on 4 CPUs; 23.06 s against 23.44 s and 23.01 s on 8 CPUs.
 
 `W2` meets the rule and becomes the default (`b2`): a task past its predicted burst gets 1 ms slices. The `LERTICK_OVERRUN_*` switches are replaced by that fixed rule. This is the first change that only the learned mode makes: fixed mode has no prediction and is unchanged. In a one-run check after the rebuild, -m4 -t2 wakeup p99 on 4 CPUs was 3,988 us online against 5,000 us fixed for the scx build (4,104 against 4,968 for the product). The final source was rebuilt and run in the VM (product and port, online and fixed); the port passes `cargo fmt --check`, clang-format with the scx style and clippy.
+
+## README numbers for the current version, 2026-11-17
+
+The README charts now show the current version (`b2`, the CPU requeue and the 1 ms overrun slice). Against EEVDF they come from the `W2` arm of `w2-run.sh` (one session, 5 repetitions, held-out and `kbuild-long`). The sched_ext schedulers were not rerun: `pool_ratio.py` takes each one's ratio to EEVDF in its own sessions (scx_bpfland `cpu*` and `eve1`, scx_lavd `cpu*-lavd` and `eve1`, scx_p2dq and scx_flash `cpu*-more` and `eve1`; the median of the two) and sets Lertick's ratio to EEVDF against it. Comparisons made this way carry the noise of both sessions and are marked as indicative.
+
+Better/same/worse at 5%, 4 CPUs then 8 CPUs: EEVDF 5/3/3 and 5/4/2, scx_bpfland 8/2/1 and 6/4/1, scx_lavd 7/3/1 and 4/5/2, scx_p2dq 7/2/2 and 5/4/2, scx_flash 7/2/2 and 7/4/0. The measured build is the scx port; the product runs the same policy from `policy.h`.
