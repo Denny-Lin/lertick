@@ -912,3 +912,15 @@ In the 8-CPU set, `b8` itself was ejected once in 3 repetitions: `hackbench -g 1
 `vtime_now` is written from every CPU without atomics: `running()` raises it to the task's vtime with a check-then-store, and `stopping()` advances it with `+=`. Two CPUs racing can lose an advance or store an older value over a newer one, moving the clock backward; tasks queued ahead of it then wait behind every task woken afterwards, for as long as the clock takes to catch up. On 8 CPUs under hackbench these writes happen hundreds of thousands of times per second. Change: `clock_advance()` (`__sync_fetch_and_add`) and `clock_raise()` (compare-and-swap, forward only, at most 4 tries) in `policy.h`, used by both builds. No scheduling rule changes.
 
 **Test** (`fix-run.sh`, `stall8.sh`): builds of `b8` and of the fix with the watchdog at 1 s instead of 5 s, so the tail of the wait becomes visible as fallbacks; 12 repetitions each of `hackbench -g 16`, `-g 32` and `-g 16` (processes) on 8 CPUs, order shuffled. Then `gate.sh` with 4 runs for the fix at 5 s. The fix is accepted if it falls back less often than `b8` (or neither does and hackbench is no slower than 3%), passes the gate, and then the held-out suite on 4 and 8 CPUs shows no measure worse than `b8` by more than 7%.
+
+### Round 11 step 1 result: rejected, 2026-11-17
+
+`r11-run.sh` ran 17:28 to 17:48 UTC (raw sets in `r11-sets.tar.gz`; rounds 9 and 10 in `r9-sets.tar.gz` and `r10-sets.tar.gz`). The session was noisy: `b8` itself read 17% behind EEVDF in perf messaging processes and 29% behind in -m1 request p99, against 7% and level in the confirmation. Against `b8` on 4 CPUs:
+
+| Arm | -m4 -t2 wakeup | -m4 -t2 request | perf messaging processes / threads | failing condition |
+|---|---|---|---|---|
+| `s1` | +23 | -19 | +10 / +4 | request p99 25% behind EEVDF, 19% behind `b8` |
+| `s125` | +42 | -4 | -18 / +10 | perf messaging processes 38% behind EEVDF |
+| `s15` | +27 | -10 | -19 / -46 | perf messaging 38% and 53% behind EEVDF |
+
+None qualifies, so step 2 is not run. `s125`'s gate fairness run read `disabled` with no nice-19 output, which points to the scheduler not attaching within the gate's 10 s wait rather than an ejection (no `failed to run` line in the gate log); it is not taken further either way. Four rounds now show the same trade: a shorter fixed slice lowers -m4 -t2 wakeup p99 and raises request p99 or perf messaging time. Slice tuning stops here.
