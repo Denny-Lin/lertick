@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — 2026-11-17 (wider affine pick)
+
+### Resume preempted tasks on their own CPU
+
+- When a CPU takes its next task, it now looks for one that last ran on it
+  among the first 16 queued tasks within 8 ms of the head, instead of 8
+  tasks within 2 ms. Preempted tasks mostly resume where they ran, so
+  migrations under schbench -m 4 -t 2 fall below EEVDF's. On 4 CPUs its
+  request p99 drops by half (from 2.4 times EEVDF's to 10% above it) and
+  wakeup p99 by 18%; perf messaging processes is 8 to 15% faster. Fair
+  order moves by at most 8 ms; the stress battery and nice weighting are
+  unchanged.
+
 ## Unreleased — 2026-11-17 (later)
 
 ### Reverted: CPU requeue and the overrun slice

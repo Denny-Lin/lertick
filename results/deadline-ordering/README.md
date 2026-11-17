@@ -766,3 +766,49 @@ Short load tests (one 10 s run, 4 CPUs, wakeup / request p99 us, migrations): `T
 - `b0` then passed the whole battery with no state change.
 
 Decision: stability comes first. The policy goes back to `b0` (one queue per LLC, no CPU requeue, no overrun slice), the scx submission branch with it, and the README charts back to the numbers measured on that policy. The schbench -m4 -t2 diagnosis (migration of lock holders) stands; a fix needs per-CPU queues with their own lag accounting (as EEVDF keeps per runqueue), or another way to keep a preempted task near its CPU without leaving the global fair order, and must pass this battery and the fairness check before screening.
+
+## Second autonomous round, 2026-11-17
+
+From here on every candidate first passes `gate.sh` (nice mix at full load, nice-weight shares on 4 CPUs, one schbench -m4 -t2 run with migrations) before any screening, and builds use `scx-build.sh`, which now refreshes file times after unpacking: tar kept the archive's times, so cargo could reuse a stale BPF object for a build without overrides. Two such stale builds (`s0` was `S4`, `sm` was `sf`) were found by comparing binaries; the accepted and reverted builds of the first round were all built after a source edit and are unaffected.
+
+- **Sticky preempted tasks** (`LERTICK_STICKY_NS` 1, 2 and 4 ms: for that long after a task is preempted mid-burst, busy CPUs other than its own pass it over in the LLC queue). All passed the nice mix, but migrations fell only from about 5,900 to 4,850 to 5,500, request p99 did not improve, and weighting broke (nice 19 got 29,395 to 65,350 bogo ops against about 2,000 for `b0`): when every candidate is held, the busy CPU keeps prev, which may be a nice 19 task. Rejected.
+- **Wider affine pick.** `take_next` already prefers, among the first `AFFINE_DEPTH` (8) queued tasks within `AFFINE_WINDOW_NS` (2 ms) of the head, one that last ran on this CPU. perf messaging (400 tasks) and schbench -m4 -t2 rarely find one there: `b0` migrates 2 to 3 times as often as EEVDF in perf messaging and about 2.5 times in schbench, while switching contexts 5 to 10 times less. Widening the window keeps fair order within a bound and needs no new state. Gate results (one schbench run each, us):
+
+| Build | migrations | -m4 -t2 wakeup / request p99 | nice -5 / 0 / 19 bogo ops | nice mix |
+|---|---|---|---|---|
+| `b0` | about 5,300 | about 5,000 / 150,000 | 94,000 / 189,000 / 2,000 | pass |
+| `D32` (depth 32, 2 ms) | 6,126 | 5,304 / 121,216 | 86,228 / 172,557 / 1,710 | 2/2 |
+| `D16W4` (depth 16, 4 ms) | 1,194 | 4,068 / 80,768 | 93,382 / 186,939 / 1,750 | 2/2 |
+| `D32W4` (depth 32, 4 ms) | 1,220 | 4,120 / 71,296 | 81,497 / 162,801 / 1,579 | 2/2 |
+| EEVDF | 2,093 | 3,780 / 50,000 to 85,000 | 104,000 / 175,000 / 7,000 | |
+
+The window, not the depth, is what matters.
+
+`D16W8` (depth 16, 8 ms): 739 migrations, 4,028 / 61,888 us, 89,410 / 180,293 / 2,641 bogo ops, nice mix 2/2.
+
+**Screening** (`aff-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `b0`, `D16W4`, `D32W4` and `D16W8`. A candidate goes on if, against `b0`, schbench -m4 -t2 request or wakeup p99 on 4 CPUs or perf messaging processes on either CPU count is better by more than 10%, and no measure is worse by more than 10% on either CPU count.
+
+### Affine screening result: `D16W8` goes on, 2026-11-17
+
+`aff-run.sh` ran 11:21 to 11:45 UTC with no fallbacks; raw sets in `aff-sets.tar.gz`. Against `b0` (EEVDF in brackets):
+
+- `D16W8`, 4 CPUs: -m4 -t2 request p99 +52 (-12, from -135 for `b0`), wakeup p99 +13 (-23); perf messaging processes +4. 8 CPUs: perf messaging processes +19 (+11), hackbench 16 groups +11. Three cells read worse than 10%, each explained by its repetitions: perf pipe -157 on 4 CPUs (2.65, 8.36 and 3.13 us against 1.12, 1.22 and 4.12; the same bimodal modes plus one outlier, 84% faster than EEVDF), the short kernel compile -12 on 4 CPUs (2.4 to 2.8 s runs; `kbuild-long` decides), and -m4 -t2 wakeup p99 -11 on 8 CPUs (225, 82 and 93 us against 187, 83 and 84).
+- `D16W4`: request p99 +44 on 4 CPUs, but -m4 -t2 wakeup p99 -18 on 8 CPUs. `D32W4`: schbench -m1 -t1 latencies 19 to 65% worse. Both stop here.
+
+**Confirmation** (`d16w8-run.sh`): held-out and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions, arms EEVDF, `b0` and `D16W8`, then `stress-run.sh` and `gate.sh`. `D16W8` replaces `b0` if no measure is more than 10% worse on either CPU count, the kernel compile is within 3%, and the battery and the gate pass.
+
+### Confirmation result: `D16W8` accepted, 2026-11-17
+
+`d16w8-run.sh` ran 11:45 to 12:38 UTC with no fallbacks; raw sets in `d16w8-sets.tar.gz`. `D16W8` against `b0` (EEVDF in brackets), 5 repetitions:
+
+- 4 CPUs: schbench -m4 -t2 request p99 +54 (-10, from -140 for `b0`), wakeup p99 +18 (-19), RPS +5; perf messaging processes +15 (-11), schbench -m1 -t1 wakeup p99 +16; the rest within 4.
+- 8 CPUs: schbench -m1 -t1 request and wakeup p99 +19 and +22, hackbench threads +11, messaging processes +8; hackbench 16 groups -16 and -m4 -t2 wakeup p99 -52 (see below).
+- Kernel compile (`kbuild-long`): 30.68 s against 30.25 s for `b0` and 31.00 s for EEVDF on 4 CPUs; 27.10 s against 28.30 s and 25.58 s on 8 CPUs.
+- The 8-CPU -m4 -t2 wakeup p99 values were 65 to 241 us for every arm, overlapping completely, and hackbench 16 groups 1.23 to 1.65 s. Ten further alternating repetitions of both on 8 CPUs (`d16w8-extra8.txt`) gave medians of 1.335 s against 1.305 s (-2%) and 94 us against 99 us (+5%), so neither is a regression.
+- `stress-run.sh`: all 13 stressors with no state change and no watchdog message. `gate.sh`: nice mix 3 of 3, nice -5 / 0 / 19 shares 93,570 / 187,023 / 2,105, 816 migrations in one schbench run.
+
+`D16W8` replaces `b0`: `AFFINE_DEPTH` 16 and `AFFINE_WINDOW_NS` 8 ms. The final source was rebuilt (`b6`, which differs from the `D16W8` binary only in source text kept in the BPF line info) and passed `gate.sh` twice; the product with the same policy passed it once; the port passes `cargo fmt --check`, clang-format with the scx style and clippy.
+
+### README numbers for the wider affine pick, 2026-11-17
+
+The README charts show this version. Against EEVDF: `pool_ratio.py` with `LERTICK_SESSION=d16w8,aff`, the median of the two sessions that ran it with EEVDF (kernel compile from `d16w8` only). Against the sched_ext schedulers: through EEVDF, as before. Better/same/worse, 4 CPUs then 8 CPUs: EEVDF 5/2/4 and 3/6/2, scx_bpfland 10/1/0 and 7/3/1, scx_lavd 6/4/1 and 3/6/2, scx_p2dq 8/1/2 and 6/3/2, scx_flash 9/1/1 and 7/3/1. The 8-CPU kernel compile reads -6%, from one session in which EEVDF's compile was itself faster than in any earlier session.

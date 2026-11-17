@@ -27,10 +27,14 @@ static u64 runnable_weight;
 /*
  * When taking the next task, prefer one that last ran on this CPU among the
  * first AFFINE_DEPTH queued tasks within AFFINE_WINDOW_NS of the head in
- * vtime.
+ * vtime. A preempted task then usually resumes on its own CPU instead of
+ * the next CPU whose slice ends, which matters most to tasks that leave
+ * others waiting on per-CPU state such as a lock; fair order moves by at
+ * most the window. A 2 ms window migrated 2.5 times as often as EEVDF under
+ * schbench -m 4 -t 2; 8 ms migrates less than EEVDF.
  */
-#define AFFINE_WINDOW_NS (2ULL * NSEC_PER_MSEC)
-#define AFFINE_DEPTH 8
+#define AFFINE_WINDOW_NS (8ULL * NSEC_PER_MSEC)
+#define AFFINE_DEPTH 16
 /* A sync wakeup may queue on the waker's CPU if within this much vtime of the queue head. */
 #define SYNC_WINDOW_NS (2ULL * NSEC_PER_MSEC)
 /* Queued tasks examined, and the longest unbroken run, when prev may keep its CPU. */
