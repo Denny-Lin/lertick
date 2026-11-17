@@ -787,3 +787,12 @@ The window, not the depth, is what matters.
 `D16W8` (depth 16, 8 ms): 739 migrations, 4,028 / 61,888 us, 89,410 / 180,293 / 2,641 bogo ops, nice mix 2/2.
 
 **Screening** (`aff-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `b0`, `D16W4`, `D32W4` and `D16W8`. A candidate goes on if, against `b0`, schbench -m4 -t2 request or wakeup p99 on 4 CPUs or perf messaging processes on either CPU count is better by more than 10%, and no measure is worse by more than 10% on either CPU count.
+
+### Affine screening result: `D16W8` goes on, 2026-11-17
+
+`aff-run.sh` ran 11:21 to 11:45 UTC with no fallbacks; raw sets in `aff-sets.tar.gz`. Against `b0` (EEVDF in brackets):
+
+- `D16W8`, 4 CPUs: -m4 -t2 request p99 +52 (-12, from -135 for `b0`), wakeup p99 +13 (-23); perf messaging processes +4. 8 CPUs: perf messaging processes +19 (+11), hackbench 16 groups +11. Three cells read worse than 10%, each explained by its repetitions: perf pipe -157 on 4 CPUs (2.65, 8.36 and 3.13 us against 1.12, 1.22 and 4.12; the same bimodal modes plus one outlier, 84% faster than EEVDF), the short kernel compile -12 on 4 CPUs (2.4 to 2.8 s runs; `kbuild-long` decides), and -m4 -t2 wakeup p99 -11 on 8 CPUs (225, 82 and 93 us against 187, 83 and 84).
+- `D16W4`: request p99 +44 on 4 CPUs, but -m4 -t2 wakeup p99 -18 on 8 CPUs. `D32W4`: schbench -m1 -t1 latencies 19 to 65% worse. Both stop here.
+
+**Confirmation** (`d16w8-run.sh`): held-out and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions, arms EEVDF, `b0` and `D16W8`, then `stress-run.sh` and `gate.sh`. `D16W8` replaces `b0` if no measure is more than 10% worse on either CPU count, the kernel compile is within 3%, and the battery and the gate pass.
