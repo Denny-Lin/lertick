@@ -739,3 +739,30 @@ Short load tests (one run, 4 CPUs, wakeup p99 / request p99 us): `W1` 3,924 / 74
 The README charts now show the current version (`b2`, the CPU requeue and the 1 ms overrun slice). Against EEVDF they come from the `W2` arm of `w2-run.sh` (one session, 5 repetitions, held-out and `kbuild-long`). The sched_ext schedulers were not rerun: `pool_ratio.py` takes each one's ratio to EEVDF in its own sessions (scx_bpfland `cpu*` and `eve1`, scx_lavd `cpu*-lavd` and `eve1`, scx_p2dq and scx_flash `cpu*-more` and `eve1`; the median of the two) and sets Lertick's ratio to EEVDF against it. Comparisons made this way carry the noise of both sessions and are marked as indicative.
 
 Better/same/worse at 5%, 4 CPUs then 8 CPUs: EEVDF 5/3/3 and 5/4/2, scx_bpfland 8/2/1 and 6/4/1, scx_lavd 7/3/1 and 4/5/2, scx_p2dq 7/2/2 and 5/4/2, scx_flash 7/2/2 and 7/4/0. The measured build is the scx port; the product runs the same policy from `policy.h`.
+
+## Round 5 on top of `b2`: requeue threshold and woken tasks, hypothesis fixed 2026-11-17 before the run
+
+`b2` still migrates twice as often as EEVDF under schbench -m4 -t2 on 4 CPUs (4,458 against 2,093 in one 15 s run), and its request and wakeup p99 remain 28 and 33% above EEVDF's. Candidates:
+
+- `T05` and `T2`: the CPU requeue threshold (`CPU_REQUEUE_MIN_NS`, 1 ms in `b2`) at 0.5 ms and 2 ms.
+- `H`: `LERTICK_WAKE_HOME`, a woken task whose last burst ran at least 1 ms waits on its previous CPU's queue when no idle CPU took it.
+
+Short load tests (one 10 s run, 4 CPUs, wakeup / request p99 us, migrations): `T05` 3,972 / 58,560, 3,041; `T2` 4,036 / 63,168, 2,845; `H` 11,216 / 62,144, 2,135. `H` nearly triples wakeup p99 (woken workers wait behind their previous CPU's queue) and is rejected without screening.
+
+**Screening** (`r5-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `b2`, `T05` and `T2`. A candidate goes on if, against `b2` on 4 CPUs, -m4 -t2 request or wakeup p99 is lower by more than 10% and neither is higher by more than 10%, and no other measure is worse by more than 10% on either CPU count.
+
+### Round 5 result: both rejected, 2026-11-17
+
+`r5-run.sh` ran 09:27 to 09:47 UTC with no fallbacks; raw sets in `r5-sets.tar.gz`. Against `b2` on 4 CPUs, -m4 -t2 wakeup / request p99: `T05` +9 / +5, `T2` +1 / -9. Neither improves the target by more than 10%. `T05` also costs perf messaging processes 19% (35% on 8 CPUs), schbench -m1 -t1 latencies 23 to 25% and -m4 -t2 wakeup p99 87% on 8 CPUs; `T2` costs -m4 -t2 wakeup p99 29% and messaging threads 12% on 4 CPUs. The 1 ms threshold stays, and the `LERTICK_WAKE_HOME` switch and the threshold override were not merged.
+
+## Stress battery: the CPU requeue starves pinned kworkers; `C1` and `W2` reverted, 2026-11-17
+
+`stress-run.sh` attaches one scheduler for a battery of 13 stressors (stress-ng cpu, a nice mix, fork, switch, pipe, futex, yield, affinity, sched, a mixed load, hackbench -g 64, perf messaging -g 40 and a 16-job kernel compile) and checks every second that sched_ext stays enabled. Raw logs in `stress-sets.tar.gz`.
+
+- `b2` (scx build) and the product with the same policy were both ejected by the watchdog in the second stressor, the nice mix (`stress-ng --cpu 8` at nice 0, `--cpu 8` at nice 19 and `--cpu 2` at nice -5 on 8 CPUs): `kworker/6:0 failed to run for 5.587s` and `kworker/5:2 failed to run for 5.634s`.
+- Bisection on the nice mix (30 s runs): `b0` 5 of 5 clean; `b1` (`C1` only) 2 of 2 ejected (5.8 and 6.2 s); `b2` 2 of 2 ejected; a build with `W2` but without the CPU requeue 1 of 2 ejected (7.1 s).
+- Weighted fairness (4 CPUs, int64 stress-ng: nice -5 x2, nice 0 x4, nice 19 x4, 20 s, bogo ops): EEVDF 64,654 / 192,375 / 7,370; `b0` 94,188 / 188,567 / 1,845; `b2` 60,244 / 122,699 / 80,904. Under `b2` nice 19 tasks take a large share.
+- Cause: per-CPU queues do not balance with each other, but placement and order use one global clock. Tasks on a crowded CPU fall far behind that clock, so a woken task that can run only there (a per-CPU kworker) is placed behind them for seconds. Dropping the 2 ms own-queue preference, or keeping tasks ahead of the clock off the CPU queues, did not help; clamping CPU-queue tasks to at most `LAG_NS` behind the clock (`b5-cpu-queue-lag-fix.patch`) passed the nice mix 3 of 3 but broke weighting (nice 19 got 100,465 bogo ops).
+- `b0` then passed the whole battery with no state change.
+
+Decision: stability comes first. The policy goes back to `b0` (one queue per LLC, no CPU requeue, no overrun slice), the scx submission branch with it, and the README charts back to the numbers measured on that policy. The schbench -m4 -t2 diagnosis (migration of lock holders) stands; a fix needs per-CPU queues with their own lag accounting (as EEVDF keeps per runqueue), or another way to keep a preempted task near its CPU without leaving the global fair order, and must pass this battery and the fairness check before screening.

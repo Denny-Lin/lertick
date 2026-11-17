@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — 2026-11-17 (later)
+
+### Reverted: CPU requeue and the overrun slice
+
+- The two changes below are reverted. Under a mix of nice levels at full
+  load they let a per-CPU kernel worker wait more than 5 s, so the watchdog
+  disabled the scheduler, and nice 19 tasks took a large share of the CPU.
+  Scheduling is back to one queue per LLC. Details in
+  results/deadline-ordering/README.md.
+
 ## Unreleased — 2026-11-17
 
 ### Shorter slices past the predicted burst

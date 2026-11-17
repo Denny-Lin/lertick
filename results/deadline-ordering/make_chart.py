@@ -15,23 +15,21 @@ ROWS = [  # label, higher_is_better, kind
     ("schbench 4 msg threads, throughput", True, "rps"),
     ("Kernel compile (kernel/)", False, "time"),
 ]
-# Current version (W2 confirmation session, 5 runs; kernel compile from
-# kbuild-long), from pool_ratio.py, in ROWS order. Against the sched_ext
-# schedulers through EEVDF: each one's ratio to EEVDF in its own sessions
-# (median of 2) against Lertick's ratio to EEVDF.
-EEVDF = {  # one session
-    4: [-9.3, -4.1, 89.9, 31.7, 9.0, 0.4, 15.8, -28.4, -33.1, 16.1, 0.2],
-    8: [-6.1, -10.7, 90.1, 13.1, 6.0, 2.1, 14.5, -0.2, 37.8, -2.9, -0.2],
+# Median over every session that ran both schedulers, from pool_all.py
+# (held-out tests; kernel compile from kbuild-long), in ROWS order.
+EEVDF = {  # 7 sessions (6 for kernel compile)
+    4: [-0.2, 1.6, 92.8, 28.6, 1.2, -0.3, 6.5, -142.7, -47.1, 2.2, 1.1],
+    8: [-5.6, -4.6, 88.9, 11.6, 4.1, -9.5, 5.3, -3.7, -31.1, 0.2, 0.3],
 }
-OTHERS = {  # through EEVDF, 2 sessions each
-    "scx_bpfland": {4: [9.8, 21.7, 12.0, 22.7, 31.8, -13.6, -1.7, 78.9, 7.0, 28.4, -1.9],
-                    8: [21.7, 27.0, -2.2, 2.6, 31.0, -1.4, 5.4, 10.2, 72.4, -5.4, 0.6]},
-    "scx_lavd": {4: [-0.5, 9.9, 90.0, 29.6, 27.1, -2.4, 29.8, 60.6, -10308.3, 11.5, -1.7],
-                 8: [-4.7, -15.7, 90.1, -7.3, 10.8, 2.9, 39.0, 4.9, 43.1, -2.4, -1.2]},
-    "scx_p2dq": {4: [11.6, 16.6, 81.8, 24.6, 26.5, 3.0, -50.9, 55.9, -68.7, 29.1, 0.6],
-                 8: [3.8, -3.9, 89.7, -10.2, 15.2, 10.7, 14.2, 1.9, 32.7, -5.2, 1.1]},
-    "scx_flash": {4: [9.0, 28.1, 90.3, 42.5, 42.0, -2.6, -6.6, 58.1, -203.8, 23.8, -0.9],
-                  8: [26.7, 37.0, 90.7, 37.4, 47.0, 3.7, 5.5, 1.2, 59.5, -2.6, -0.1]},
+OTHERS = {  # 2 sessions each
+    "scx_bpfland": {4: [18.8, 25.8, 28.3, 19.6, 25.8, 0.9, -12.2, 60.0, 1.3, 9.8, 0.2],
+                    8: [23.9, 29.2, -5.9, 13.0, 33.8, 8.2, 11.0, 10.4, 55.3, 0.2, 0.7]},
+    "scx_lavd": {4: [11.0, 19.8, 92.7, 19.3, 16.3, 3.1, 34.3, 25.8, -12886.7, -0.6, -1.6],
+                 8: [5.6, -6.2, 89.4, -8.2, 6.4, -9.1, 33.9, 8.3, -14.4, 0.2, 1.7]},
+    "scx_p2dq": {4: [19.7, 17.5, 86.4, 19.4, 20.5, 3.1, -54.4, 21.2, -82.2, 14.0, 0.8],
+                 8: [4.7, -0.6, 89.4, -9.0, 15.4, 2.6, 5.3, -1.2, -8.9, -2.5, 0.3]},
+    "scx_flash": {4: [17.7, 29.0, 92.7, 38.6, 37.3, -2.4, -10.5, 25.1, -228.0, 9.3, -0.7],
+                  8: [27.9, 38.9, 90.5, 38.0, 47.2, -4.8, -4.0, -2.7, 36.8, 0.3, -0.8]},
 }
 SAME = 5.0  # percent; matches the held-out verdict
 CAP = 40.0  # bars longer than this are clipped and marked with an arrow
@@ -59,12 +57,12 @@ def draw(cpus, path):
     losses = sum(p < -SAME for p in pcts)
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="t d">',
            f'<title id="t">Lertick compared with Linux EEVDF on {cpus} CPUs</title>',
-           f'<desc id="d">Percentage difference of Lertick (learned mode) against Linux EEVDF on {cpus} CPUs, median of 5 runs: '
+           f'<desc id="d">Percentage difference of Lertick (learned mode) against Linux EEVDF on {cpus} CPUs, median over several sessions: '
            f'better on {wins}, the same on {len(ROWS) - wins - losses}, worse on {losses} of {len(ROWS)} benchmarks not used for tuning. '
            'Green is better than EEVDF, red is worse, grey is within 5%.</desc>',
            f'<rect width="{W}" height="{H}" rx="24" fill="#f5f5f7"/>',
            f'<text x="48" y="64" font-family="{FONT}" font-size="30" font-weight="700" fill="#1d1d1f">{cpus} CPUs: better on {wins}, worse on {losses}</text>',
-           f'<text x="48" y="100" font-family="{FONT}" font-size="18" fill="#6e6e73">Lertick vs Linux default scheduler (EEVDF). Right is better. One session, median of 5 runs.</text>',
+           f'<text x="48" y="100" font-family="{FONT}" font-size="18" fill="#6e6e73">Lertick vs Linux default scheduler (EEVDF). Right is better. Median over 7 sessions.</text>',
            f'<line x1="{zero_x}" y1="{top - 18}" x2="{zero_x}" y2="{top + rh * len(ROWS) - 10}" stroke="#86868b" stroke-width="2"/>',
            f'<text x="{zero_x}" y="{top - 28}" text-anchor="middle" font-family="{FONT}" font-size="14" fill="#6e6e73">same as Linux</text>',
            f'<text x="{zero_x - 110}" y="{top - 28}" text-anchor="end" font-family="{FONT}" font-size="14" fill="#ff3b30">← worse</text>',
@@ -101,8 +99,8 @@ def tally(pcts):
 
 
 def scoreboard(cpus, path):
-    rows = [("Linux EEVDF", "default · same session, 5 runs", tally(EEVDF[cpus]))]
-    rows += [(name, f"sched_ext {'1.1.2' if name == 'scx_bpfland' else '1.1.4'} · through EEVDF, 2 sessions", tally(p[cpus])) for name, p in OTHERS.items()]
+    rows = [("Linux EEVDF", "default · median of 7 sessions", tally(EEVDF[cpus]))]
+    rows += [(name, f"sched_ext {'1.1.2' if name == 'scx_bpfland' else '1.1.4'} · median of 2 sessions", tally(p[cpus])) for name, p in OTHERS.items()]
     W, top, rh, bh = 1120, 150, 84, 40
     x0, bar_w = 330, 520
     H = top + rh * len(rows) + 40
