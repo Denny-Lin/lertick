@@ -515,8 +515,8 @@ static __always_inline u64 choose_slice(struct task_ctx *tctx, u64 consumed_ns)
 		slice = tctx->prediction_ns - consumed_ns;
 		adaptive = true;
 	}
-	if (LERTICK_OVERRUN_YIELD && overran(tctx, consumed_ns))
-		slice = min_slice_ns;
+	if (LERTICK_OVERRUN_SLICE_NS && overran(tctx, consumed_ns))
+		slice = LERTICK_OVERRUN_SLICE_NS;
 	if (slice < min_slice_ns)
 		slice = min_slice_ns;
 	if (slice > max_slice_ns)
@@ -604,8 +604,6 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 		vtime = vtime_now - LAG_NS;
 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
 	scx_bpf_dsq_insert_vtime(p, enqueue_dsq(p, tctx, enq_flags), slice, vtime, enq_flags);
-	if (enq_flags & SCX_ENQ_WAKEUP)
-		wake_preempt(p);
 	if (tctx)
 		publish(tctx);
 }
@@ -734,7 +732,6 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 	tctx->wake_ns = 0;
 	tctx->runtime_start_ns = p->se.sum_exec_runtime;
 	tctx->running = true;
-	policy_running(p, tctx);
 	if (tctx->tracked) {
 		tctx->snapshot.runs++;
 		tctx->snapshot.observed_running_slice_ns = observed_slice;
@@ -761,7 +758,6 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	u32 weight = p->scx.weight;
 
 	cpu_on_stopping();
-	policy_stopping(p);
 	if (!tctx || !tctx->running)
 		return;
 	/* comm can change while a task continues without a running callback. */

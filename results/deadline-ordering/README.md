@@ -693,3 +693,14 @@ perf messaging runs hundreds of tasks whose bursts last microseconds, while schb
 | kernel compile | -6 | -2 | -11 | -1 | -2 | -2 |
 
 All three keep the request gain on 4 CPUs. The 8-CPU messaging results move by 10 to 30 points between arms that differ only in a threshold, and `base` itself moved from -4 to -17 against EEVDF on 4-CPU messaging processes between sessions, so 3 repetitions cannot settle them. `C1` goes to a 5-repetition confirmation against `base` (`c1-run.sh`): it is accepted if -m4 -t2 request p99 on 4 CPUs is lower by more than 10% and no measure is worse than `base` by more than 10% on either CPU count.
+
+### Confirmation result: `C1` accepted, 2026-11-17
+
+`c1-run.sh` (held-out, 5 repetitions, 07:27 to 07:51 UTC) and `c1-kb-run.sh` (`kbuild-long.sh`, 5 repetitions, to 08:06 UTC) ran with no fallbacks; raw sets in `c1-sets.tar.gz`. `C1` against `base` (EEVDF in brackets):
+
+- 4 CPUs: schbench -m4 -t2 request p99 +52 (-25, from -162 for `base`), RPS +13 (+20), wakeup p99 +2 (-52); perf messaging processes -9 (-7), threads -7 (-5); hackbench, schbench -m1 -t1 and kernel compile within 2.
+- 8 CPUs: perf messaging processes -8 (-8), -m4 -t2 wakeup p99 -10 (+18), the rest within 8.
+- Kernel compile (`kbuild-long`): 26.32 s against 26.72 s for `base` and 26.35 s for EEVDF on 4 CPUs; 19.87 s against 19.55 s and 19.57 s on 8 CPUs.
+- perf pipe reads -71 on 4 CPUs, but per repetition both arms take the same values (1.1, 2.0, 2.5 and 4.2 us per round trip, against 20 us for EEVDF); only the mix of modes differs, so this is not a change.
+
+No measure is more than 10% worse than `base`, so the CPU requeue with the 1 ms threshold becomes the default code and the next baseline (`b1`). The rejected switches (`LERTICK_WAKE_PREEMPT`, `LERTICK_CPU_KICK`) are removed; `LERTICK_OVERRUN_SLICE_NS` and `LERTICK_OVERRUN_NOKEEP` stay off for the wakeup-latency screening that follows. The final source was rebuilt: the scx build and the product attach in online and fixed mode and run hackbench, schbench and perf messaging; the port passes `cargo fmt --check`, clang-format with the scx style and clippy.

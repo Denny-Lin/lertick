@@ -2,6 +2,16 @@
 
 ## Unreleased — 2026-11-17
 
+### Keep long preempted bursts on their CPU
+
+- A task preempted after running at least 1 ms of its burst now waits on a
+  queue of its own CPU, so it resumes where its cache and any lock it holds
+  are. On 4 CPUs this cuts schbench -m 4 -t 2 request p99 by about half
+  (from 2.6 times EEVDF's to 25% above it) and raises its throughput 13%;
+  other measures stay within 10% and the kernel compile is unchanged.
+
+## Unreleased — 2026-11-17
+
 ### One queue per last-level cache and a shared policy source
 
 - Queue tasks per last-level cache domain, read from the cache topology in
