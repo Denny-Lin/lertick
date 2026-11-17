@@ -11,7 +11,9 @@ Tasks wait in one queue per last-level cache, ordered by weighted virtual time,
 and an idle CPU steals from another cache's queue. All queues share one virtual
 clock, which advances with the CPU time actually delivered over the total
 runnable weight, so tasks that keep waking cannot hold back tasks that have
-already run. A woken task is placed at most 2 ms behind the clock.
+already run. A woken task is placed at most 2 ms behind the clock, and a queued
+task at most 20 ms (scaled by its weight) ahead of it, so no task waits long for
+the clock to catch up.
 
 Each task trains a small linear model, in fixed-point arithmetic inside BPF, on
 its own completed CPU bursts (from wakeup to sleep). The features are the last
@@ -20,8 +22,10 @@ next wakeup the prediction sets the task's time slice, between 0.5 ms and 3 ms.
 Fairness always charges the CPU time actually used, never the prediction. There
 is no offline training, model file or user-space inference.
 
-A CPU prefers a queued task that last ran on it when that task is within 2 ms of
-the queue head, and a synchronous wakeup can queue on the waker's CPU. `nice`
+A CPU prefers a queued task that last ran on it when that task is among the
+first 16 in the queue and within 8 ms of its head, so a preempted task usually
+resumes where its cache, and any lock it holds, is. A synchronous wakeup can
+queue on the waker's CPU. `nice`
 values and cgroup `cpu.weight` set each task's share.
 
 ## Typical Use Case
