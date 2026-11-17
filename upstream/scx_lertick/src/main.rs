@@ -100,6 +100,10 @@ struct Opts {
     pub libbpf: LibbpfOpts,
 }
 
+/// Longest accepted time slice in microseconds: one second, far below the
+/// watchdog timeout and far from overflowing the nanosecond conversion.
+const MAX_SLICE_US: u64 = 1_000_000;
+
 struct Scheduler<'a> {
     skel: BpfSkel<'a>,
     struct_ops: Option<libbpf_rs::Link>,
@@ -110,8 +114,17 @@ impl<'a> Scheduler<'a> {
     fn init(opts: &'a Opts, open_object: &'a mut MaybeUninit<OpenObject>) -> Result<Self> {
         try_set_rlimit_infinity();
 
-        if opts.slice_min_us == 0 || opts.slice_min_us > opts.slice_max_us {
-            bail!("--slice-min-us must be positive and not above --slice-max-us");
+        for (name, us) in [
+            ("--slice-us", opts.slice_us),
+            ("--slice-min-us", opts.slice_min_us),
+            ("--slice-max-us", opts.slice_max_us),
+        ] {
+            if !(1..=MAX_SLICE_US).contains(&us) {
+                bail!("{name} must be between 1 and {MAX_SLICE_US}");
+            }
+        }
+        if opts.slice_min_us > opts.slice_max_us {
+            bail!("--slice-min-us must not be above --slice-max-us");
         }
 
         info!(

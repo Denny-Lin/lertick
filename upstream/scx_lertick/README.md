@@ -39,3 +39,7 @@ No. It is experimental. It has been tested in a QEMU/HVF ARM64 virtual machine
 with 4 and 8 CPUs on Linux 7.0, but not on physical hardware or large machines.
 That VM reports a single last-level cache, so the per-cache queues have only
 been exercised with CPUs split into groups artificially.
+
+cgroup weights assume the cgroup v2 rule that only the root cgroup holds both
+tasks and child cgroups. Threaded cgroups, which may also do so, are not handled
+specially and can skew weights between their own tasks and their children.
