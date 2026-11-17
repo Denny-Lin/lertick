@@ -601,3 +601,27 @@ The policy (queues per LLC, continuation, affine pick, sync wakeup, cgroup weigh
 - 8 CPUs: perf messaging processes +1, threads +7, perf pipe +40, schbench -m4 -t2 wakeup p99 +16, request p99 -5, RPS -0, -m1 -t1 wakeup and request p99 +0, hackbench threads +1, 16 groups -4, kernel compile -1.
 
 No measure is more than 10% worse on either CPU count, so the shared-policy build with one queue per LLC replaces `base`. After the screening switch was removed, the final source was rebuilt in the VM: the product attaches in online and fixed mode and runs hackbench, and the port builds in the scx 1.1.4 workspace, passes `cargo fmt --check` and does the same with and without `--fixed`.
+
+## Baseline of the scx submission build, 2026-11-17
+
+From here on the scx port (`Denny-Lin/scx` branch `scx_lertick`, built on scx main 48e2a9c) is the build under test. `scx-base-run.sh` ran it against EEVDF with the product build (`prod`, online mode, `--track-all`) in the same sessions: held-out and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions, 04:42 to 05:23 UTC. No fallbacks; guest steal time 0. Raw sets in `scx-base-sets.tar.gz`.
+
+`scx` against EEVDF (positive is better):
+
+| Test | 4 CPUs | 8 CPUs |
+|---|---|---|
+| perf messaging processes | -5 | -3 |
+| perf messaging threads | +1 | -10 |
+| perf pipe | +91 | +85 |
+| hackbench pipe threads | +25 | +12 |
+| hackbench 16 groups | +5 | -3 |
+| schbench -m1 -t1 request p99 | +0 | -2 |
+| schbench -m1 -t1 wakeup p99 | +20 | +26 |
+| schbench -m4 -t2 request p99 | -143 | -10 |
+| schbench -m4 -t2 wakeup p99 | -49 | +7 |
+| schbench -m4 -t2 RPS | +9 | -1 |
+| kernel compile | -1 | +0 |
+
+Better/same/worse at 5%: 5/3/3 on 4 CPUs and 4/5/2 on 8 CPUs. `prod` in the same sessions: 4/5/2 and 4/6/1. `scx` against `prod`: within 5% on most measures; perf pipe is slower in `scx` (-22 and -34) though still far ahead of EEVDF, perf messaging threads +15 on 8 CPUs, schbench -m4 -t2 request p99 -14 on 8 CPUs.
+
+Against the submission bar (no measure more than 5% worse than EEVDF, at least 4 wins), the scx build fails on schbench -m4 -t2 request and wakeup p99 on 4 CPUs and, on 8 CPUs, perf messaging threads and -m4 -t2 request p99 by 10%.
