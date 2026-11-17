@@ -873,3 +873,68 @@ Kernel compile (`kbuild-long.sh`, median of 5, seconds): 4 CPUs `b7` 26.85, `M3`
 ### README numbers for the 3 ms slice cap, 2026-11-17
 
 `pool_ratio.py` with `LERTICK_SESSION=r8,r8c LERTICK_ARM=M3` (kernel compile from `r8c` only). Better/same/worse, 4 CPUs then 8 CPUs: EEVDF 6/2/3 and 4/7/0, scx_bpfland 8/1/2 and 7/4/0, scx_lavd 7/2/2 and 4/6/1, scx_p2dq 7/2/2 and 7/3/1, scx_flash 7/2/2 and 7/4/0. On 4 CPUs scx_bpfland moves from 10/1/0 to 8/1/2: Lertick's schbench -m1 request p99 is level with EEVDF's in these two sessions (17% better in the previous two), which puts it 16% behind scx_bpfland's ratio from its own sessions, and the kernel compile reads 5.5% behind.
+
+## Round 9: slice bounds around 3 ms, hypothesis fixed 2026-11-17 before the run
+
+The 3 ms cap helped and the 1 ms fixed slice helped 4-CPU wakeup latency further but cost perf messaging processes on 8 CPUs. The remaining losses against EEVDF are all on 4 CPUs (perf messaging processes and schbench -m4 -t2 latency, 6 to 7% each). Candidates on top of `b8` (the 3 ms cap): `M2` (`--slice-max-us 2000`), `M25` (2,500), `s15` (`--slice-us 1500`, fixed and fallback slice) and `M2s15` (both). Each runs `gate.sh` 3 times first; `r9-run.sh` then screens them with 3 repetitions on 4 and 8 CPUs. A candidate goes on if, against `b8`, any of the three 4-CPU losses improves by more than 5% and no measure is worse by more than 7% on either CPU count.
+
+### Round 9 result: all four rejected, 2026-11-17
+
+All four passed `gate.sh` 3 of 3. Screening (`r9-run.sh`, 15:45 to 16:45 UTC, no fallbacks), against `b8`, the three 4-CPU losses (perf messaging processes, -m4 -t2 request, -m4 -t2 wakeup) and the worst other measure:
+
+| Arm | 4 CPUs: mproc / m4 req / m4 wake | worst measure |
+|---|---|---|
+| `M2` | -0 / -4 / -1 | -6 (4 CPUs, hackbench) |
+| `M25` | +1 / -4 / +10 | -8 (8 CPUs, perf messaging processes) |
+| `s15` | +6 / -9 / +24 | -11 (8 CPUs, -m1 wakeup), -92 on 4-CPU pipe |
+| `M2s15` | -3 / +1 / +30 | -19 (8 CPUs, perf messaging processes), -17 on 8-CPU -m4 wakeup |
+
+`M2` improves nothing it targets; the others each cost more than 7% somewhere. A shorter fixed slice keeps helping 4-CPU wakeup latency but every time at the cost of 8-CPU perf messaging or wakeup. The 3 ms cap stays.
+
+## Round 10: policy constants, hypothesis fixed 2026-11-17 before the run
+
+Builds on top of `b8`: `SW1` and `SW0` (`SYNC_WINDOW_NS` 1 ms and 0: sync wakeups queue on the waker's CPU only when closer to the head; fewer wakees stack behind the waker, which may help perf messaging processes on 4 CPUs), `H8` (`HEAD_SCAN` 8: `keep_prev` gives up sooner when the CPU's next eligible task is deep in the queue) and `D32` (`AFFINE_DEPTH` 32). Same gate and screening rule as round 9 (`r10-run.sh`).
+
+## Round 11: fixed slice scaled with the CPU count, hypothesis fixed 2026-11-17 before the run
+
+EEVDF scales its base slice by 1 + log2(CPUs) (`sysctl_sched_base_slice`, `SCHED_TUNABLESCALING_LOG`), so a smaller machine gets shorter slices. Lertick uses 2 ms for the fixed and fallback slice everywhere. Rounds 8 and 9 point the same way: 1 to 1.5 ms improved 4-CPU -m4 -t2 wakeup p99 by 24 to 41% but cost 8-CPU perf messaging processes or -m1 wakeup. A scaled fixed slice would keep 2 ms on 8 CPUs and shorten it on 4.
+
+**Step 1** (`r11-run.sh`): on 4 CPUs only, 5 repetitions, arms EEVDF, `b8`, `s1`, `s125`, `s15` (`--slice-us` 1,000, 1,250, 1,500). The longest of these that improves -m4 -t2 wakeup or request p99 by more than 10% against `b8` sets the 4-CPU value, provided every 4-CPU measure stays no more than 5% worse than EEVDF or, where `b8` was already worse than EEVDF, no worse than `b8` by more than 3%. Unlike earlier rounds, a measure where Lertick leads EEVDF by a wide margin (perf pipe, hackbench) may give some of that lead back, as long as it stays ahead of EEVDF: the latency losses matter more than the size of a lead. (Rule changed before step 1 started, at the owner's request.) **Step 2:** the scaling rule through 4 CPUs at that value and 8 CPUs at 2 ms is built into both loaders, then confirmed on 4 and 8 CPUs (5 repetitions, kernel compile, battery, gate) before it can become the default.
+
+### Round 10 result: all four rejected, and a stall in `b8`, 2026-11-17
+
+All four passed `gate.sh` 3 of 3. Screening (`r10-run.sh`, 16:56 to 17:25 UTC) against `b8`: `SW1` and `SW0` cost 4-CPU hackbench threads 22 and 23%; `H8` costs the 4-CPU kernel compile 10%; `D32` changes nothing by more than 5% on 4 CPUs and costs 8-CPU perf messaging threads 16% and the 8-CPU kernel compile 28%. All rejected.
+
+In the 8-CPU set, `b8` itself was ejected once in 3 repetitions: `hackbench -g 16 -l 1000` on 8 CPUs, `hackbench[1163334] failed to run for 6.434s`. The dump shows that task queued at a vtime 60 ms ahead of the tasks just woken (which sit `LAG_NS` behind the clock) and 92 ms ahead of the running task, while every other queued task waited 1.1 s or less. With weight 100 a single run can put a task at most about 20 ms (`KEEP_MAX_NS`) ahead of the clock it saw when it started.
+
+## Atomic clock, hypothesis fixed 2026-11-17 before the run
+
+`vtime_now` is written from every CPU without atomics: `running()` raises it to the task's vtime with a check-then-store, and `stopping()` advances it with `+=`. Two CPUs racing can lose an advance or store an older value over a newer one, moving the clock backward; tasks queued ahead of it then wait behind every task woken afterwards, for as long as the clock takes to catch up. On 8 CPUs under hackbench these writes happen hundreds of thousands of times per second. Change: `clock_advance()` (`__sync_fetch_and_add`) and `clock_raise()` (compare-and-swap, forward only, at most 4 tries) in `policy.h`, used by both builds. No scheduling rule changes.
+
+**Test** (`fix-run.sh`, `stall8.sh`): builds of `b8` and of the fix with the watchdog at 1 s instead of 5 s, so the tail of the wait becomes visible as fallbacks; 12 repetitions each of `hackbench -g 16`, `-g 32` and `-g 16` (processes) on 8 CPUs, order shuffled. Then `gate.sh` with 4 runs for the fix at 5 s. The fix is accepted if it falls back less often than `b8` (or neither does and hackbench is no slower than 3%), passes the gate, and then the held-out suite on 4 and 8 CPUs shows no measure worse than `b8` by more than 7%.
+
+### Round 11 step 1 result: rejected, 2026-11-17
+
+`r11-run.sh` ran 17:28 to 17:48 UTC (raw sets in `r11-sets.tar.gz`; rounds 9 and 10 in `r9-sets.tar.gz` and `r10-sets.tar.gz`). The session was noisy: `b8` itself read 17% behind EEVDF in perf messaging processes and 29% behind in -m1 request p99, against 7% and level in the confirmation. Against `b8` on 4 CPUs:
+
+| Arm | -m4 -t2 wakeup | -m4 -t2 request | perf messaging processes / threads | failing condition |
+|---|---|---|---|---|
+| `s1` | +23 | -19 | +10 / +4 | request p99 25% behind EEVDF, 19% behind `b8` |
+| `s125` | +42 | -4 | -18 / +10 | perf messaging processes 38% behind EEVDF |
+| `s15` | +27 | -10 | -19 / -46 | perf messaging 38% and 53% behind EEVDF |
+
+None qualifies, so step 2 is not run. `s125`'s gate fairness run read `disabled` with no nice-19 output, which points to the scheduler not attaching within the gate's 10 s wait rather than an ejection (no `failed to run` line in the gate log); it is not taken further either way. Four rounds now show the same trade: a shorter fixed slice lowers -m4 -t2 wakeup p99 and raises request p99 or perf messaging time. Slice tuning stops here.
+
+### Atomic clock: stall tests and gate, 2026-11-17
+
+- `stall8.sh atomic` (`hackbench -g 16`, `-g 32`, `-g 16` on 8 CPUs, 1 s watchdog builds, 12 repetitions): `b8` fell back 3 times, the fix once. In the one `b8` dump that lists the stalled task, it sat 12.5 ms ahead of the queue median; in the fix's, 0.8 ms, an ordinary fair round of 1,280 tasks running past the 1 s test watchdog.
+- `stall8.sh atomic16` (`hackbench -g 16` only, 40 repetitions of three runs): no fallback in either build; median hackbench 1.244 s (`b8`) and 1.246 s (fix).
+- `gate.sh` (fix at the normal 5 s watchdog): nice mix 4 of 4, fairness 96,117 / 192,169 / 2,279, -m4 -t2 wakeup / request p99 3,988 / 53,696 µs.
+
+The race is real in the code and the fix costs nothing measured, but the 6 s stall it targets is rare (once in about 40 `b8` runs), so these tests cannot show it is gone. It is treated as a correctness fix: `fix3-run.sh` checks held-out against `b8` on 4 and 8 CPUs (3 repetitions, no measure worse by more than 7% on both CPU counts at once is allowed, given the noise), the stress battery, and 15 repetitions of three `hackbench -g 32` runs per build at the normal 5 s watchdog.
+
+### Atomic clock: accepted as a correctness fix, 2026-11-17
+
+`fix3-run.sh` ran 18:15 to 19:05 UTC (raw sets in `fix-sets.tar.gz`, the first stall tests in `stall-atomic.tar.gz`). The host was busy during the run (load average 6 to 7 on the 10-core Mac from other work), so the held-out medians moved by up to ±45% between two builds whose scheduling differs only by the race: against `b8`, the fix read -33 and -44 on 4-CPU -m1 request and wakeup p99 and +10 and +9 on 8 CPUs, +18 and -29 on -m4 -t2 request p99. No measure is worse by more than 7% on both CPU counts. The stress battery ran with no state change, and 15 repetitions of three `hackbench -g 32` runs on 8 CPUs at the 5 s watchdog had no fallback for either build (one repetition of the fix had two runs at 6.0 and 6.9 s while the rest of both builds stayed under 3.3 s, consistent with the host load). The product build passes `test-model`, `test-accounting` and `test-burst-profiles` and the gate (2 of 2, nice 19 at 1,942).
+
+The race is a defect whatever its measured effect, the fix costs nothing measurable, and it stays within the acceptance rule, so it is accepted. Whether it removes the rare 6 s stall needs many more runs than were possible here; any further stall will be dumped and compared against this explanation.

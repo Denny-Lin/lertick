@@ -17,6 +17,33 @@
 #define __LERTICK_POLICY_H
 
 static u64 vtime_now;
+
+/*
+ * The clock is updated from every CPU at once. A plain read-modify-write can
+ * lose an advance or, worse, write back an older value and move the clock
+ * backward; tasks already ahead of it then wait behind every newly woken task
+ * for seconds. Advance with an atomic add, and raise it only forward with a
+ * compare-and-swap.
+ */
+static __always_inline void clock_advance(u64 delta)
+{
+	__sync_fetch_and_add(&vtime_now, delta);
+}
+
+static __always_inline void clock_raise(u64 vtime)
+{
+	u64 cur;
+	int i;
+
+	bpf_for(i, 0, 4)
+	{
+		cur = *(volatile u64 *)&vtime_now;
+		if (!time_before(cur, vtime))
+			return;
+		if (__sync_val_compare_and_swap(&vtime_now, cur, vtime) == cur)
+			return;
+	}
+}
 /* Sum of runnable tasks' weights: the virtual clock advances by service / weight. */
 static u64 runnable_weight;
 /*

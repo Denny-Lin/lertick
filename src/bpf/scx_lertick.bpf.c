@@ -706,9 +706,7 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 	struct task_ctx *tctx = task_ctx(p);
 	u64 observed_slice = p->scx.slice;
 
-	/* As in scx_simple, this cross-CPU monotonic update tolerates small races. */
-	if (time_before(vtime_now, p->scx.dsq_vtime))
-		vtime_now = p->scx.dsq_vtime;
+	clock_raise(p->scx.dsq_vtime);
 	stat_add(LERTICK_STAT_RUNS, 1);
 	cpu_on_running(p, tctx);
 	if (!tctx)
@@ -782,7 +780,7 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	 * starves tasks that have already run.
 	 */
 	rw = runnable_weight;
-	vtime_now += delta * 100 / (rw < 100 ? 100 : rw);
+	clock_advance(delta * 100 / (rw < 100 ? 100 : rw));
 	tctx->episode_runtime_ns = service.consumed_ns;
 	stat_add(LERTICK_STAT_RUNTIME_NS, delta);
 	cpu_account_run(delta, tctx->latcrit);
