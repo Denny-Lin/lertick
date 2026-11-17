@@ -515,8 +515,8 @@ static __always_inline u64 choose_slice(struct task_ctx *tctx, u64 consumed_ns)
 		slice = tctx->prediction_ns - consumed_ns;
 		adaptive = true;
 	}
-	if (LERTICK_OVERRUN_SLICE_NS && overran(tctx, consumed_ns))
-		slice = LERTICK_OVERRUN_SLICE_NS;
+	if (overran(tctx, consumed_ns))
+		slice = OVERRUN_SLICE_NS;
 	if (slice < min_slice_ns)
 		slice = min_slice_ns;
 	if (slice > max_slice_ns)
