@@ -20,6 +20,10 @@ enum consts {
 	NSEC_PER_SEC = (1000ULL * NSEC_PER_MSEC),
 };
 
+/* cpu_domain has one entry per possible CPU, at most LERTICK_MAX_CPUS. */
+#define LERTICK_MAX_CPUS	512U
+#define LERTICK_MAX_DOMAINS	64U
+
 enum lertick_mode {
 	LERTICK_MODE_FIXED = 0,
 	LERTICK_MODE_ONLINE = 1,

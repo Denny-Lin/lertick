@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — 2026-11-17
+
+### One queue per last-level cache and a shared policy source
+
+- Queue tasks per last-level cache domain, read from the cache topology in
+  sysfs, with idle CPUs stealing from other domains; all queues share one
+  virtual clock. Machines with one LLC schedule as before; a 5-repetition
+  comparison on 4 and 8 CPUs found no measure more than 10% worse.
+- Move the scheduling policy into `src/bpf/policy.h`, shared with the
+  sched-ext/scx port in `upstream/scx_lertick`. `scripts/export_scx.py` keeps
+  the port's copies of the policy and model in sync, and CI checks them.
+
 ## Unreleased — 2026-11-16
 
 ### Watchdog timeout

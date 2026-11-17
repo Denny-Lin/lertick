@@ -25,6 +25,8 @@ use crossbeam::channel::RecvTimeoutError;
 use libbpf_rs::OpenObject;
 use log::{debug, info, warn};
 use scx_stats::prelude::*;
+use scx_utils::NR_CPU_IDS;
+use scx_utils::Topology;
 use scx_utils::UserExitInfo;
 use scx_utils::build_id;
 use scx_utils::libbpf_clap_opts::LibbpfOpts;
@@ -144,6 +146,26 @@ impl<'a> Scheduler<'a> {
         rodata.slice_min = opts.slice_min_us * 1000;
         rodata.slice_max = opts.slice_max_us * 1000;
         rodata.min_train_samples = opts.min_train_samples;
+
+        // One queue per last-level cache; a single queue when there is one LLC.
+        let topo = Topology::new()?;
+        let nr_cpus = (*NR_CPU_IDS).min(LERTICK_MAX_CPUS as usize);
+        let nr_llcs = topo.all_llcs.len();
+        if nr_llcs > 1 && nr_llcs <= LERTICK_MAX_DOMAINS as usize {
+            for (domain, llc) in topo.all_llcs.values().enumerate() {
+                for &cpu in llc.all_cpus.keys() {
+                    if cpu < nr_cpus {
+                        rodata.cpu_domain[cpu] = domain as u8;
+                    }
+                }
+            }
+            rodata.nr_domains = nr_llcs as u32;
+        }
+        info!(
+            "{} CPUs, {} queue(s)",
+            nr_cpus,
+            if rodata.nr_domains > 1 { nr_llcs } else { 1 }
+        );
 
         // Load the BPF program for validation.
         let mut skel = scx_ops_load!(skel, lertick_ops, uei)?;

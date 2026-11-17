@@ -1,4 +1,8 @@
 /* SPDX-License-Identifier: MIT */
+/*
+ * Regions between #ifndef LERTICK_UPSTREAM and its #endif are product-only
+ * variants; scripts/export_scx.py drops them for upstream/scx_lertick.
+ */
 #ifndef LERTICK_MODEL_H
 #define LERTICK_MODEL_H
 
@@ -27,7 +31,9 @@ typedef uint64_t __u64;
  */
 struct lertick_model {
 	__s32 weight_q16[LERTICK_FEATURES];
+#ifndef LERTICK_UPSTREAM
 	__s32 carry_q16[LERTICK_FEATURES];	/* fractional weight updates, carry mode only */
+#endif /* !LERTICK_UPSTREAM */
 	__u64 updates;
 };
 
@@ -71,12 +77,15 @@ LERTICK_INLINE void lertick_model_init(struct lertick_model *model)
 #endif
 	for (i = 0; i < LERTICK_FEATURES; i++) {
 		model->weight_q16[i] = 0;
+#ifndef LERTICK_UPSTREAM
 		model->carry_q16[i] = 0;
+#endif /* !LERTICK_UPSTREAM */
 	}
 	model->weight_q16[0] = LERTICK_Q / 4;
 	model->updates = 0;
 }
 
+#ifndef LERTICK_UPSTREAM
 /* Start from the causal EWMA feature rather than a fixed 2.5 ms estimate.
  * Subsequent bounded LMS updates and all feature/target rules are unchanged.
  */
@@ -87,6 +96,7 @@ LERTICK_INLINE void lertick_model_init_ewma(struct lertick_model *model)
 	model->weight_q16[2] = LERTICK_Q;
 }
 
+#endif /* !LERTICK_UPSTREAM */
 LERTICK_INLINE __s32 lertick_model_raw_q16(const struct lertick_model *model,
 				       const __s32 features[LERTICK_FEATURES])
 {
@@ -138,6 +148,7 @@ LERTICK_INLINE __s32 lertick_model_train(struct lertick_model *model,
 	return (__s32)error;
 }
 
+#ifndef LERTICK_UPSTREAM
 /* Keep 16 fractional bits of each update instead of discarding every update
  * smaller than one Q16 weight unit. The public prediction/weight format stays
  * Q16. With clipped inputs, |gradient| <= 2^42, |sum| < 2^27 and each stored
@@ -179,6 +190,7 @@ LERTICK_INLINE __s32 lertick_model_train_carry(struct lertick_model *model,
 	return (__s32)error;
 }
 
+#endif /* !LERTICK_UPSTREAM */
 /* Exact floor(min(ns / cap, 1) * Q), including full u64 inputs. The normal
  * nanosecond range uses a multiply/divide. Extreme caps use sixteen bounded
  * restoring steps, maintaining remainder < cap without overflowing 2 * rem.

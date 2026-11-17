@@ -30,6 +30,8 @@ jobs:
             !*.tar.xz
       - name: Check documents and local links
         run: python3 tests/check_docs.py
+      - name: Check the sched-ext/scx port copies of policy.h and model.h
+        run: python3 scripts/export_scx.py --check
       - name: Test fixed-point arithmetic and learning
         run: make test-model
       - name: Test CPU service accounting

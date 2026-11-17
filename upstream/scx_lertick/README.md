@@ -7,10 +7,11 @@ This is a single user-defined scheduler used within [`sched_ext`](https://github
 `scx_lertick`: a weighted virtual-time `sched_ext` scheduler that learns each
 task's time slice in BPF.
 
-All tasks share one queue ordered by weighted virtual time. The virtual clock
-advances with the CPU time actually delivered over the total runnable weight,
-so tasks that keep waking cannot hold back tasks that have already run. A woken
-task is placed at most 2 ms behind the clock.
+Tasks wait in one queue per last-level cache, ordered by weighted virtual time,
+and an idle CPU steals from another cache's queue. All queues share one virtual
+clock, which advances with the CPU time actually delivered over the total
+runnable weight, so tasks that keep waking cannot hold back tasks that have
+already run. A woken task is placed at most 2 ms behind the clock.
 
 Each task trains a small linear model, in fixed-point arithmetic inside BPF, on
 its own completed CPU bursts (from wakeup to sleep). The features are the last
@@ -32,4 +33,5 @@ sleeps, such as message passing and pipelines.
 
 No. It is experimental. It has been tested in a QEMU/HVF ARM64 virtual machine
 with 4 and 8 CPUs on Linux 7.0, but not on physical hardware or large machines.
-The single shared queue is not expected to scale to many CPUs.
+That VM reports a single last-level cache, so the per-cache queues have only
+been exercised with CPUs split into groups artificially.

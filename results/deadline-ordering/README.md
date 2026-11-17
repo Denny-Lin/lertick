@@ -568,3 +568,36 @@ Better/same/worse at 5%, 4 CPUs then 8 CPUs: EEVDF 3/6/2 and 3/5/3, scx_bpfland 
 **VM limit.** The test VM reports every cache, L1 included, as shared by all 8 CPUs, so the real topology gives one domain there and no difference. Screening therefore uses builds with `-DLERTICK_DOMAIN_SPLIT=N`, which splits CPUs into consecutive groups of N: N=2 for the 4-CPU run (two domains on CPUs 0-3) and N=4 for the 8-CPU run (two domains).
 
 **Screening** (`llc-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `base` (the current build), `one` (the new code with the VM's one domain) and `split`. `split` goes on to the full confirmation if schbench `-m 4 -t 2` wakeup p99 is lower than `base` by more than 10% on both CPU counts and no other measure is worse than `base` by more than 10%. `one` must stay within 10% of `base` on every measure, since it should behave the same.
+
+### Screening result: forced split rejected, 2026-11-16
+
+`llc-run.sh` ran 01:51 to 02:10 UTC with no fallbacks; raw sets in `llc-sets.tar.gz`. Against `base` (positive is better):
+
+| Test | `split` 4 CPUs | `split` 8 CPUs | `one` 4 CPUs | `one` 8 CPUs |
+|---|---|---|---|---|
+| schbench -m4 -t2 wakeup p99 (target) | -31 | -11 | +0 | -33 |
+| schbench -m4 -t2 request p99 | +16 | -1 | -1 | -5 |
+| schbench -m1 -t1 wakeup p99 | -2 | +34 | +5 | +34 |
+| perf messaging threads | -14 | +5 | +4 | -29 |
+| perf pipe | +50 | +51 | +51 | -2 |
+| hackbench pipe threads | +23 | -1 | +18 | +2 |
+| kernel compile | -9 | -0 | -3 | -1 |
+
+Splitting the queue made the target worse on both CPU counts, so two-way queues do not help this test here; the loss is not contention on the shared queue. `split` is rejected and the `LERTICK_DOMAIN_SPLIT` screening switch is removed.
+
+`one` schedules exactly as `base` on this VM (one domain), yet differs by up to 33% on single measures in 3 repetitions, in both directions; `base` also measured perf pipe 50% slower than usual in this session. That is the session noise already seen between identical builds. The criterion for `one` (within 10% everywhere) is not met at 3 repetitions, so the final build is confirmed separately below before it replaces `base`.
+
+## Shared policy header and the scx export, 2026-11-16
+
+The policy (queues per LLC, continuation, affine pick, sync wakeup, cgroup weights) moved from `scx_lertick.bpf.c` into `src/bpf/policy.h`, which the product and `upstream/scx_lertick` both include. `scripts/export_scx.py` copies it and `src/shared/model.h` (without the product-only regions marked `LERTICK_UPSTREAM`) into the port; CI runs it with `--check`. Built in the VM: the product (`pol`) attaches and runs hackbench; the port builds in the scx 1.1.4 workspace, passes `cargo fmt --check`, attaches and reports `8 CPUs, 1 queue(s)`.
+
+**Confirmation** (`pol-run.sh`): held-out on 4 and 8 CPUs, 5 repetitions, arms EEVDF, `base` and `pol`. `pol` replaces `base` if no measure is worse than `base` by more than 10% on either CPU count.
+
+### Confirmation result: shared-policy build accepted, 2026-11-16
+
+`pol-run.sh` ran 02:12 to 02:35 UTC with no fallbacks; raw sets in `pol-sets.tar.gz`. `pol` against `base` (positive is better), 5 repetitions:
+
+- 4 CPUs: perf messaging processes -8, threads +3, perf pipe -5, schbench -m4 -t2 wakeup p99 +0, request p99 +3, RPS -1, -m1 -t1 wakeup p99 +9, request p99 -1, hackbench threads -0, 16 groups -1, kernel compile -3.
+- 8 CPUs: perf messaging processes +1, threads +7, perf pipe +40, schbench -m4 -t2 wakeup p99 +16, request p99 -5, RPS -0, -m1 -t1 wakeup and request p99 +0, hackbench threads +1, 16 groups -4, kernel compile -1.
+
+No measure is more than 10% worse on either CPU count, so the shared-policy build with one queue per LLC replaces `base`. After the screening switch was removed, the final source was rebuilt in the VM: the product attaches in online and fixed mode and runs hackbench, and the port builds in the scx 1.1.4 workspace, passes `cargo fmt --check` and does the same with and without `--fixed`.

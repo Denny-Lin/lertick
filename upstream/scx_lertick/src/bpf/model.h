@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 OR MIT */
+/* Generated from Lertick src/shared/model.h by scripts/export_scx.py. */
 #ifndef LERTICK_MODEL_H
 #define LERTICK_MODEL_H
 
@@ -68,8 +69,9 @@ LERTICK_INLINE void lertick_model_init(struct lertick_model *model)
 #ifdef __clang__
 #pragma clang loop unroll(disable)
 #endif
-	for (i = 0; i < LERTICK_FEATURES; i++)
+	for (i = 0; i < LERTICK_FEATURES; i++) {
 		model->weight_q16[i] = 0;
+	}
 	model->weight_q16[0] = LERTICK_Q / 4;
 	model->updates = 0;
 }
