@@ -766,3 +766,24 @@ Short load tests (one 10 s run, 4 CPUs, wakeup / request p99 us, migrations): `T
 - `b0` then passed the whole battery with no state change.
 
 Decision: stability comes first. The policy goes back to `b0` (one queue per LLC, no CPU requeue, no overrun slice), the scx submission branch with it, and the README charts back to the numbers measured on that policy. The schbench -m4 -t2 diagnosis (migration of lock holders) stands; a fix needs per-CPU queues with their own lag accounting (as EEVDF keeps per runqueue), or another way to keep a preempted task near its CPU without leaving the global fair order, and must pass this battery and the fairness check before screening.
+
+## Second autonomous round, 2026-11-17
+
+From here on every candidate first passes `gate.sh` (nice mix at full load, nice-weight shares on 4 CPUs, one schbench -m4 -t2 run with migrations) before any screening, and builds use `scx-build.sh`, which now refreshes file times after unpacking: tar kept the archive's times, so cargo could reuse a stale BPF object for a build without overrides. Two such stale builds (`s0` was `S4`, `sm` was `sf`) were found by comparing binaries; the accepted and reverted builds of the first round were all built after a source edit and are unaffected.
+
+- **Sticky preempted tasks** (`LERTICK_STICKY_NS` 1, 2 and 4 ms: for that long after a task is preempted mid-burst, busy CPUs other than its own pass it over in the LLC queue). All passed the nice mix, but migrations fell only from about 5,900 to 4,850 to 5,500, request p99 did not improve, and weighting broke (nice 19 got 29,395 to 65,350 bogo ops against about 2,000 for `b0`): when every candidate is held, the busy CPU keeps prev, which may be a nice 19 task. Rejected.
+- **Wider affine pick.** `take_next` already prefers, among the first `AFFINE_DEPTH` (8) queued tasks within `AFFINE_WINDOW_NS` (2 ms) of the head, one that last ran on this CPU. perf messaging (400 tasks) and schbench -m4 -t2 rarely find one there: `b0` migrates 2 to 3 times as often as EEVDF in perf messaging and about 2.5 times in schbench, while switching contexts 5 to 10 times less. Widening the window keeps fair order within a bound and needs no new state. Gate results (one schbench run each, us):
+
+| Build | migrations | -m4 -t2 wakeup / request p99 | nice -5 / 0 / 19 bogo ops | nice mix |
+|---|---|---|---|---|
+| `b0` | about 5,300 | about 5,000 / 150,000 | 94,000 / 189,000 / 2,000 | pass |
+| `D32` (depth 32, 2 ms) | 6,126 | 5,304 / 121,216 | 86,228 / 172,557 / 1,710 | 2/2 |
+| `D16W4` (depth 16, 4 ms) | 1,194 | 4,068 / 80,768 | 93,382 / 186,939 / 1,750 | 2/2 |
+| `D32W4` (depth 32, 4 ms) | 1,220 | 4,120 / 71,296 | 81,497 / 162,801 / 1,579 | 2/2 |
+| EEVDF | 2,093 | 3,780 / 50,000 to 85,000 | 104,000 / 175,000 / 7,000 | |
+
+The window, not the depth, is what matters.
+
+`D16W8` (depth 16, 8 ms): 739 migrations, 4,028 / 61,888 us, 89,410 / 180,293 / 2,641 bogo ops, nice mix 2/2.
+
+**Screening** (`aff-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `b0`, `D16W4`, `D32W4` and `D16W8`. A candidate goes on if, against `b0`, schbench -m4 -t2 request or wakeup p99 on 4 CPUs or perf messaging processes on either CPU count is better by more than 10%, and no measure is worse by more than 10% on either CPU count.
