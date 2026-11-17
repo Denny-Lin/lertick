@@ -956,3 +956,10 @@ Only one 5 s stall has been seen (`r10-cpu8/1-b8`); the "once in about 40 runs" 
 ### Clamp result: `cap` accepted, 2026-11-17
 
 `cap-run.sh` finished at 19:39 UTC with no fallbacks; raw sets in `cap-sets.tar.gz`. The host was busy (load average 4 to 6). Held-out against `b9`, 3 repetitions (EEVDF in brackets): on 4 CPUs -m4 -t2 request p99 +20 (-10), -m1 request and wakeup p99 -12 and -18 (-42, -29), kernel compile +10; on 8 CPUs -m1 and -m4 -t2 wakeup p99 +21 and +22 (+35, +33), -m4 -t2 request p99 +8, hackbench threads -7. No measure is worse than `b9` by more than 7% on both CPU counts; the -m1 latencies move in opposite directions on the two counts, as noise does. With the gate, cgroup ratios and stall stress above, `cap` meets its rule and becomes the default: a queued task sits at most 20 ms × 100 / its weight ahead of the clock.
+
+## Release checks, 2026-11-17
+
+- **veristat** (built from the Linux 7.0 tree, run in the VM): every program of the scx port (16) and the product (17) is accepted; the largest, `lertick_quiescent`, takes 5,039 instructions against the 1,000,000 limit. With the debug dump below, 18 programs, all accepted (`lertick_dump` 190, `lertick_dump_task` 31).
+- **x86** (Ubuntu 26.04 cloud image, Linux 7.0.0-43, QEMU TCG with 4 vCPUs on the Mac): the product builds with clang 21 and libbpf 1.6.3, `test-model`, `test-accounting` and `test-burst-profiles` pass, the verifier accepts it, and it stays enabled through hackbench, the nice mix and stress-ng fork/switch/pipe, then unregisters cleanly. Emulation is too slow for performance numbers.
+- **Long run** (`long-run.sh`): the current default attached for 2 hours, cycling the nice mix, hackbench with 640, 1,280 and 2,560 processes, perf messaging, schbench, a stress-ng mix and a kernel compile, with the state checked every second.
+- **Licence and debug dump:** the exported `model.h` is now GPL-2.0, as every scheduler in sched-ext/scx is; `ops.dump` and `ops.dump_task` print the clock, queue lengths and each task's vtime against the clock and prediction on an error exit.
