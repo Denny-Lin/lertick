@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 OR MIT */
-/* Generated from Lertick src/shared/model.h by scripts/export_scx.py. */
 #ifndef LERTICK_MODEL_H
 #define LERTICK_MODEL_H
 
@@ -9,8 +8,8 @@
 #include <linux/types.h>
 #else
 #include <stdint.h>
-typedef int32_t __s32;
-typedef int64_t __s64;
+typedef int32_t	 __s32;
+typedef int64_t	 __s64;
 typedef uint64_t __u64;
 #endif
 #endif
@@ -73,14 +72,15 @@ LERTICK_INLINE void lertick_model_init(struct lertick_model *model)
 		model->weight_q16[i] = 0;
 	}
 	model->weight_q16[0] = LERTICK_Q / 4;
-	model->updates = 0;
+	model->updates	     = 0;
 }
 
-LERTICK_INLINE __s32 lertick_model_raw_q16(const struct lertick_model *model,
-				       const __s32 features[LERTICK_FEATURES])
+LERTICK_INLINE __s32
+lertick_model_raw_q16(const struct lertick_model *model,
+		      const __s32		  features[LERTICK_FEATURES])
 {
 	__s64 dot = 0;
-	int i;
+	int   i;
 
 #ifdef __clang__
 #pragma clang loop unroll(disable)
@@ -91,8 +91,9 @@ LERTICK_INLINE __s32 lertick_model_raw_q16(const struct lertick_model *model,
 	return (__s32)lertick_trunc_shift(dot, 16);
 }
 
-LERTICK_INLINE __s32 lertick_model_predict_q16(const struct lertick_model *model,
-				 const __s32 features[LERTICK_FEATURES])
+LERTICK_INLINE __s32
+lertick_model_predict_q16(const struct lertick_model *model,
+			  const __s32 features[LERTICK_FEATURES])
 {
 	return lertick_clip_q16(lertick_model_raw_q16(model, features));
 }
@@ -101,10 +102,11 @@ LERTICK_INLINE __s32 lertick_model_predict_q16(const struct lertick_model *model
  * clipped, but training uses raw output, so saturated predictions can recover.
  */
 LERTICK_INLINE __s32 lertick_model_train(struct lertick_model *model,
-			 const __s32 features[LERTICK_FEATURES], __s32 target_q16)
+					 const __s32 features[LERTICK_FEATURES],
+					 __s32	     target_q16)
 {
 	__s64 error = (__s64)lertick_clip_q16(target_q16) -
-		     lertick_model_raw_q16(model, features);
+		      lertick_model_raw_q16(model, features);
 	int i;
 
 	if (error > LERTICK_Q)
@@ -118,9 +120,10 @@ LERTICK_INLINE __s32 lertick_model_train(struct lertick_model *model,
 		__s64 update = (__s64)LERTICK_ALPHA_Q16 * error *
 			       lertick_clip_q16(features[i]);
 
-		update = lertick_trunc_shift(update, 32);
+		update		     = lertick_trunc_shift(update, 32);
 		model->weight_q16[i] = lertick_clip_weight(
-			(__s64)lertick_clip_weight(model->weight_q16[i]) + update);
+			(__s64)lertick_clip_weight(model->weight_q16[i]) +
+			update);
 	}
 	if (model->updates != ~(__u64)0)
 		model->updates++;
@@ -134,8 +137,8 @@ LERTICK_INLINE __s32 lertick_model_train(struct lertick_model *model,
 LERTICK_INLINE __s32 lertick_scale_ns_q16(__u64 ns, __u64 cap_ns)
 {
 	__u64 remainder = ns;
-	__s32 fraction = 0;
-	int bit;
+	__s32 fraction	= 0;
+	int   bit;
 
 	if (!cap_ns)
 		return 0;

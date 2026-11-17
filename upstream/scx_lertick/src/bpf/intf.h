@@ -17,30 +17,30 @@
 enum consts {
 	NSEC_PER_USEC = 1000ULL,
 	NSEC_PER_MSEC = (1000ULL * NSEC_PER_USEC),
-	NSEC_PER_SEC = (1000ULL * NSEC_PER_MSEC),
+	NSEC_PER_SEC  = (1000ULL * NSEC_PER_MSEC),
 };
 
 /* cpu_domain has one entry per possible CPU, at most LERTICK_MAX_CPUS. */
-#define LERTICK_MAX_CPUS	512U
-#define LERTICK_MAX_DOMAINS	64U
+#define LERTICK_MAX_CPUS 512U
+#define LERTICK_MAX_DOMAINS 64U
 
 enum lertick_mode {
-	LERTICK_MODE_FIXED = 0,
+	LERTICK_MODE_FIXED  = 0,
 	LERTICK_MODE_ONLINE = 1,
 };
 
 #ifndef __VMLINUX_H__
-typedef unsigned char u8;
+typedef unsigned char  u8;
 typedef unsigned short u16;
-typedef unsigned int u32;
-typedef unsigned long u64;
+typedef unsigned int   u32;
+typedef unsigned long  u64;
 
-typedef signed char s8;
-typedef signed short s16;
-typedef signed int s32;
-typedef signed long s64;
+typedef signed char    s8;
+typedef signed short   s16;
+typedef signed int     s32;
+typedef signed long    s64;
 
-typedef int pid_t;
+typedef int	       pid_t;
 #endif /* __VMLINUX_H__ */
 
 #endif /* __INTF_H */
