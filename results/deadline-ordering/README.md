@@ -704,3 +704,16 @@ All three keep the request gain on 4 CPUs. The 8-CPU messaging results move by 1
 - perf pipe reads -71 on 4 CPUs, but per repetition both arms take the same values (1.1, 2.0, 2.5 and 4.2 us per round trip, against 20 us for EEVDF); only the mix of modes differs, so this is not a change.
 
 No measure is more than 10% worse than `base`, so the CPU requeue with the 1 ms threshold becomes the default code and the next baseline (`b1`). The rejected switches (`LERTICK_WAKE_PREEMPT`, `LERTICK_CPU_KICK`) are removed; `LERTICK_OVERRUN_SLICE_NS` and `LERTICK_OVERRUN_NOKEEP` stay off for the wakeup-latency screening that follows. The final source was rebuilt: the scx build and the product attach in online and fixed mode and run hackbench, schbench and perf messaging; the port passes `cargo fmt --check`, clang-format with the scx style and clippy.
+
+## Wakeup latency on top of `b1`, hypothesis fixed 2026-11-17 before the run
+
+With `C1` in place, schbench -m4 -t2 wakeup p99 on 4 CPUs is still about 50% above EEVDF. In round 1, giving tasks past their prediction the 0.5 ms minimum slice with no continuation (`A`) turned that into a win, but also cut lock holders' slices, which undid the request gain. The two halves of `A` are now separate switches:
+
+- `W1`: `LERTICK_OVERRUN_NOKEEP` alone (no `keep_prev` continuation past the prediction).
+- `W2`: `LERTICK_OVERRUN_SLICE_NS` = 1 ms alone.
+- `W3`: `LERTICK_OVERRUN_SLICE_NS` = 0.5 ms alone.
+- `W4`: 1 ms and no continuation.
+
+Short load tests (one run, 4 CPUs, wakeup p99 / request p99 us): `W1` 3,924 / 74,624, `W2` 3,980 / 54,976, `W3` 3,956 / 62,912, `W4` 3,012 / 103,040, against about 5,200 / 59,000 for `b1`.
+
+**Screening** (`wake-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `b1` and `W1` to `W4`. A candidate goes on if, against `b1` on 4 CPUs, -m4 -t2 wakeup p99 is lower by more than 10% and request p99 is not higher by more than 10%, and no other measure is worse than `b1` by more than 10% on either CPU count.
