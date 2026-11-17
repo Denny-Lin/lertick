@@ -981,3 +981,8 @@ Only one 5 s stall has been seen (`r10-cpu8/1-b8`); the "once in about 40 runs" 
 - The fix passes `gate.sh` 6 of 6 (nice 19 at 2,217 bogo ops) and keeps cgroup weights: 1.98, 1.00, 3.02.
 
 The double count is real in the formula (effective weights add up to twice the runnable weight while a root task is runnable), but `rootcg.sh` does not show it causes the stall. The direct test is the run that failed: `long-run.sh` with the fix, 2 hours (`long/rootfix`).
+
+## Follow-ups (open)
+
+- **Cgroups with tasks and child cgroups beyond the root.** The root-cgroup fix covers the one case cgroup v2 allows by default. Threaded cgroups (cgroup v2 thread mode, with the cpu controller enabled) may also hold threads and child cgroups at once, and their threads are then counted twice in the same way: under-charged against the clock, so other tasks wait longer. General fix: treat a cgroup's own runnable tasks as one more sibling of its active children, so `hweight` of a child is `hweight(parent) × weight / (child_weight_sum + task_weight_sum)` and the parent's own tasks share `hweight(parent) × task_weight_sum / (child_weight_sum + task_weight_sum)`; the root becomes the general case. It changes the core weight computation and needs the gate, `cgp.sh`, a test with a threaded subtree and the 2-hour run. No threaded cgroup exists on a default Ubuntu 26.04 system; documented as a limitation in the port README until then.
+- Wakeup-latency gap on 4 CPUs (6-7% behind EEVDF on schbench -m4 -t2): per-CPU queues with weight-scaled lag (`pc`, branch `percpu`) are written and untested; postponed by the owner on 2026-11-17.
