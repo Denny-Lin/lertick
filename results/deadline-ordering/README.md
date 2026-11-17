@@ -894,3 +894,9 @@ All four passed `gate.sh` 3 of 3. Screening (`r9-run.sh`, 15:45 to 16:45 UTC, no
 ## Round 10: policy constants, hypothesis fixed 2026-11-17 before the run
 
 Builds on top of `b8`: `SW1` and `SW0` (`SYNC_WINDOW_NS` 1 ms and 0: sync wakeups queue on the waker's CPU only when closer to the head; fewer wakees stack behind the waker, which may help perf messaging processes on 4 CPUs), `H8` (`HEAD_SCAN` 8: `keep_prev` gives up sooner when the CPU's next eligible task is deep in the queue) and `D32` (`AFFINE_DEPTH` 32). Same gate and screening rule as round 9 (`r10-run.sh`).
+
+## Round 11: fixed slice scaled with the CPU count, hypothesis fixed 2026-11-17 before the run
+
+EEVDF scales its base slice by 1 + log2(CPUs) (`sysctl_sched_base_slice`, `SCHED_TUNABLESCALING_LOG`), so a smaller machine gets shorter slices. Lertick uses 2 ms for the fixed and fallback slice everywhere. Rounds 8 and 9 point the same way: 1 to 1.5 ms improved 4-CPU -m4 -t2 wakeup p99 by 24 to 41% but cost 8-CPU perf messaging processes or -m1 wakeup. A scaled fixed slice would keep 2 ms on 8 CPUs and shorten it on 4.
+
+**Step 1** (`r11-run.sh`): on 4 CPUs only, 5 repetitions, arms EEVDF, `b8`, `s1`, `s125`, `s15` (`--slice-us` 1,000, 1,250, 1,500). The longest of these that improves -m4 -t2 wakeup or request p99 by more than 10% against `b8` with no 4-CPU measure worse by more than 7% sets the 4-CPU value. **Step 2:** the scaling rule through 4 CPUs at that value and 8 CPUs at 2 ms is built into both loaders, then confirmed on 4 and 8 CPUs (5 repetitions, kernel compile, battery, gate) before it can become the default.
