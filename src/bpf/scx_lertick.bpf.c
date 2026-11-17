@@ -515,6 +515,8 @@ static __always_inline u64 choose_slice(struct task_ctx *tctx, u64 consumed_ns)
 		slice = tctx->prediction_ns - consumed_ns;
 		adaptive = true;
 	}
+	if (LERTICK_OVERRUN_SLICE_NS && overran(tctx, consumed_ns))
+		slice = LERTICK_OVERRUN_SLICE_NS;
 	if (slice < min_slice_ns)
 		slice = min_slice_ns;
 	if (slice > max_slice_ns)
@@ -601,7 +603,7 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	if ((enq_flags & SCX_ENQ_WAKEUP) && time_before(vtime, vtime_now - LAG_NS))
 		vtime = vtime_now - LAG_NS;
 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
-	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice, vtime, enq_flags);
+	scx_bpf_dsq_insert_vtime(p, enqueue_dsq(p, tctx, enq_flags), slice, vtime, enq_flags);
 	if (tctx)
 		publish(tctx);
 }
@@ -964,14 +966,12 @@ void BPF_STRUCT_OPS(lertick_tick, struct task_struct *p)
 s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 {
 	struct lertick_idle_timer *t;
-	u32 zero = 0, d;
-	s32 ret = 0;
+	u32 zero = 0;
+	s32 ret;
 
-	bpf_for(d, 0, domain_count()) {
-		ret = scx_bpf_create_dsq(d, -1);
-		if (ret)
-			return ret;
-	}
+	ret = policy_init();
+	if (ret)
+		return ret;
 	if (cpuperf_mode != LERTICK_CPUPERF_UTIL)
 		return ret;
 	t = bpf_map_lookup_elem(&idle_timer_map, &zero);

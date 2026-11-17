@@ -625,3 +625,95 @@ From here on the scx port (`Denny-Lin/scx` branch `scx_lertick`, built on scx ma
 Better/same/worse at 5%: 5/3/3 on 4 CPUs and 4/5/2 on 8 CPUs. `prod` in the same sessions: 4/5/2 and 4/6/1. `scx` against `prod`: within 5% on most measures; perf pipe is slower in `scx` (-22 and -34) though still far ahead of EEVDF, perf messaging threads +15 on 8 CPUs, schbench -m4 -t2 request p99 -14 on 8 CPUs.
 
 Against the submission bar (no measure more than 5% worse than EEVDF, at least 4 wins), the scx build fails on schbench -m4 -t2 request and wakeup p99 on 4 CPUs and, on 8 CPUs, perf messaging threads and -m4 -t2 request p99 by 10%.
+
+## Diagnosis: schbench -m 4 -t 2 on 4 CPUs, 2026-11-17
+
+schbench workers take a per-CPU mutex with a `trylock` spin (`lock_this_cpu()`) around their CPU work. A worker preempted while holding it leaves the next worker on that CPU spinning until its own slice ends. `-L` disables the lock. `lock-run.sh` ran `-m 4 -t 2 -r 20 -w 3` on CPUs 0-3 under EEVDF and the scx build, with and without `-L`, 3 repetitions, no fallbacks; raw sets in `lock-sets.tar.gz`. Medians (us):
+
+| | wakeup p99 | request p99 | RPS |
+|---|---|---|---|
+| EEVDF, lock | 3756 | 52160 | 188 |
+| scx, lock | 5528 | 137984 | 191 |
+| EEVDF, no lock | 3788 | 31008 | 382 |
+| scx, no lock | 6504 | 29216 | 367 |
+
+Two separate losses:
+
+- **Request p99 is the lock.** Without the lock, scx is 6% better than EEVDF; with it, 2.6 times worse. Lertick lets a spinning worker keep its CPU (a burst past its prediction falls back to the 2 ms fixed slice, and `keep_prev` can extend it to 20 ms) while the lock holder waits in the queue, so a lock handoff can cost several milliseconds. EEVDF's shorter effective slices under contention cut the spin sooner.
+- **Wakeup p99 is not the lock.** It is 47 to 72% worse with or without it, so a woken worker waits behind running tasks for another reason, most likely the absence of wakeup preemption: EEVDF lets an eligible wakee with an earlier deadline preempt, while Lertick waits for the running slice to end.
+
+### Migration is the cause, and three candidates, hypothesis fixed 2026-11-17 before the run
+
+`perf stat` over `schbench -m 4 -t 2` on CPUs 0-3: EEVDF makes 1,349 migrations, the scx build 5,908. With workers and message threads pinned (`-M 0-3 -W auto`) the scx build beats EEVDF on both measures (wakeup p99 381 against 947 us, request p99 20,768 against 29,344 us). schbench's lock is per CPU and checked only when taken, so a holder preempted and resumed on another CPU leaves workers on its old CPU spinning until its whole request ends. The shared queue lets any CPU pick up a preempted task.
+
+Candidates, as switches in `policy.h` (all off in the default build):
+
+- `A`, `LERTICK_OVERRUN_YIELD`: a task past its predicted burst gets the minimum slice and no `keep_prev` continuation.
+- `B`, `LERTICK_WAKE_PREEMPT`: a woken task that finds no idle CPU preempts its previous CPU or one of two random CPUs if the task there has overrun its prediction.
+- `C`, `LERTICK_CPU_REQUEUE`: a task preempted mid-burst waits on a queue of its own CPU; that CPU runs it unless the LLC queue's head is more than 2 ms earlier, and idle CPUs steal from other CPUs' queues when the LLC queues are empty. Woken tasks still go to the LLC queue.
+
+Short load tests (one run each, 4 CPUs): wakeup p99 / request p99 in us were `A` 4,004 / 149,760, `B` 5,112 / 131,328, `AB` 2,996 / 169,728, `C` 4,504 / 54,464, `AC` 2,116 / 115,072, `ABC` 1,998 / 124,800, against about 5,500 / 130,000 for the current build and 3,760 / 50,000 for EEVDF.
+
+**Screening** (`cand-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `base` (the current scx build), `A`, `C`, `AC` and `ABC`. A candidate goes on if, against `base` on 4 CPUs, schbench `-m 4 -t 2` request p99 or wakeup p99 is lower by more than 10% and neither is higher by more than 10%, and no other measure is worse than `base` by more than 10% on either CPU count.
+
+### Screening result: `A` fixes wakeup, `C` fixes request, not both, 2026-11-17
+
+`cand-run.sh` ran 06:06 to 06:35 UTC with no fallbacks; raw sets in `cand-sets.tar.gz`. schbench `-m 4 -t 2` on 4 CPUs, against `base` and (in brackets) against EEVDF:
+
+| Arm | request p99 | wakeup p99 | perf messaging processes |
+|---|---|---|---|
+| `base` | 0 (-147) | 0 (-49) | 0 (-4) |
+| `A` | -18 (-191) | -11 (-66) | +1 (-3) |
+| `C` | +55 (-12) | +5 (-41) | -21 (-26) |
+| `AC` | -2 (-152) | +46 (+20) | -15 (-19) |
+| `ABC` | -1 (-150) | +64 (+46) | -2 (-5) |
+
+`C` removes most of the request loss and `A` with `C` turns the wakeup loss into a win, but no arm does both: with `A`, a lock holder past its prediction also gets minimum slices, which undoes `C`'s gain. `C` costs perf messaging processes 21% on 4 CPUs and 17% on 8 CPUs, and perf pipe 29 to 53% (still about 90% faster than EEVDF). `ABC` collapses on 8 CPUs (-m4 -t2 wakeup p99 -191%). None passes as screened.
+
+Two likely costs of the CPU queues: an idle CPU is not told about a task queued on another CPU's queue, so messaging bunches up, and every dispatch now iterates two queue heads, which shows on perf pipe's microsecond round trips. Next round: `AC2` (AC with a cheap `scx_bpf_dsq_nr_queued()` check before each head iteration), `ACK` (AC2 plus `LERTICK_CPU_KICK`, which wakes an idle CPU to steal when a task is queued on a CPU's queue) and `CK` (C with both), screened by the same rule (`cand2-run.sh`).
+
+### Round 2 result and round 3, 2026-11-17
+
+`cand2-run.sh` ran 06:37 to 07:01 UTC with no fallbacks; raw sets in `cand2-sets.tar.gz`. Against `base` (EEVDF in brackets), 4 CPUs: `AC2` request p99 -10 (-183), wakeup p99 +48 (+20), messaging processes -6 (-10); `ACK` -18 (-205), +48 (+20), +1 (-4), with perf messaging threads -55 on 8 CPUs; `CK` +51 (-28), +3 (-50), -5 (-10), with messaging processes -27 on 8 CPUs. The idle kick does not cure the messaging loss of `C` and hurts with `A`.
+
+perf messaging runs hundreds of tasks whose bursts last microseconds, while schbench workers run for milliseconds. Round 3 keeps a preempted task on its CPU only once its current burst has run at least 1 ms (`CPU_REQUEUE_MIN_NS`): `C1` (C with the threshold) and `C1K` (with the kick), against `base` and `CK`, by the same rule (`cand3-run.sh`).
+
+### Round 3 result, 2026-11-17
+
+`cand3-run.sh` ran 07:02 to 07:26 UTC with no fallbacks; raw sets in `cand3-sets.tar.gz`. Against `base` (EEVDF in brackets):
+
+| Test | `C1` 4 CPUs | `C1` 8 CPUs | `C1K` 4 | `C1K` 8 | `CK` 4 | `CK` 8 |
+|---|---|---|---|---|---|---|
+| -m4 -t2 request p99 | +51 (-21) | -2 (+5) | +50 (-22) | -5 (+1) | +50 (-22) | -2 (+4) |
+| -m4 -t2 wakeup p99 | +9 (-45) | -2 (+39) | +9 (-45) | -2 (+39) | +9 (-45) | +0 (+40) |
+| -m4 -t2 RPS | +13 (+11) | -0 | +13 | +0 | +14 | +0 |
+| messaging processes | +12 (-3) | -10 (-9) | +4 | -7 | +8 | -18 |
+| messaging threads | -4 | -31 (-22) | -5 | -29 | -2 | -9 |
+| perf pipe | +1 | +43 | +4 | -32 | +6 | +53 |
+| kernel compile | -6 | -2 | -11 | -1 | -2 | -2 |
+
+All three keep the request gain on 4 CPUs. The 8-CPU messaging results move by 10 to 30 points between arms that differ only in a threshold, and `base` itself moved from -4 to -17 against EEVDF on 4-CPU messaging processes between sessions, so 3 repetitions cannot settle them. `C1` goes to a 5-repetition confirmation against `base` (`c1-run.sh`): it is accepted if -m4 -t2 request p99 on 4 CPUs is lower by more than 10% and no measure is worse than `base` by more than 10% on either CPU count.
+
+### Confirmation result: `C1` accepted, 2026-11-17
+
+`c1-run.sh` (held-out, 5 repetitions, 07:27 to 07:51 UTC) and `c1-kb-run.sh` (`kbuild-long.sh`, 5 repetitions, to 08:06 UTC) ran with no fallbacks; raw sets in `c1-sets.tar.gz`. `C1` against `base` (EEVDF in brackets):
+
+- 4 CPUs: schbench -m4 -t2 request p99 +52 (-25, from -162 for `base`), RPS +13 (+20), wakeup p99 +2 (-52); perf messaging processes -9 (-7), threads -7 (-5); hackbench, schbench -m1 -t1 and kernel compile within 2.
+- 8 CPUs: perf messaging processes -8 (-8), -m4 -t2 wakeup p99 -10 (+18), the rest within 8.
+- Kernel compile (`kbuild-long`): 26.32 s against 26.72 s for `base` and 26.35 s for EEVDF on 4 CPUs; 19.87 s against 19.55 s and 19.57 s on 8 CPUs.
+- perf pipe reads -71 on 4 CPUs, but per repetition both arms take the same values (1.1, 2.0, 2.5 and 4.2 us per round trip, against 20 us for EEVDF); only the mix of modes differs, so this is not a change.
+
+No measure is more than 10% worse than `base`, so the CPU requeue with the 1 ms threshold becomes the default code and the next baseline (`b1`). The rejected switches (`LERTICK_WAKE_PREEMPT`, `LERTICK_CPU_KICK`) are removed; `LERTICK_OVERRUN_SLICE_NS` and `LERTICK_OVERRUN_NOKEEP` stay off for the wakeup-latency screening that follows. The final source was rebuilt: the scx build and the product attach in online and fixed mode and run hackbench, schbench and perf messaging; the port passes `cargo fmt --check`, clang-format with the scx style and clippy.
+
+## Wakeup latency on top of `b1`, hypothesis fixed 2026-11-17 before the run
+
+With `C1` in place, schbench -m4 -t2 wakeup p99 on 4 CPUs is still about 50% above EEVDF. In round 1, giving tasks past their prediction the 0.5 ms minimum slice with no continuation (`A`) turned that into a win, but also cut lock holders' slices, which undid the request gain. The two halves of `A` are now separate switches:
+
+- `W1`: `LERTICK_OVERRUN_NOKEEP` alone (no `keep_prev` continuation past the prediction).
+- `W2`: `LERTICK_OVERRUN_SLICE_NS` = 1 ms alone.
+- `W3`: `LERTICK_OVERRUN_SLICE_NS` = 0.5 ms alone.
+- `W4`: 1 ms and no continuation.
+
+Short load tests (one run, 4 CPUs, wakeup p99 / request p99 us): `W1` 3,924 / 74,624, `W2` 3,980 / 54,976, `W3` 3,956 / 62,912, `W4` 3,012 / 103,040, against about 5,200 / 59,000 for `b1`.
+
+**Screening** (`wake-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `b1` and `W1` to `W4`. A candidate goes on if, against `b1` on 4 CPUs, -m4 -t2 wakeup p99 is lower by more than 10% and request p99 is not higher by more than 10%, and no other measure is worse than `b1` by more than 10% on either CPU count.
