@@ -739,3 +739,18 @@ Short load tests (one run, 4 CPUs, wakeup p99 / request p99 us): `W1` 3,924 / 74
 The README charts now show the current version (`b2`, the CPU requeue and the 1 ms overrun slice). Against EEVDF they come from the `W2` arm of `w2-run.sh` (one session, 5 repetitions, held-out and `kbuild-long`). The sched_ext schedulers were not rerun: `pool_ratio.py` takes each one's ratio to EEVDF in its own sessions (scx_bpfland `cpu*` and `eve1`, scx_lavd `cpu*-lavd` and `eve1`, scx_p2dq and scx_flash `cpu*-more` and `eve1`; the median of the two) and sets Lertick's ratio to EEVDF against it. Comparisons made this way carry the noise of both sessions and are marked as indicative.
 
 Better/same/worse at 5%, 4 CPUs then 8 CPUs: EEVDF 5/3/3 and 5/4/2, scx_bpfland 8/2/1 and 6/4/1, scx_lavd 7/3/1 and 4/5/2, scx_p2dq 7/2/2 and 5/4/2, scx_flash 7/2/2 and 7/4/0. The measured build is the scx port; the product runs the same policy from `policy.h`.
+
+## Round 5 on top of `b2`: requeue threshold and woken tasks, hypothesis fixed 2026-11-17 before the run
+
+`b2` still migrates twice as often as EEVDF under schbench -m4 -t2 on 4 CPUs (4,458 against 2,093 in one 15 s run), and its request and wakeup p99 remain 28 and 33% above EEVDF's. Candidates:
+
+- `T05` and `T2`: the CPU requeue threshold (`CPU_REQUEUE_MIN_NS`, 1 ms in `b2`) at 0.5 ms and 2 ms.
+- `H`: `LERTICK_WAKE_HOME`, a woken task whose last burst ran at least 1 ms waits on its previous CPU's queue when no idle CPU took it.
+
+Short load tests (one 10 s run, 4 CPUs, wakeup / request p99 us, migrations): `T05` 3,972 / 58,560, 3,041; `T2` 4,036 / 63,168, 2,845; `H` 11,216 / 62,144, 2,135. `H` nearly triples wakeup p99 (woken workers wait behind their previous CPU's queue) and is rejected without screening.
+
+**Screening** (`r5-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `b2`, `T05` and `T2`. A candidate goes on if, against `b2` on 4 CPUs, -m4 -t2 request or wakeup p99 is lower by more than 10% and neither is higher by more than 10%, and no other measure is worse by more than 10% on either CPU count.
+
+### Round 5 result: both rejected, 2026-11-17
+
+`r5-run.sh` ran 09:27 to 09:47 UTC with no fallbacks; raw sets in `r5-sets.tar.gz`. Against `b2` on 4 CPUs, -m4 -t2 wakeup / request p99: `T05` +9 / +5, `T2` +1 / -9. Neither improves the target by more than 10%. `T05` also costs perf messaging processes 19% (35% on 8 CPUs), schbench -m1 -t1 latencies 23 to 25% and -m4 -t2 wakeup p99 87% on 8 CPUs; `T2` costs -m4 -t2 wakeup p99 29% and messaging threads 12% on 4 CPUs. The 1 ms threshold stays, and the `LERTICK_WAKE_HOME` switch and the threshold override were not merged.
