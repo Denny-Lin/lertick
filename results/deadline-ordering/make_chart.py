@@ -103,7 +103,7 @@ def tally(pcts):
 
 def scoreboard(cpus, path):
     rows = [("Linux EEVDF", "default · median of 2 sessions", tally(EEVDF[cpus]))]
-    rows += [(name, f"sched_ext {'1.1.2' if name == 'scx_bpfland' else '1.1.4'} · through EEVDF, 2 sessions", tally(p[cpus])) for name, p in OTHERS.items()]
+    rows += [(name, f"sched_ext {'1.1.2' if name == 'scx_bpfland' else '1.1.4'} · via EEVDF", tally(p[cpus])) for name, p in OTHERS.items()]
     W, top, rh, bh = 1120, 150, 84, 40
     x0, bar_w = 330, 520
     H = top + rh * len(rows) + 40

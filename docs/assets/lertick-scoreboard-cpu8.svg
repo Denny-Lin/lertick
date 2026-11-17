@@ -14,7 +14,7 @@
 <text x="802.7" y="177" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">2</text>
 <text x="874" y="177" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f"><tspan fill="#248a3d" font-weight="700">3 better</tspan> · 6 same · <tspan fill="#d70015" font-weight="700">2 worse</tspan></text>
 <text x="48" y="254" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="20" font-weight="600" fill="#1d1d1f">vs scx_bpfland</text>
-<text x="48" y="278" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" fill="#86868b">sched_ext 1.1.2 · through EEVDF, 2 sessions</text>
+<text x="48" y="278" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" fill="#86868b">sched_ext 1.1.2 · via EEVDF</text>
 <rect x="331.0" y="234" width="328.9" height="40" rx="6" fill="#34c759"/>
 <text x="495.5" y="261" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">7</text>
 <rect x="661.9" y="234" width="139.8" height="40" rx="6" fill="#aeaeb2"/>
@@ -23,7 +23,7 @@
 <text x="826.4" y="261" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">1</text>
 <text x="874" y="261" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f"><tspan fill="#248a3d" font-weight="700">7 better</tspan> · 3 same · <tspan fill="#d70015" font-weight="700">1 worse</tspan></text>
 <text x="48" y="338" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="20" font-weight="600" fill="#1d1d1f">vs scx_lavd</text>
-<text x="48" y="362" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" fill="#86868b">sched_ext 1.1.4 · through EEVDF, 2 sessions</text>
+<text x="48" y="362" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" fill="#86868b">sched_ext 1.1.4 · via EEVDF</text>
 <rect x="331.0" y="318" width="139.8" height="40" rx="6" fill="#34c759"/>
 <text x="400.9" y="345" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">3</text>
 <rect x="472.8" y="318" width="281.6" height="40" rx="6" fill="#aeaeb2"/>
@@ -32,7 +32,7 @@
 <text x="802.7" y="345" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">2</text>
 <text x="874" y="345" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f"><tspan fill="#248a3d" font-weight="700">3 better</tspan> · 6 same · <tspan fill="#d70015" font-weight="700">2 worse</tspan></text>
 <text x="48" y="422" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="20" font-weight="600" fill="#1d1d1f">vs scx_p2dq</text>
-<text x="48" y="446" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" fill="#86868b">sched_ext 1.1.4 · through EEVDF, 2 sessions</text>
+<text x="48" y="446" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" fill="#86868b">sched_ext 1.1.4 · via EEVDF</text>
 <rect x="331.0" y="402" width="281.6" height="40" rx="6" fill="#34c759"/>
 <text x="471.8" y="429" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">6</text>
 <rect x="614.6" y="402" width="139.8" height="40" rx="6" fill="#aeaeb2"/>
@@ -41,7 +41,7 @@
 <text x="802.7" y="429" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">2</text>
 <text x="874" y="429" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f"><tspan fill="#248a3d" font-weight="700">6 better</tspan> · 3 same · <tspan fill="#d70015" font-weight="700">2 worse</tspan></text>
 <text x="48" y="506" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="20" font-weight="600" fill="#1d1d1f">vs scx_flash</text>
-<text x="48" y="530" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" fill="#86868b">sched_ext 1.1.4 · through EEVDF, 2 sessions</text>
+<text x="48" y="530" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" fill="#86868b">sched_ext 1.1.4 · via EEVDF</text>
 <rect x="331.0" y="486" width="328.9" height="40" rx="6" fill="#34c759"/>
 <text x="495.5" y="513" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">7</text>
 <rect x="661.9" y="486" width="139.8" height="40" rx="6" fill="#aeaeb2"/>
