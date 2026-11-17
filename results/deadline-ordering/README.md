@@ -973,3 +973,11 @@ Only one 5 s stall has been seen (`r10-cpu8/1-b8`); the "once in about 40 runs" 
 **Change** (`nice-fix`): root-cgroup tasks are charged with their own weight, as in CFS, and tasks in child cgroups split `runnable_weight` less the root's runnable task weight by their hierarchical shares, so the effective weights add up to `runnable_weight` again.
 
 **Test** (`rootfix-run.sh`): `rootcg.sh`, a nice -20 CPU hog moved into the root cgroup next to 4 nice-0 and 4 nice-19 hogs on 4 CPUs for 40 s, twice each for EEVDF, the release build and the fix; then `gate.sh` 6 runs and `cgp.sh`. The fix goes on if the release build misbehaves in `rootcg.sh` (ejection or a share far from EEVDF's) and the fix does not, the gate passes 6 of 6 and the cgroup ratios stay within 10% of 2.0, 1.0 and 3.0. Then the 2-hour run again.
+
+### Root-cgroup fix: first results, 2026-11-17
+
+- The first `nicelong.sh` run hung after one round: a bare `wait` also waited for the scheduler, which runs as a background job of the same script. Nothing was measured; the script now waits for the three stressors only.
+- `rootcg.sh`, twice each, bogo ops of the root-cgroup nice -20 hog / 4 nice-0 / 4 nice-19 hogs on 4 CPUs: EEVDF 137,851 / 383,528 / 7,950 and 144,096 / 398,189 / 14,350; release build 134,728 / 393,082 / 3,952 and 136,645 / 399,415 / 4,009; fix 133,527 / 386,535 / 3,922 and 142,964 / 417,325 / 4,479. Neither build was ejected and the two do not differ. The test does not exercise the double count: the root hog stays runnable throughout, so every session-cgroup task is scaled by the same factor and their order is unchanged. The stall needs the root task's runnable state to change between charges (charged without it, waiting with it).
+- The fix passes `gate.sh` 6 of 6 (nice 19 at 2,217 bogo ops) and keeps cgroup weights: 1.98, 1.00, 3.02.
+
+The double count is real in the formula (effective weights add up to twice the runnable weight while a root task is runnable), but `rootcg.sh` does not show it causes the stall. The direct test is the run that failed: `long-run.sh` with the fix, 2 hours (`long/rootfix`).

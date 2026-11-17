@@ -13,8 +13,10 @@ for _ in $(seq 100); do [ "$(state)" = enabled ] && break; sleep 0.1; done
 end=$(( $(date +%s) + mins * 60 )); n=0
 while [ $(date +%s) -lt $end ]; do
   n=$((n + 1))
-  stress-ng --cpu 8 --timeout 30s >/dev/null 2>&1 & nice -n 19 stress-ng --cpu 8 --timeout 30s >/dev/null 2>&1 &
-  sudo nice -n -5 stress-ng --cpu 2 --timeout 30s >/dev/null 2>&1 & wait
+  stress-ng --cpu 8 --timeout 30s >/dev/null 2>&1 & a=$!
+  nice -n 19 stress-ng --cpu 8 --timeout 30s >/dev/null 2>&1 & b=$!
+  sudo nice -n -5 stress-ng --cpu 2 --timeout 30s >/dev/null 2>&1 & c=$!
+  wait $a $b $c  # not a bare wait: the scheduler is a background job too
   [ "$(state)" = enabled ] || { log "EJECTED in run $n"; break; }
 done
 log "final $(state) after $n runs"
