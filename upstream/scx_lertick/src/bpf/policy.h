@@ -329,28 +329,46 @@ static void cgrp_task_runnable(struct task_struct *p, struct task_ctx *tctx,
 	bpf_cgroup_release(cgrp);
 }
 
-/* Weight to charge service against: the task's share of its cgroup's share. */
+/*
+ * Weight to charge service against: the task's share of its cgroup's share.
+ *
+ * Only the root cgroup holds both tasks and child cgroups (cgroup v2 allows
+ * no internal tasks elsewhere). Its tasks, mostly kernel threads, compete by
+ * their own weights, as in CFS; the child cgroups split the rest of the
+ * runnable weight by their hierarchical shares. Without that split a
+ * runnable root task was counted twice: a nice -20 kworker (weight 8668)
+ * made every task in a child cgroup be charged about a tenth of its run,
+ * and tasks ahead of the clock waited ten times longer, past the watchdog.
+ */
 static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx,
 				 u32 weight)
 {
-	struct cgrp_ctx *cgc;
+	struct cgrp_ctx *cgc, *root;
 	struct cgroup	*cgrp;
-	u64		 eff, tws, rw = runnable_weight;
+	u64		 eff, tws, rw = runnable_weight, root_tws = 0;
 
 	if (!tctx || !tctx->cg_counted)
 		return weight;
 	cgrp = LERTICK_TASK_CGROUP(p);
 	if (!cgrp)
 		return weight;
+	if (!cgrp->level) {
+		bpf_cgroup_release(cgrp);
+		return weight;
+	}
 	cgc = cgrp_ctx(cgrp);
 	if (!cgc) {
 		bpf_cgroup_release(cgrp);
 		return weight;
 	}
+	root = cgrp_ancestor_ctx(cgrp, 0);
+	if (root)
+		root_tws = root->task_weight_sum;
 	cgrp_refresh_hweight(cgrp, cgc);
 	tws = cgc->task_weight_sum;
 	eff = (u64)weight * cgc->hweight / HWEIGHT_ONE;
 	bpf_cgroup_release(cgrp);
+	rw = rw > root_tws ? rw - root_tws : 0;
 	if (!tws || !rw)
 		return weight;
 	eff = eff * rw / tws;
