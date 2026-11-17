@@ -677,3 +677,19 @@ Two likely costs of the CPU queues: an idle CPU is not told about a task queued 
 `cand2-run.sh` ran 06:37 to 07:01 UTC with no fallbacks; raw sets in `cand2-sets.tar.gz`. Against `base` (EEVDF in brackets), 4 CPUs: `AC2` request p99 -10 (-183), wakeup p99 +48 (+20), messaging processes -6 (-10); `ACK` -18 (-205), +48 (+20), +1 (-4), with perf messaging threads -55 on 8 CPUs; `CK` +51 (-28), +3 (-50), -5 (-10), with messaging processes -27 on 8 CPUs. The idle kick does not cure the messaging loss of `C` and hurts with `A`.
 
 perf messaging runs hundreds of tasks whose bursts last microseconds, while schbench workers run for milliseconds. Round 3 keeps a preempted task on its CPU only once its current burst has run at least 1 ms (`CPU_REQUEUE_MIN_NS`): `C1` (C with the threshold) and `C1K` (with the kick), against `base` and `CK`, by the same rule (`cand3-run.sh`).
+
+### Round 3 result, 2026-11-17
+
+`cand3-run.sh` ran 07:02 to 07:26 UTC with no fallbacks; raw sets in `cand3-sets.tar.gz`. Against `base` (EEVDF in brackets):
+
+| Test | `C1` 4 CPUs | `C1` 8 CPUs | `C1K` 4 | `C1K` 8 | `CK` 4 | `CK` 8 |
+|---|---|---|---|---|---|---|
+| -m4 -t2 request p99 | +51 (-21) | -2 (+5) | +50 (-22) | -5 (+1) | +50 (-22) | -2 (+4) |
+| -m4 -t2 wakeup p99 | +9 (-45) | -2 (+39) | +9 (-45) | -2 (+39) | +9 (-45) | +0 (+40) |
+| -m4 -t2 RPS | +13 (+11) | -0 | +13 | +0 | +14 | +0 |
+| messaging processes | +12 (-3) | -10 (-9) | +4 | -7 | +8 | -18 |
+| messaging threads | -4 | -31 (-22) | -5 | -29 | -2 | -9 |
+| perf pipe | +1 | +43 | +4 | -32 | +6 | +53 |
+| kernel compile | -6 | -2 | -11 | -1 | -2 | -2 |
+
+All three keep the request gain on 4 CPUs. The 8-CPU messaging results move by 10 to 30 points between arms that differ only in a threshold, and `base` itself moved from -4 to -17 against EEVDF on 4-CPU messaging processes between sessions, so 3 repetitions cannot settle them. `C1` goes to a 5-repetition confirmation against `base` (`c1-run.sh`): it is accepted if -m4 -t2 request p99 on 4 CPUs is lower by more than 10% and no measure is worse than `base` by more than 10% on either CPU count.
