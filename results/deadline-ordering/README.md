@@ -655,3 +655,9 @@ Candidates, as switches in `policy.h` (all off in the default build):
 Short load tests (one run each, 4 CPUs): wakeup p99 / request p99 in us were `A` 4,004 / 149,760, `B` 5,112 / 131,328, `AB` 2,996 / 169,728, `C` 4,504 / 54,464, `AC` 2,116 / 115,072, `ABC` 1,998 / 124,800, against about 5,500 / 130,000 for the current build and 3,760 / 50,000 for EEVDF.
 
 **Screening** (`cand-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `base` (the current scx build), `A`, `C`, `AC` and `ABC`. A candidate goes on if, against `base` on 4 CPUs, schbench `-m 4 -t 2` request p99 or wakeup p99 is lower by more than 10% and neither is higher by more than 10%, and no other measure is worse than `base` by more than 10% on either CPU count.
+
+### Screening result: `AC` closes the schbench gap but costs elsewhere, 2026-11-17
+
+`cand-run.sh` ran 06:06 to 06:35 UTC with no fallbacks; raw sets in `cand-sets.tar.gz`. `AC` against EEVDF on 4 CPUs: schbench `-m 4 -t 2` request p99 -2% and wakeup p99 -6%, against -147% and -49% for `base`. Against `base` it is +46% and +20% there, but perf messaging processes is 15% worse on 4 CPUs, perf messaging threads 12% worse on 8 CPUs and perf pipe 54% slower on 8 CPUs (still 91% faster than EEVDF). `C` alone worsens messaging by 15 to 21% and -m4 -t2 wakeup p99 by 12%; `A` alone worsens request p99 by 18%; `ABC` collapses on 8 CPUs (-m4 -t2 request p99 -191%). None passes as screened.
+
+Two likely costs of the CPU queues: an idle CPU is not told about a task queued on another CPU's queue, so messaging bunches up, and every dispatch now iterates two queue heads, which shows on perf pipe's microsecond round trips. Next round: `AC2` (AC with a cheap `scx_bpf_dsq_nr_queued()` check before each head iteration), `ACK` (AC2 plus `LERTICK_CPU_KICK`, which wakes an idle CPU to steal when a task is queued on a CPU's queue) and `CK` (C with both), screened by the same rule (`cand2-run.sh`).

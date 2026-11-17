@@ -344,6 +344,8 @@ static __always_inline bool dsq_head(u64 dsq, u64 *vtime)
 {
 	struct task_struct *q;
 
+	if (!scx_bpf_dsq_nr_queued(dsq))
+		return false;
 	bpf_for_each(scx_dsq, q, dsq, 0) {
 		*vtime = q->scx.dsq_vtime;
 		return true;
@@ -351,16 +353,30 @@ static __always_inline bool dsq_head(u64 dsq, u64 *vtime)
 	return false;
 }
 
-/* The queue for an enqueued task: its CPU's own after a preemption, else its LLC's. */
+/*
+ * The queue for an enqueued task: its CPU's own after a preemption, else its
+ * LLC's. Nothing tells an idle CPU about another CPU's queue, so with
+ * LERTICK_CPU_KICK an idle CPU is woken to steal from it.
+ */
+#ifndef LERTICK_CPU_KICK
+#define LERTICK_CPU_KICK 0
+#endif
+
 static __always_inline u64 enqueue_dsq(struct task_struct *p,
 				       struct task_ctx *tctx, u64 enq_flags)
 {
-	s32 cpu = scx_bpf_task_cpu(p);
+	s32 cpu = scx_bpf_task_cpu(p), idle;
 
 	if (LERTICK_CPU_REQUEUE && !(enq_flags & SCX_ENQ_WAKEUP) && tctx &&
 	    tctx->episode_active && tctx->episode_runtime_ns && cpu >= 0 &&
-	    cpu < LERTICK_MAX_CPUS && bpf_cpumask_test_cpu(cpu, p->cpus_ptr))
+	    cpu < LERTICK_MAX_CPUS && bpf_cpumask_test_cpu(cpu, p->cpus_ptr)) {
+		if (LERTICK_CPU_KICK) {
+			idle = scx_bpf_pick_idle_cpu(p->cpus_ptr, 0);
+			if (idle >= 0)
+				scx_bpf_kick_cpu(idle, SCX_KICK_IDLE);
+		}
 		return CPU_DSQ(cpu);
+	}
 	return domain_of(cpu);
 }
 
@@ -397,7 +413,8 @@ static __always_inline bool steal_cpu_queue(s32 cpu)
 	bpf_for(i, 0, nr) {
 		if (i >= LERTICK_MAX_CPUS)
 			break;
-		if (i != (u32)cpu && LERTICK_MOVE_TO_LOCAL(CPU_DSQ(i)))
+		if (i != (u32)cpu && scx_bpf_dsq_nr_queued(CPU_DSQ(i)) &&
+		    LERTICK_MOVE_TO_LOCAL(CPU_DSQ(i)))
 			return true;
 	}
 	return false;
@@ -615,7 +632,8 @@ static __always_inline bool take_next(s32 cpu)
 		n++;
 	}
 	return LERTICK_MOVE_TO_LOCAL(home) || steal(home) ||
-	       (LERTICK_CPU_REQUEUE && LERTICK_MOVE_TO_LOCAL(CPU_DSQ(cpu))) ||
+	       (LERTICK_CPU_REQUEUE && scx_bpf_dsq_nr_queued(CPU_DSQ(cpu)) &&
+		LERTICK_MOVE_TO_LOCAL(CPU_DSQ(cpu))) ||
 	       steal_cpu_queue(cpu);
 }
 
