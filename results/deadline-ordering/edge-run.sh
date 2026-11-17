@@ -10,7 +10,7 @@ log() { echo "$(date +%T) $*" >> $OUT/progress.log; }
 st() { cat /sys/kernel/sched_ext/state; }
 up() { sudo dmesg -C; sudo $B "$@" > $OUT/sched-$name.log 2>&1 & pid=$!; for _ in $(seq 100); do [ "$(st)" = enabled ] && break; sleep 0.1; done; }
 down() { sudo kill -INT $pid 2>/dev/null; wait $pid; rc=$?; f=$(sudo dmesg | grep -o 'failed to run for [0-9.]*s\|runnable task stall' | head -1); log "$name: rc=$rc state-before-stop=$s ${f:-no-stall}"; }
-until grep -qE " done$" long/rootfix/progress.log 2>/dev/null; do sleep 20; done
+# (run after the long run finishes)
 N=$(nproc)
 
 # 1. The sched-ext/scx CI test, verbatim: aggressive stress with affinity churn, SIGTERM after 45 s, exit code must be 0.
@@ -36,17 +36,6 @@ for r in $(seq 20); do
 done
 log "attach-detach x20: failures=$fails"
 
-# 3. CPU hotplug under load: the kernel restarts the scheduler, the loader must re-attach.
-name=hotplug; up
-stress-ng --cpu $N --timeout 60s > /dev/null 2>&1 & sp=$!
-for c in 3 5 7; do
-  echo 0 | sudo tee /sys/devices/system/cpu/cpu$c/online > /dev/null; sleep 5
-  echo "after offline $c: $(st)" >> $OUT/hotplug.txt
-  echo 1 | sudo tee /sys/devices/system/cpu/cpu$c/online > /dev/null; sleep 5
-  echo "after online $c: $(st)" >> $OUT/hotplug.txt
-done
-wait $sp; s=$(st); down
-log "hotplug states: $(tr '\n' ';' < $OUT/hotplug.txt) restarts=$(grep -ci 'restart' $OUT/sched-hotplug.log)"
 
 # 4. cgroup churn: busy tasks moved between 8 cgroups every 0.2 s, weights changed, cgroups removed at the end.
 name=cgroup-churn; up

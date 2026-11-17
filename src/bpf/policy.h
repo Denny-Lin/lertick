@@ -67,8 +67,17 @@ static u64 runnable_weight;
  * the first bound) would wait over 10 s and trip the watchdog. The second
  * bound keeps that wait near WAIT_MAX_NS; under such load a light task gets a
  * little more than its weight's share instead of none.
+ *
+ * Every queued task also sits at most BEHIND_NS behind the clock, whatever
+ * brought it to the queue. Only wakeups were bounded before: tasks pinned to
+ * one crowded CPU each run a small fraction of it while the other CPUs move
+ * the one clock ahead, so they fell seconds behind it; one of them then held
+ * that CPU for a second and every task woken there (placed at the clock)
+ * waited past the watchdog. In a balanced system queued tasks stay within a
+ * few slices of the clock and the bound never applies.
  */
 #define AHEAD_NS (20ULL * NSEC_PER_MSEC)
+#define BEHIND_NS (20ULL * NSEC_PER_MSEC)
 #define WAIT_MAX_NS (500ULL * NSEC_PER_MSEC)
 
 static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
@@ -83,7 +92,11 @@ static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
 	if (by_now < ahead)
 		ahead = by_now;
 	cap = vtime_now + ahead;
-	return time_before(cap, vtime) ? cap : vtime;
+	if (time_before(cap, vtime))
+		return cap;
+	if (time_before(vtime, vtime_now - BEHIND_NS))
+		return vtime_now - BEHIND_NS;
+	return vtime;
 }
 /*
  * When taking the next task, prefer one that last ran on this CPU among the

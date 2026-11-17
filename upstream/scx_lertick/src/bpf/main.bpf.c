@@ -163,9 +163,10 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	u64 slice = task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
 
 	/*
-	 * Only a wakeup earns sleeper credit: a task requeued after its slice
-	 * keeps its vtime, or tasks with larger weights would be pulled back to
-	 * the clock and lose their share.
+	 * Only a wakeup earns sleeper credit (LAG_NS); a task requeued after its
+	 * slice keeps its vtime within the wider bounds of clamp_ahead(), or
+	 * tasks with larger weights would be pulled back to the clock and lose
+	 * their share.
 	 */
 	if ((enq_flags & SCX_ENQ_WAKEUP) &&
 	    time_before(vtime, vtime_now - LAG_NS))
