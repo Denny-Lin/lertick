@@ -8,8 +8,7 @@
  *
  * The including file defines, before including this header:
  *   struct task_ctx with u64 runtime_start_ns, bool running, u32 rq_weight,
- *     bool cg_counted, u32 eff_weight and u64 enq_ns, and a task_ctx()
- *     accessor;
+ *     bool cg_counted and u32 eff_weight;
  *   NSEC_PER_MSEC, LERTICK_MAX_CPUS (a power of two) and LERTICK_MAX_DOMAINS;
  *   LERTICK_MOVE_TO_LOCAL(dsq), its kernel's scx_bpf_dsq_move_to_local();
  *   LERTICK_TASK_CGROUP(p), its kernel's scx_bpf_task_cgroup().
@@ -325,111 +324,6 @@ static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx,
 }
 
 /*
- * Screening switch, 0 (off) by default: in the learned mode a task past its
- * predicted burst gets LERTICK_OVERRUN_SLICE_NS slices.
- */
-#ifndef LERTICK_OVERRUN_SLICE_NS
-#define LERTICK_OVERRUN_SLICE_NS 0
-#endif
-
-static __always_inline bool overran(struct task_ctx *tctx, u64 consumed)
-{
-	return tctx && mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
-	       tctx->model.updates >= min_train_samples && tctx->prediction_ns &&
-	       consumed >= tctx->prediction_ns;
-}
-
-/*
- * Screening switch, 0 (off) by default. A task that can run on one CPU only
- * (a per-CPU kworker, say) waits on that CPU's own queue. The CPU runs it
- * when it is ahead of the LLC queue in fair order, or once it has waited
- * PIN_WAIT_NS, and prev does not continue past it then. Its wait is then
- * bounded by about PIN_WAIT_NS plus one slice, instead of depending on how
- * far the tasks ahead of it lag the clock.
- */
-#ifndef LERTICK_PIN_GUARD
-#define LERTICK_PIN_GUARD 0
-#endif
-#define PIN_DSQ(cpu) ((u64)LERTICK_MAX_DOMAINS + (u32)(cpu))
-#define PIN_WAIT_NS  (10ULL * NSEC_PER_MSEC)
-
-/* The queue for an enqueued task. */
-static __always_inline u64 enqueue_dsq(struct task_struct *p)
-{
-	s32 cpu = scx_bpf_task_cpu(p);
-
-	if (LERTICK_PIN_GUARD && p->nr_cpus_allowed == 1 && cpu >= 0 &&
-	    cpu < LERTICK_MAX_CPUS && bpf_cpumask_test_cpu(cpu, p->cpus_ptr))
-		return PIN_DSQ(cpu);
-	return domain_of(cpu);
-}
-
-/* Record when a task was queued, for the pinned-task bound. */
-static __always_inline void note_enqueue(struct task_ctx *tctx)
-{
-	if (LERTICK_PIN_GUARD && tctx)
-		tctx->enq_ns = bpf_ktime_get_ns();
-}
-
-static __always_inline bool head_vtime(u64 dsq, u64 *vtime)
-{
-	struct task_struct *q;
-
-	bpf_for_each(scx_dsq, q, dsq, 0) {
-		*vtime = q->scx.dsq_vtime;
-		return true;
-	}
-	return false;
-}
-
-/*
- * Whether the head of this CPU's pinned queue is due: it has waited
- * PIN_WAIT_NS, or it is ahead of vtime, or (vtime 0) of the LLC queue's head.
- */
-static __always_inline bool pin_due(s32 cpu, u64 vtime)
-{
-	struct task_struct *q;
-	struct task_ctx	   *t;
-	u64		    dv;
-
-	if (!LERTICK_PIN_GUARD || !scx_bpf_dsq_nr_queued(PIN_DSQ(cpu)))
-		return false;
-	bpf_for_each(scx_dsq, q, PIN_DSQ(cpu), 0) {
-		t = task_ctx(q);
-		if (t && time_after(bpf_ktime_get_ns(), t->enq_ns + PIN_WAIT_NS))
-			return true;
-		if (vtime)
-			return time_before(q->scx.dsq_vtime, vtime);
-		vtime = q->scx.dsq_vtime;
-		break;
-	}
-	return !head_vtime(domain_of(cpu), &dv) || !time_before(dv, vtime);
-}
-
-/* Create the LLC queues and, with LERTICK_PIN_GUARD, one queue per CPU. */
-static __always_inline s32 policy_init(void)
-{
-	u32 d, nr = scx_bpf_nr_cpu_ids();
-	s32 ret;
-
-	bpf_for(d, 0, domain_count()) {
-		ret = scx_bpf_create_dsq(d, -1);
-		if (ret)
-			return ret;
-	}
-	if (!LERTICK_PIN_GUARD)
-		return 0;
-	bpf_for(d, 0, nr) {
-		if (d >= LERTICK_MAX_CPUS)
-			break;
-		ret = scx_bpf_create_dsq(PIN_DSQ(d), -1);
-		if (ret)
-			return ret;
-	}
-	return 0;
-}
-
-/*
  * Whether prev should keep its CPU instead of taking the next queued task.
  * A task whose slice ends otherwise always yields, so two tasks sharing a
  * CPU alternate and get equal time whatever their weights. prev stays while
@@ -478,8 +372,6 @@ static __always_inline bool keep_prev(struct task_struct *prev,
 	if (ran >= KEEP_MAX_NS)
 		return false;
 	vtime += ran * 100 / weight;
-	if (pin_due(cpu, vtime))
-		return false;
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (n++ >= HEAD_SCAN)
 			return false;
@@ -518,8 +410,6 @@ static __always_inline bool take_next(s32 cpu)
 	u64		    head = 0;
 	int		    n	 = 0;
 
-	if (pin_due(cpu, 0) && LERTICK_MOVE_TO_LOCAL(PIN_DSQ(cpu)))
-		return true;
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (!n)
 			head = q->scx.dsq_vtime;
@@ -531,8 +421,7 @@ static __always_inline bool take_next(s32 cpu)
 			return true;
 		n++;
 	}
-	return LERTICK_MOVE_TO_LOCAL(home) || steal(home) ||
-	       (LERTICK_PIN_GUARD && LERTICK_MOVE_TO_LOCAL(PIN_DSQ(cpu)));
+	return LERTICK_MOVE_TO_LOCAL(home) || steal(home);
 }
 
 #endif /* __LERTICK_POLICY_H */
