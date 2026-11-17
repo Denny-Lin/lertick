@@ -16,7 +16,7 @@ for rep in $(seq 0 $((reps - 1))); do
     sudo ${arm#*=} > $d/sched.log 2>&1 &
     pid=$!
     wait_state enabled || { log "FAIL attach $rep-$name"; sudo kill -INT $pid; wait $pid; exit 1; }
-    for g in 16 32 16; do $HB -g $g -l 1000 >> $d/hb.txt 2>&1; done
+    for g in ${GROUPS_LIST:-16 32 16}; do $HB -g $g -l 1000 >> $d/hb.txt 2>&1; done
     [ "$(state)" = enabled ] || { log "FALLBACK $rep-$name"; touch $d/fallback; }
     sudo kill -INT $pid 2>/dev/null; wait $pid
     wait_state disabled || { log "FAIL detach $rep-$name"; exit 1; }

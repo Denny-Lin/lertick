@@ -924,3 +924,11 @@ In the 8-CPU set, `b8` itself was ejected once in 3 repetitions: `hackbench -g 1
 | `s15` | +27 | -10 | -19 / -46 | perf messaging 38% and 53% behind EEVDF |
 
 None qualifies, so step 2 is not run. `s125`'s gate fairness run read `disabled` with no nice-19 output, which points to the scheduler not attaching within the gate's 10 s wait rather than an ejection (no `failed to run` line in the gate log); it is not taken further either way. Four rounds now show the same trade: a shorter fixed slice lowers -m4 -t2 wakeup p99 and raises request p99 or perf messaging time. Slice tuning stops here.
+
+### Atomic clock: stall tests and gate, 2026-11-17
+
+- `stall8.sh atomic` (`hackbench -g 16`, `-g 32`, `-g 16` on 8 CPUs, 1 s watchdog builds, 12 repetitions): `b8` fell back 3 times, the fix once. In the one `b8` dump that lists the stalled task, it sat 12.5 ms ahead of the queue median; in the fix's, 0.8 ms, an ordinary fair round of 1,280 tasks running past the 1 s test watchdog.
+- `stall8.sh atomic16` (`hackbench -g 16` only, 40 repetitions of three runs): no fallback in either build; median hackbench 1.244 s (`b8`) and 1.246 s (fix).
+- `gate.sh` (fix at the normal 5 s watchdog): nice mix 4 of 4, fairness 96,117 / 192,169 / 2,279, -m4 -t2 wakeup / request p99 3,988 / 53,696 µs.
+
+The race is real in the code and the fix costs nothing measured, but the 6 s stall it targets is rare (once in about 40 `b8` runs), so these tests cannot show it is gone. It is treated as a correctness fix: `fix3-run.sh` checks held-out against `b8` on 4 and 8 CPUs (3 repetitions, no measure worse by more than 7% on both CPU counts at once is allowed, given the noise), the stress battery, and 15 repetitions of three `hackbench -g 32` runs per build at the normal 5 s watchdog.
