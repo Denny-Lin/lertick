@@ -52,6 +52,23 @@ static u64 runnable_weight;
  */
 #define LAG_NS (2ULL * NSEC_PER_MSEC)
 /*
+ * A queued task may sit at most AHEAD_NS (scaled by its own weight) ahead of
+ * the clock. Charges use the cgroup-effective weight, which drops while
+ * sibling cgroups have runnable tasks; a task charged in such a moment can
+ * land far ahead of the clock, and the clock catches up at service over the
+ * runnable weight, which with hundreds of runnable tasks takes seconds. EEVDF
+ * bounds lag the same way in both directions.
+ */
+#define AHEAD_NS (20ULL * NSEC_PER_MSEC)
+
+static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
+{
+	u32 w	= p->scx.weight ? p->scx.weight : 1;
+	u64 cap = vtime_now + AHEAD_NS * 100 / w;
+
+	return time_before(cap, vtime) ? cap : vtime;
+}
+/*
  * When taking the next task, prefer one that last ran on this CPU among the
  * first AFFINE_DEPTH queued tasks within AFFINE_WINDOW_NS of the head in
  * vtime. A preempted task then usually resumes on its own CPU instead of
@@ -126,6 +143,7 @@ static __always_inline bool sync_local(struct task_struct *p, s32 *cpu)
 		return false;
 	if (time_before(vtime, vtime_now - LAG_NS))
 		vtime = vtime_now - LAG_NS;
+	vtime = clamp_ahead(p, vtime);
 	if (bpf_iter_scx_dsq_new(&it, domain_of(this), 0) == 0) {
 		head = bpf_iter_scx_dsq_next(&it);
 		ok   = !head ||
