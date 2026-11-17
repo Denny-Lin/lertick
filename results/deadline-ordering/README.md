@@ -370,3 +370,191 @@ scx_lavd 1.1.2 and 1.1.4 failed to load when built with the guest's clang 18: th
 - **Arms:** EEVDF, Lertick online (release build), scx_p2dq 1.1.4 (Meta, server-oriented) and scx_flash 1.1.4 (latency-oriented), both built with LLVM 20.1.8 and run with default options.
 - **Sets and verdicts:** the same as for scx_lavd: `heldout.sh` and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions each, 5% and 3% thresholds. `more-run.sh` starts them after the lavd sets finish and stops if either scheduler fails a 10-second load test.
 - **README comparison:** each scheduler is compared with Lertick within the same session.
+
+## Wakeup preemption and a shorter continuation cap, hypothesis fixed 2026-11-16 before the run
+
+**Why.** schbench with 4 message threads (`-m 4 -t 2`) has 12 threads on 4 CPUs. Its wakeup p99 is 42% (4 CPUs) and 27% (8 CPUs) above EEVDF. scx_lavd 1.1.4 reaches 66 µs against EEVDF's 3,748 µs on 4 CPUs. Reading its source, it orders by a latency-criticality deadline and, on a wakeup, preempts the least critical of the preferred CPU and two random CPUs. Lertick queues a woken task in fair order and never preempts, so it waits for a slice to end (up to 5 ms), and `keep_prev` can let the running task continue for up to 20 ms. Earlier wakeup preemption (r1, r6) only kicked the target CPU and was judged on the tuned benchmarks, which do not include this case. lavd pays elsewhere (request p99 +213%, `hackbench -g 16` +28% on 4 CPUs), so only the preemption idea is tried, inside Lertick's fair order.
+
+**Arms** (all built from the same source, `BPF_DEFS` selects the change):
+
+- `base`: the current algorithm.
+- `kickA`: `LERTICK_WAKE_KICK=1`. A woken task that is not ahead of the clock asks one CPU to yield: among its previous CPU and two random CPUs, the one whose current task is furthest ahead in vtime, if that task has run at least 0.5 ms and is more than 1 ms ahead.
+- `kickB`: kickA plus `LERTICK_KEEP_MAX_NS=5 ms` (instead of 20 ms).
+- `keepC`: the 5 ms cap alone.
+
+**Screening** (`kick-run.sh`): the 11 held-out measures on 4 and on 8 CPUs, 3 repetitions, with EEVDF. A candidate goes on to a 5-repetition confirmation if it lowers schbench `-m 4 -t 2` wakeup p99 against `base` by more than 10% on both CPU counts, and is not worse than `base` by more than 5% on any other measure. It replaces `base` only if the confirmation shows it no worse than `base` on any measure on either CPU count, and the kernel compile (`kbuild-long.sh`) is no worse by more than 3%.
+
+### Screening result: wakeup preemption rejected, 2026-11-16
+
+`kick-sets.tar.gz` holds both sets (`heldout/kick-cpu4`, `heldout/kick-cpu8`, 3 repetitions, 5 arms). All four builds passed a 10-second load test; there were no fallbacks in 30 Lertick runs. schbench `-m 4 -t 2` wakeup p99, the target measure:
+
+| Arm | 4 CPUs | 8 CPUs |
+| --- | ---: | ---: |
+| EEVDF | 3,788 µs | 142 µs |
+| base | 5,064 µs | 200 µs |
+| kickA | 5,368 µs (+6%) | 346 µs (+73%) |
+| kickB | 5,336 µs (+5%) | 314 µs (+57%) |
+| keepC | 5,224 µs (+3%) | 202 µs (+1%) |
+
+- **No candidate meets the screening rule** (more than 10% lower than `base` on both CPU counts). Wakeup preemption makes the 8-CPU tail worse and also slows `perf messaging` processes on 8 CPUs by 14–16%. The 5 ms continuation cap changes nothing measurable.
+- **The switches were removed** (revert of the experiment commit), as with earlier rejected switches.
+- **Interpretation.** lavd's low tail does not come from preemption alone. Its deadline puts frequently waking, short-running tasks (here the message threads) far ahead of the workers, so they run almost at once; Lertick's fair vtime order treats both kinds of thread alike. Trying that would change the ordering rule itself and needs its own hypothesis.
+
+## Runnable-task stalls in the p2dq and flash sessions, 2026-11-16
+
+In `heldout/cpu4-more`, Lertick (release build) fell back to EEVDF in 2 of 5 repetitions. Both times the kernel watchdog reported a runnable hackbench task that had not run for over 1 s (1.108 s and 1.150 s); the loader sets a 1,000 ms watchdog timeout. The 20 earlier 4-CPU held-out runs, the 15 lavd runs and the 30 runs above had no fallback, so the stall is intermittent.
+
+**Likely mechanism.** `hackbench -g 16` keeps hundreds of tasks runnable on 4 CPUs. The clock advances by service over the runnable weight, so with about 640 runnable tasks it moves about 6 ms per second. A task requeued after a 5 ms slice sits about 5 ms ahead of the clock, and every woken task is placed up to 2 ms behind it, so the requeued task waits until the clock advances about 7 ms: 640 × 7 ms / 4 CPUs ≈ 1.1 s, which matches the watchdog reports. Fair order alone does not bound the wait when the runnable count is large.
+
+The p2dq and flash comparison from these sessions is kept here but not added to the README until the stall is fixed and the comparison is rerun with the fixed build. Lertick against each, from the same sessions, with the two fallback repetitions removed (4 CPUs: 3 repetitions):
+
+| Lertick against | 4 CPUs | 8 CPUs |
+| --- | --- | --- |
+| scx_p2dq 1.1.4 | 7 better, 2 same, 2 worse | 3 better, 5 same, 3 worse |
+| scx_flash 1.1.4 | 8 better, 2 same, 1 worse | 6 better, 3 same, 2 worse |
+
+### Starvation guard, criteria fixed 2026-11-16 before the run
+
+**Change.** Each enqueue into the shared queue records its time. A BPF timer every 50 ms moves up to 8 tasks that have been queued for more than 200 ms straight to their CPU's local queue and kicks that CPU. The new `stall_rescues` counter reports how often it acts. This bounds the wait well inside the loader's 1 s watchdog without changing fair order otherwise.
+
+**Stress test** (`stall-test.sh`): `hackbench -g 16 -l 1000` and `-g 32 -l 1000` on CPUs 0–3, 10 repetitions, arms EEVDF, `base` (current algorithm) and `guard`, order shuffled per repetition. The guard passes if it has no fallback, its largest wake-to-run time stays under 500 ms, and its median hackbench times are no more than 5% slower than `base`. It then goes to the 5-repetition held-out and kernel compile confirmation on 4 and 8 CPUs against `base` and EEVDF, and replaces `base` only if no measure is worse than `base` on either CPU count.
+
+**First stress result (`stall/s1`): the guard alone fails.** `base` and `guard` each fell back once in 10 repetitions (a hackbench task not run for 1.08 s), and the largest wake-to-run time stayed at 450–660 ms with the guard against 510–760 ms without it, although the guard moved 340–660 tasks per run. Both runs put about 100,000 tasks on local queues against about 10,000 on the shared queue: `sync_local` queues a sync wakee on the waker's CPU without looking at that CPU's local queue, which other CPUs cannot take from, so a chain of sync wakeups can pile tasks there out of the guard's reach.
+
+**Second candidate (`guard2`):** the guard plus `sync_local` only onto an empty local queue. Same stress test and criteria (`ARMS="default base=... guard2=..." stall-test.sh s2 10`).
+
+**Second stress result (`stall/s2`): `guard2` fails too.** Each of `base` and `guard2` fell back once in 10 repetitions; the largest wake-to-run time was 470–730 ms for `base` and 460–740 ms for `guard2`, and `guard2` made `hackbench -g 16` and `-g 32` 12% and 18% slower than `base`. Limiting `sync_local` cut local enqueues from about 158,000 to 65,000 per run without shortening the longest wait, so the local queues were not the cause. Both changes were reverted.
+
+**Revised explanation.** With 640 or 1,280 hackbench tasks on 4 CPUs, a fair round alone takes several hundred milliseconds: `base` has a longest wake-to-run time of 470–760 ms in every one of its 20 stress runs, not only in the runs that fell back. The fallbacks are the tail of that distribution crossing Lertick's watchdog timeout, which is 1 s. The other sched_ext schedulers measured here use 5 s (scx_bpfland, scx_flash), 25 s (scx_p2dq) and 30 s (scx_lavd). The 1 s value dates from the project's first commit and has no recorded rationale.
+
+### Watchdog timeout 5 s, criteria fixed 2026-11-16 before the run
+
+The owner chose to raise the runnable-task watchdog timeout from 1 s to 5 s (`t5`), as in scx_bpfland and scx_flash. It changes no scheduling decision, so it can only remove fallbacks; it must still eject a scheduler that really stalls a task.
+
+- **Stall stress** (`stall-test.sh s3 10`, arms EEVDF, `base`, `t5`): `t5` passes with no fallback in 10 repetitions and median hackbench times within 5% of `base`.
+- **Watchdog still works:** `tests/validate_watchdog_flags.py` (expected and unexpected injected stalls) passes with `t5` in the VM.
+- **No regression:** the held-out suite and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions, against `base` and EEVDF; no measure worse than `base` by more than 5% (3% for the kernel compile) on either CPU count. Since scheduling is unchanged, a difference beyond that would point to noise and be rerun rather than accepted.
+
+### Watchdog timeout 5 s: result
+
+`t5-sets.tar.gz` holds the load test, the injected watchdog tests and the held-out and kernel compile sets; `stall-s3-s4.tar.gz` the two stress runs.
+
+- **Load and watchdog:** `t5` loads with `timeout_ms` 5000, and `validate_watchdog_flags.py` passes (normal exit, expected and unexpected injected stalls all eject the scheduler and restore the default).
+- **Stress:** `t5` had no fallback in 20 repetitions (`s3`, `s4`); `base` fell back once in `s4`. Median hackbench `t5` against `base`: −2.8% and +7.3% (`s3`), −0.4% and −3.1% (`s4`) for `-g 16` and `-g 32`. The +7.3% exceeded the 5% rule and was rerun as planned; the rerun is within it.
+- **Held-out and kernel compile:** no fallback. `t5` against `base` was worse by 6–7% on three 4-CPU measures and better by 12–42% on four 8-CPU measures, with no 8-CPU loss. The two builds make identical scheduling decisions, so these differences measure the noise between two arms of one session, not the change.
+- **Decision:** `t5` replaces `base`. It removes the fallbacks without changing scheduling.
+
+## Pooled comparison with EEVDF over six sessions, 2026-11-16
+
+The noise above made single-session verdicts against EEVDF suspect, so `pool.py` combines every held-out session that ran Lertick (the release algorithm) and EEVDF together: the first held-out sessions, the lavd, p2dq/flash, kick and t5 sessions, six per CPU count (the t5 session contributes both `base` and `t5`). Each session gives one percentage per measure; the verdict uses the median over sessions.
+
+| Measure | 4 CPUs | 8 CPUs |
+| --- | --- | --- |
+| perf messaging, processes | same (−1%) | worse (−7%) |
+| perf messaging, threads | same (+1%) | same (−3%) |
+| perf pipe | better (+93%) | better (+89%) |
+| schbench `-m 4 -t 2` wakeup p99 | worse (−47%) | worse (−32%) |
+| schbench `-m 4 -t 2` request p99 | worse (−136%) | worse (−6%) |
+| schbench `-m 4 -t 2` RPS | same (+4%) | same (0%) |
+| schbench `-m 1 -t 1` wakeup p99 | same (+5%) | same (+5%) |
+| schbench `-m 1 -t 1` request p99 | worse (−7%) | worse (−12%) |
+| hackbench threads | better (+29%) | better (+11%) |
+| hackbench `-g 16` | same (+1%) | same (+4%) |
+| kernel/sched rebuild (short) | same (−4%) | same (0%) |
+| **Total** | **2 better, 6 same, 3 worse** | **2 better, 5 same, 4 worse** |
+
+- **Only two wins hold in every session:** `perf bench pipe` and hackbench in thread mode. The losses on schbench `-m 4 -t 2` also hold in every session.
+- **The README's first held-out session was a favourable one.** It showed 4 wins on 4 CPUs and 6 on 8; pooled, both are 2. The other measures swing by 10–50 percentage points between sessions with no code change.
+- **Consequence for reporting:** verdicts against EEVDF should come from pooled sessions, not from one session. The longer kernel compile (`kbuild-long`) was level or better in every session and is not in this table.
+
+## Overnight sessions with an idle host, criteria fixed 2026-11-16 before the run
+
+The six pooled sessions ran while the host Mac was also in use (a video call and video playback at times). Host load takes vCPUs away from the guest, and Lertick's single shared queue may suffer more from a vCPU paused while holding its lock than EEVDF's per-CPU queues, so host activity could bias results against Lertick rather than only add noise.
+
+- **Sessions** (`night-run.sh`): two rounds, each with EEVDF, Lertick (`t5`, the 5 s watchdog build), scx_bpfland, scx_lavd, scx_p2dq and scx_flash in the same sessions: `heldout.sh` on 4 and 8 CPUs and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions each. The host is not otherwise used.
+- **Host evidence:** `host-load.sh` logs the Mac's load average and busiest processes every 10 s; the guest logs `/proc/stat` every 10 s for steal time.
+- **Use:** if both rounds agree with each other and steal time stays low, they replace the pooled daytime sessions as the README's basis, with verdicts from the median of the two rounds and every scheduler compared within the same rounds. If the overnight results are clearly better for Lertick than the daytime ones, host load biased the daytime sessions.
+
+### Evening session result, 2026-11-16
+
+The schedule changed to one round (`night-run.sh 1 eve 0`, 15:29 to 16:47 host time) while the owner was away; another process on the host trained a model under a usage limit. Host load average 2.4 to 7.8 (mean 4.2, including the VM itself), guest steal time 0. No fallbacks in any arm.
+
+Lertick (`t5`) against EEVDF in this session (positive is better for Lertick; pooled daytime value in brackets):
+
+| Test | 4 CPUs | 8 CPUs |
+|---|---|---|
+| hackbench msg processes | +3 (-1) | +0 (-7) |
+| hackbench msg threads | +2 (+1) | -5 (-3) |
+| perf bench sched pipe | +92 (+93) | +92 (+88) |
+| hackbench pipe threads | +26 (+29) | +16 (+11) |
+| hackbench 16 groups | +1 (+1) | +2 (+4) |
+| schbench -m1 -t1 request p99 | +1 (-7) | +0 (-12) |
+| schbench -m1 -t1 wakeup p99 | +9 (+5) | +7 (+5) |
+| schbench -m4 -t2 request p99 | -155 (-136) | -3 (-6) |
+| schbench -m4 -t2 wakeup p99 | -40 (-47) | +27 (-32) |
+| schbench -m4 -t2 RPS | +0 (+4) | +0 (+0) |
+| kernel compile | -1 (+2) | +0 (+1) |
+
+Better/same/worse at a 5% threshold: 3/6/2 on 4 CPUs and 4/7/0 on 8 CPUs. Against the other schedulers in the same session: scx_bpfland 7/4/0 and 6/4/1, scx_lavd 7/3/1 and 2/6/3, scx_p2dq 7/2/2 and 3/6/2, scx_flash 7/2/2 and 7/4/0.
+
+Raw sets: `eve-sets.tar.gz` (held-out, kernel compile, guest `/proc/stat` log).
+
+Verdict: the evening session agrees with the pooled daytime results within the known session-to-session swing. The 4-CPU schbench -m4 -t2 losses are as large as before, so host use did not cause them. The small daytime losses on 8-CPU messaging processes and on schbench -m1 -t1 request p99 did not appear in this session and may have been partly host noise; the 8-CPU -m4 -t2 wakeup win is a single session against a pooled loss and is not taken as a change. One round is not enough to replace the pooled basis, so the README keeps the pooled numbers.
+
+## AI deadline order (`dl`), hypothesis fixed 2026-11-16 before the run
+
+**Why.** The losses that hold in every session are latency with many message threads (schbench `-m 4 -t 2`) and single-thread request latency. EEVDF orders by virtual deadline (vruntime plus the requested slice over weight), and lavd puts short, frequently waking tasks first. Lertick orders by vtime alone; the model's predicted burst only sets the slice, which is why online and fixed modes score alike.
+
+**Change** (`LERTICK_AI_DEADLINE=1`): the shared queue key becomes vtime plus the task's slice over its weight; in online mode the slice is the predicted burst (0.5–5 ms). The offset is removed when the task starts running, so charging is unchanged, and `keep_prev` adds prev's own offset before comparing. r4's earlier deadline variant hurt hackbench pipe (1.72×); it is not identical (it was combined with other changes and judged on the tuned set), so pipe and hackbench are watched closely.
+
+**Screening** (`heldout.sh aidl-cpu4` and `aidl-cpu8`, 3 repetitions, arms EEVDF, `base` and `dl` built from the same source). `dl` against `base` is compared within each session, so host load affects both Lertick arms alike. `dl` goes on if schbench `-m 4 -t 2` wakeup p99 is lower than `base` by more than 10% on both CPU counts and no other measure is worse than `base` by more than 10% (the spread seen between identical builds in one session).
+
+### Screening result: AI deadline order rejected, 2026-11-16
+
+`aidl-sets.tar.gz` holds both sets (3 repetitions, EEVDF, `base`, `dl`). `dl` against `base`, same session:
+
+| Measure | 4 CPUs | 8 CPUs |
+| --- | ---: | ---: |
+| schbench `-m 4 -t 2` wakeup p99 (target) | +1% | +15% |
+| schbench `-m 4 -t 2` request p99 | +1% | +12% |
+| perf messaging, processes | +8% | +6% |
+| perf messaging, threads | +25% | −9% |
+| hackbench `-g 16` | +7% | +11% |
+| perf pipe | −45% | −29% |
+| schbench `-m 1 -t 1` request p99 | −6% | +6% |
+
+Positive is worse for `dl`. The target measure does not improve and several others get worse, so `dl` is rejected and the switch reverted. With one shared queue, ordering by predicted deadline moves short-burst tasks ahead of fair order without shortening the wakeup tail; this agrees with r4.
+
+**Schedule change.** The idle-host comparison runs as one round (`night-run.sh 1 eve`) from 17:35 to about 20:00 local time on 2026-11-16, while the owner is out, instead of two rounds overnight. `host-load.sh` logs the host from 17:35 to 21:00. One round cannot show round-to-round spread on an idle host; it does show whether the daytime sessions were biased against Lertick.
+
+## Learned continuation (`ek`), hypothesis fixed 2026-11-16 before the run
+
+**Why.** Online and fixed modes score alike because the prediction only sets the slice, and most tasks sleep before any slice ends. The consistent loss is wakeup latency with many message threads, where a woken task waits behind a running one: `keep_prev` lets prev continue while it is ahead in fair order, for up to 20 ms.
+
+**Change** (`LERTICK_AI_KEEP=1`): when prev's slice ends and its current burst has a trained prediction, keep prev if it is predicted to sleep within 0.5 ms, and yield to a queued task if it is predicted to run more than 2 ms longer. Otherwise the fair rule decides. CPU-bound tasks have no valid burst and fixed mode has no prediction, so both are unchanged; only the learned mode can change.
+
+**Screening** (`ek-run.sh`, starts when the evening round ends): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `base` online, `base` fixed and `ek` online, built from the same source. `ek` goes on if schbench `-m 4 -t 2` wakeup p99 is lower than `base` online by more than 10% on both CPU counts and no other measure is worse than `base` online by more than 10%. The `base` online and fixed arms also measure what the learned slice adds today.
+
+### Screening result: learned continuation rejected, 2026-11-16
+
+`ek-run.sh` ran 16:47 to 17:06 host time with no fallbacks; raw sets in `ek-sets.tar.gz`. Change against `base` online (positive is better for `ek`):
+
+| Test | 4 CPUs | 8 CPUs |
+|---|---|---|
+| schbench -m4 -t2 wakeup p99 (target) | +2 | -16 |
+| schbench -m4 -t2 request p99 | -2 | -5 |
+| schbench -m1 -t1 wakeup p99 | -15 | +9 |
+| hackbench msg processes | +12 | +6 |
+| hackbench 16 groups | +12 | -1 |
+| hackbench pipe threads | -9 | -3 |
+| perf bench sched pipe | +1 | -7 |
+
+The target moved by +2% and -16%, not by more than 10% on both CPU counts, and schbench -m1 -t1 wakeup p99 was 15% worse on 4 CPUs. `ek` is rejected and the `LERTICK_AI_KEEP` switch is removed from the source; `BPF_DEFS` stays in the Makefile for later screening builds.
+
+What the learned slice adds today (`base` online against `base` fixed, same session): on 4 CPUs perf pipe +24% but schbench -m4 -t2 wakeup p99 -18%, hackbench msg processes -12% and 16 groups -10%; on 8 CPUs schbench -m1 -t1 wakeup p99 +18% and hackbench pipe threads +6%, the rest within 3%. The signs disagree between CPU counts and with earlier sessions, so with 3 repetitions this is still noise rather than a measured gain or loss from learning.
+
+## Pooled comparison with every scheduler, 2026-11-16
+
+`pool_all.py` adds the evening session to the pool and pools the other schedulers the same way: per session, Lertick's median against the other scheduler's median from the same session (fallback repetitions dropped, kernel compile from `kbuild-long`), then the median over sessions. EEVDF has 7 sessions (6 for kernel compile); scx_bpfland, scx_lavd, scx_p2dq and scx_flash have 2 each (the first bpfland or lavd or p2dq/flash session, and the evening session). The README charts use these numbers (`make_chart.py`).
+
+Better/same/worse at 5%, 4 CPUs then 8 CPUs: EEVDF 3/6/2 and 3/5/3, scx_bpfland 7/3/1 and 8/2/1, scx_lavd 7/3/1 and 5/2/4, scx_p2dq 7/2/2 and 3/6/2, scx_flash 7/2/2 and 6/5/0. Against EEVDF the losses that remain are schbench -m 4 -t 2 (request p99 2.4 times higher and wakeup p99 47% higher on 4 CPUs, wakeup p99 31% higher on 8 CPUs) and, on 8 CPUs, perf messaging processes (6%) and schbench -m 1 -t 1 request p99 (10%).

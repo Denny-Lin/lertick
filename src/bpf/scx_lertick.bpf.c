@@ -1345,5 +1345,11 @@ SCX_OPS_DEFINE(lertick_ops,
 	.disable = (void *)lertick_disable,
 	.init = (void *)lertick_init,
 	.exit = (void *)lertick_exit,
-	.timeout_ms = 1000U,
+	/*
+	 * Runnable-task watchdog. With hundreds of runnable tasks per CPU, a fair
+	 * round alone can take most of a second, so 1 s ejected the scheduler under
+	 * heavy hackbench. 5 s matches scx_bpfland and scx_flash and still bounds a
+	 * real stall; the kernel default is 30 s.
+	 */
+	.timeout_ms = 5000U,
 	.name = "scx_lertick");

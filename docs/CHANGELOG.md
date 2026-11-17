@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — 2026-11-16
+
+### Watchdog timeout
+
+- Raise the runnable-task watchdog timeout from 1 s to 5 s, as in scx_bpfland
+  and scx_flash. With hundreds of runnable tasks on 4 CPUs (hackbench -g 16 or
+  -g 32) a fair round can take most of a second, and the 1 s timeout ejected
+  Lertick in about one run in ten. Scheduling decisions are unchanged; injected
+  stalls still eject it. See results/deadline-ordering/README.md.
+- The README now reports every comparison as the median over all sessions
+  that ran both schedulers (7 against EEVDF, 2 against each sched_ext
+  scheduler) instead of one session.
+
 ## Unreleased — 2026-11-02
 
 ### Native installation and foreground trials
