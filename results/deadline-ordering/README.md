@@ -475,6 +475,30 @@ The six pooled sessions ran while the host Mac was also in use (a video call and
 - **Host evidence:** `host-load.sh` logs the Mac's load average and busiest processes every 10 s; the guest logs `/proc/stat` every 10 s for steal time.
 - **Use:** if both rounds agree with each other and steal time stays low, they replace the pooled daytime sessions as the README's basis, with verdicts from the median of the two rounds and every scheduler compared within the same rounds. If the overnight results are clearly better for Lertick than the daytime ones, host load biased the daytime sessions.
 
+### Evening session result, 2026-11-16
+
+The schedule changed to one round (`night-run.sh 1 eve 0`, 15:29 to 16:47 host time) while the owner was away; another process on the host trained a model under a usage limit. Host load average 2.4 to 7.8 (mean 4.2, including the VM itself), guest steal time 0. No fallbacks in any arm.
+
+Lertick (`t5`) against EEVDF in this session (positive is better for Lertick; pooled daytime value in brackets):
+
+| Test | 4 CPUs | 8 CPUs |
+|---|---|---|
+| hackbench msg processes | +3 (-1) | +0 (-7) |
+| hackbench msg threads | +2 (+1) | -5 (-3) |
+| perf bench sched pipe | +92 (+93) | +92 (+88) |
+| hackbench pipe threads | +26 (+29) | +16 (+11) |
+| hackbench 16 groups | +1 (+1) | +2 (+4) |
+| schbench -m1 -t1 request p99 | +1 (-7) | +0 (-12) |
+| schbench -m1 -t1 wakeup p99 | +9 (+5) | +7 (+5) |
+| schbench -m4 -t2 request p99 | -155 (-136) | -3 (-6) |
+| schbench -m4 -t2 wakeup p99 | -40 (-47) | +27 (-32) |
+| schbench -m4 -t2 RPS | +0 (+4) | +0 (+0) |
+| kernel compile | -1 (+2) | +0 (+1) |
+
+Better/same/worse at a 5% threshold: 3/6/2 on 4 CPUs and 4/7/0 on 8 CPUs. Against the other schedulers in the same session: scx_bpfland 7/4/0 and 6/4/1, scx_lavd 7/3/1 and 2/6/3, scx_p2dq 7/2/2 and 3/6/2, scx_flash 7/2/2 and 7/4/0.
+
+Verdict: the evening session agrees with the pooled daytime results within the known session-to-session swing. The 4-CPU schbench -m4 -t2 losses are as large as before, so host use did not cause them. The small daytime losses on 8-CPU messaging processes and on schbench -m1 -t1 request p99 did not appear in this session and may have been partly host noise; the 8-CPU -m4 -t2 wakeup win is a single session against a pooled loss and is not taken as a change. One round is not enough to replace the pooled basis, so the README keeps the pooled numbers.
+
 ## AI deadline order (`dl`), hypothesis fixed 2026-11-16 before the run
 
 **Why.** The losses that hold in every session are latency with many message threads (schbench `-m 4 -t 2`) and single-thread request latency. EEVDF orders by virtual deadline (vruntime plus the requested slice over weight), and lavd puts short, frequently waking tasks first. Lertick orders by vtime alone; the model's predicted burst only sets the slice, which is why online and fixed modes score alike.
