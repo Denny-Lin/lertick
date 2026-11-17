@@ -315,16 +315,13 @@ static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx,
 }
 
 /*
- * Experimental switches, off by default; screening builds turn them on.
- * LERTICK_OVERRUN_SLICE_NS: a task past its predicted burst gets this slice.
- * LERTICK_OVERRUN_NOKEEP: such a task loses the continuation of keep_prev.
+ * A task past its predicted burst gets OVERRUN_SLICE_NS slices. It may be
+ * spinning on a lock whose holder waits, or simply mispredicted: shorter
+ * slices let woken tasks in sooner, while 1 ms still leaves a lock holder
+ * time to finish. Shorter values and dropping the keep_prev continuation
+ * both cost lock holders more than they gained.
  */
-#ifndef LERTICK_OVERRUN_SLICE_NS
-#define LERTICK_OVERRUN_SLICE_NS 0
-#endif
-#ifndef LERTICK_OVERRUN_NOKEEP
-#define LERTICK_OVERRUN_NOKEEP 0
-#endif
+#define OVERRUN_SLICE_NS (1ULL * NSEC_PER_MSEC)
 
 /*
  * A task preempted after running at least CPU_REQUEUE_MIN_NS of its burst
@@ -466,9 +463,6 @@ static __always_inline bool keep_prev(struct task_struct *prev,
 	    prev->se.sum_exec_runtime > tctx->runtime_start_ns)
 		ran = prev->se.sum_exec_runtime - tctx->runtime_start_ns;
 	if (ran >= KEEP_MAX_NS)
-		return false;
-	if (LERTICK_OVERRUN_NOKEEP && tctx &&
-	    overran(tctx, tctx->episode_runtime_ns + ran))
 		return false;
 	vtime += ran * 100 / weight;
 	/* A task waiting on this CPU's own queue ahead of prev takes over. */

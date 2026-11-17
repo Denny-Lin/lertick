@@ -717,3 +717,19 @@ With `C1` in place, schbench -m4 -t2 wakeup p99 on 4 CPUs is still about 50% abo
 Short load tests (one run, 4 CPUs, wakeup p99 / request p99 us): `W1` 3,924 / 74,624, `W2` 3,980 / 54,976, `W3` 3,956 / 62,912, `W4` 3,012 / 103,040, against about 5,200 / 59,000 for `b1`.
 
 **Screening** (`wake-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `b1` and `W1` to `W4`. A candidate goes on if, against `b1` on 4 CPUs, -m4 -t2 wakeup p99 is lower by more than 10% and request p99 is not higher by more than 10%, and no other measure is worse than `b1` by more than 10% on either CPU count.
+
+### Wakeup screening result: `W2` goes on, 2026-11-17
+
+`wake-run.sh` ran 08:10 to 08:38 UTC with no fallbacks; raw sets in `wake-sets.tar.gz`. On 4 CPUs against `b1` (EEVDF in brackets), -m4 -t2 wakeup / request p99: `W1` +10 / -38, `W2` +12 (-29) / -8 (-32), `W3` +10 / -18, `W4` +28 (-5) / -87. Cutting the continuation (`W1`, `W4`) or using 0.5 ms (`W3`) costs lock holders too much. `W2` (1 ms slice past the prediction) meets the rule: wakeup better by more than 10%, request within 10%, and no other measure more than 10% worse on either CPU count (worst: hackbench threads -9 on 4 CPUs).
+
+**Confirmation** (`w2-run.sh`): held-out and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions, arms EEVDF, `b1` and `W2`. `W2` replaces `b1` if -m4 -t2 wakeup p99 on 4 CPUs is lower by more than 5% and no measure is more than 10% worse than `b1` on either CPU count, with the kernel compile within 3%.
+
+### Confirmation result: `W2` accepted, 2026-11-17
+
+`w2-run.sh` ran 08:39 to 09:18 UTC with no fallbacks; raw sets in `w2-sets.tar.gz`. `W2` against `b1` (EEVDF in brackets), 5 repetitions:
+
+- 4 CPUs: schbench -m4 -t2 wakeup p99 +8 (-33, from -45 for `b1`), request p99 -5 (-28), RPS -4 (+16); hackbench threads +8, 16 groups +5; the rest within 4.
+- 8 CPUs: perf messaging processes -5, threads -4, the rest within 4.
+- Kernel compile (`kbuild-long`): 26.61 s against 26.43 s for `b1` and 26.67 s for EEVDF on 4 CPUs; 23.06 s against 23.44 s and 23.01 s on 8 CPUs.
+
+`W2` meets the rule and becomes the default (`b2`): a task past its predicted burst gets 1 ms slices. The `LERTICK_OVERRUN_*` switches are replaced by that fixed rule. This is the first change that only the learned mode makes: fixed mode has no prediction and is unchanged. In a one-run check after the rebuild, -m4 -t2 wakeup p99 on 4 CPUs was 3,988 us online against 5,000 us fixed for the scx build (4,104 against 4,968 for the product). The final source was rebuilt and run in the VM (product and port, online and fixed); the port passes `cargo fmt --check`, clang-format with the scx style and clippy.

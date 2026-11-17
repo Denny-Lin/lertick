@@ -129,8 +129,8 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 		slice = tctx->prediction_ns - consumed_ns;
 		__sync_fetch_and_add(&nr_adaptive_slices, 1);
 	}
-	if (LERTICK_OVERRUN_SLICE_NS && overran(tctx, consumed_ns))
-		slice = LERTICK_OVERRUN_SLICE_NS;
+	if (overran(tctx, consumed_ns))
+		slice = OVERRUN_SLICE_NS;
 
 	return CLAMP(slice, slice_min, slice_max);
 }

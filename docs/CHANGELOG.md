@@ -2,6 +2,12 @@
 
 ## Unreleased — 2026-11-17
 
+### Shorter slices past the predicted burst
+
+- In the learned mode, a task that has run past its predicted burst gets
+  1 ms slices. On 4 CPUs schbench -m 4 -t 2 wakeup p99 drops 8%; other
+  measures stay within 5% and the kernel compile is unchanged.
+
 ### Keep long preempted bursts on their CPU
 
 - A task preempted after running at least 1 ms of its burst now waits on a
