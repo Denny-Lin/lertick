@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — 2026-11-17 (3 ms slice cap)
+
+### Learned slices are capped at 3 ms
+
+- The default upper bound for predicted slices drops from 5 ms to 3 ms
+  (`--max-slice-us`, and `--slice-max-us` in the sched_ext port). Woken
+  tasks reach a CPU sooner: on 4 CPUs schbench -m 4 -t 2 wakeup p99 drops
+  21% and request p99 10%, perf messaging threads is 11% faster, and on 8
+  CPUs the -m 4 -t 2 wakeup p99 drops 11%. Nothing is more than 3% worse,
+  the kernel compile is unchanged, and the stress battery and nice
+  weighting pass. Against EEVDF on 8 CPUs, Lertick is now slower on none of
+  the 11 benchmarks.
+
 ## Unreleased — 2026-11-17 (wider affine pick)
 
 ### Resume preempted tasks on their own CPU

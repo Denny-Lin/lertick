@@ -68,7 +68,7 @@ struct Opts {
     slice_min_us: u64,
 
     /// Maximum learned time slice in microseconds.
-    #[clap(short = 'M', long, default_value = "5000")]
+    #[clap(short = 'M', long, default_value = "3000")]
     slice_max_us: u64,
 
     /// Completed bursts a task needs before its prediction sets its slice.

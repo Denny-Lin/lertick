@@ -191,7 +191,7 @@ selection:
 | `online` | Training/inference inside eBPF | Predictions may select bounded slices after eight valid labels |
 | `ewma` | Historical EWMA; no linear training | Same bounds and warm-up; EWMA predicts remaining service |
 
-The default prediction bounds are 0.5–5 ms. `--fixed-slice-us`,
+The default prediction bounds are 0.5–3 ms. `--fixed-slice-us`,
 `--min-slice-us`, and `--max-slice-us` configure them; the loader requires
 `min <= fixed <= max`. Duration is an integer number of seconds, from 0 through
 3600; 0 means continuous operation and is the current raw-loader default.

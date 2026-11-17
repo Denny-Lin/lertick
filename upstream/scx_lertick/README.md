@@ -16,7 +16,7 @@ already run. A woken task is placed at most 2 ms behind the clock.
 Each task trains a small linear model, in fixed-point arithmetic inside BPF, on
 its own completed CPU bursts (from wakeup to sleep). The features are the last
 burst, an average of recent bursts, the sleep time and the queue depth. At the
-next wakeup the prediction sets the task's time slice, between 0.5 ms and 5 ms.
+next wakeup the prediction sets the task's time slice, between 0.5 ms and 3 ms.
 Fairness always charges the CPU time actually used, never the prediction. There
 is no offline training, model file or user-space inference.
 

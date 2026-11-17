@@ -14,6 +14,7 @@ for rep in $(seq 1 ${REPS:-3}); do
   stress-ng --cpu 8 --timeout 30s >/dev/null 2>&1 & nice -n 19 stress-ng --cpu 8 --timeout 30s >/dev/null 2>&1 &
   nice -n -5 stress-ng --cpu 2 --timeout 30s >/dev/null 2>&1 & sleep 32
   s=$(st); down; [ "$s" = enabled ] && ok=$((ok+1))
+  [ "$s" = enabled ] || { mkdir -p gate-fail; sudo dmesg > gate-fail/$name-$rep.txt; }
   echo "$name nice-mix $rep: $s $(sudo dmesg | grep -o 'failed to run for [0-9.]*s')"
 done
 up "$@"; rm -f /tmp/g*.y

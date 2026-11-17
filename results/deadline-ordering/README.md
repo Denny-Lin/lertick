@@ -812,3 +812,64 @@ The window, not the depth, is what matters.
 ### README numbers for the wider affine pick, 2026-11-17
 
 The README charts show this version. Against EEVDF: `pool_ratio.py` with `LERTICK_SESSION=d16w8,aff`, the median of the two sessions that ran it with EEVDF (kernel compile from `d16w8` only). Against the sched_ext schedulers: through EEVDF, as before. Better/same/worse, 4 CPUs then 8 CPUs: EEVDF 5/2/4 and 3/6/2, scx_bpfland 10/1/0 and 7/3/1, scx_lavd 6/4/1 and 3/6/2, scx_p2dq 8/1/2 and 6/3/2, scx_flash 9/1/1 and 7/3/1. The 8-CPU kernel compile reads -6%, from one session in which EEVDF's compile was itself faster than in any earlier session.
+
+## Round 7 on top of the wider affine pick (`b7`), 2026-11-17
+
+All candidates go through `gate.sh` first. `b7` itself passed the nice mix 6 of 6 (13 of 13 counting the confirmation runs), with nice 19 at 1,284 bogo ops.
+
+| Build | Change | nice mix | nice 19 bogo ops | -m4 -t2 wakeup / request p99 (us) |
+|---|---|---|---|---|
+| `SW8` | `SYNC_WINDOW_NS` 8 ms | 1 of 2 | 1,603 | 4,984 / 69,760 |
+| `L4` | `LAG_NS` 4 ms | 2 of 2, but disabled during the fairness run | 58,565 | 3,772 / 62,912 |
+| `SW8L4` | both | 2 of 2 | 1,595 | 3,980 / 51,264 |
+| `O1` | 1 ms slice past the prediction (`LERTICK_OVERRUN_SLICE_NS`, as `W2`) | 9 of 10 (one 6.4 s kworker stall) | 1,223 | 4,920 / 156,416 |
+
+A wider sync window lets more wakees go straight to the waker's local queue and can shut out a task pinned to that CPU; a larger lag let the watchdog fire and broke weighting; the overrun slice stalls about once in ten runs. All four are rejected (`SW8L4` contains both failing parts).
+
+### Pinned-task guard, hypothesis fixed 2026-11-17 before the run
+
+Every stall seen so far is a task that can run on one CPU only (a per-CPU kworker) waiting behind tasks that lag the clock. `LERTICK_PIN_GUARD`: such a task waits on its CPU's own queue; the CPU runs it when it is ahead of the LLC queue's head in fair order or once it has waited 10 ms (`PIN_WAIT_NS`), and `keep_prev` does not continue past it then. Pinned tasks cannot migrate anyway, so this costs no balance; it bounds their wait to about 10 ms plus one slice. Builds: `G` (guard alone), `GO1` (guard and the 1 ms overrun slice), `GSW8` (guard and the 8 ms sync window). The guard is accepted only if `G` passes the nice mix 10 of 10, keeps weighting and then passes screening against `b7`; `GO1` and `GSW8` test whether it removes those candidates' stalls.
+
+### Pinned-task guard result: rejected, 2026-11-17
+
+`gate.sh` with 10 then 12 runs of the nice mix: `G` (guard alone) 21 of 22, with nice 19 at 1,718 and then 21,971 bogo ops; `GO1` 10 of 10; `GSW8` 10 of 10. The baseline `b7` passed 12 of 12 more (25 of 25 in all), so it needs no guard, and the guard both stalled once and disturbed weighting once. Rejected; `GO1` and `GSW8` rest on it and are not taken further. `gate.sh` now keeps the full kernel log of any failed run in `gate-fail/`.
+
+## Round 8: slice bounds and a wider window, hypothesis fixed 2026-11-17 before the run
+
+Lertick switches contexts 5 to 10 times less than EEVDF in perf messaging, and schbench -m4 -t2 wakeup p99 on 4 CPUs is still about 20% above EEVDF's. Shorter slices should let woken tasks reach a CPU sooner. Candidates, gate results (6 nice-mix runs each, all passed):
+
+| Arm | Change | nice 19 bogo ops | -m4 -t2 wakeup / request p99 (us) | migrations |
+|---|---|---|---|---|
+| `W16` | `AFFINE_WINDOW_NS` 16 ms | 1,959 | 4,984 / 54,080 | 1,015 |
+| `M3` | `--slice-max-us 3000` (was 5,000) | 1,882 | 4,004 / 53,440 | 992 |
+| `M3s1` | also `--slice-us 1000` (fixed and fallback slice, was 2,000) | 2,371 | 3,084 / 54,848 | 1,158 |
+
+**Screening** (`r8-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `b7`, `W16`, `M3` and `M3s1`. A candidate goes on if, against `b7`, -m4 -t2 wakeup or request p99 on 4 CPUs or perf messaging on either CPU count is better by more than 10%, and no measure is worse by more than 10% on either CPU count.
+
+### Round 8 result: `M3` and `M3s1` go on, 2026-11-17
+
+`r8-run.sh` ran 14:13 to 14:37 UTC with no fallbacks; raw sets in `r8-sets.tar.gz`. Against `b7` (EEVDF in brackets), 4 CPUs: `M3s1` -m4 -t2 wakeup p99 +37 (+16), perf messaging threads +15 (+11), RPS -9; `M3` wakeup p99 +20 (-6), messaging threads +11. On 8 CPUs neither is worse than 8% on any measure. `W16` costs perf messaging threads 18% on 8 CPUs and stops here.
+
+**Confirmation** (`r8c-run.sh`): held-out and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions, arms EEVDF, `b7`, `M3` and `M3s1`, then `stress-run.sh` and `gate.sh` for each. The better candidate that has no measure more than 10% worse than `b7`, the kernel compile within 3%, and passes the battery and the gate becomes the default slice bounds.
+
+### Round 8 confirmation: `M3` accepted, 2026-11-17
+
+`r8c-run.sh` ran 14:38 to 15:52 UTC with no fallbacks; raw sets, battery and gate logs in `r8c-sets.tar.gz`. Against `b7`, 5 repetitions (EEVDF in brackets):
+
+| Measure | `M3` 4 CPUs | `M3s1` 4 CPUs | `M3` 8 CPUs | `M3s1` 8 CPUs |
+|---|---|---|---|---|
+| perf messaging, processes | +1 (-5) | +5 (-2) | -3 (-3) | **-13** (-13) |
+| perf messaging, threads | +11 (+12) | +19 (+19) | -1 (-1) | +8 (+9) |
+| hackbench threads | +3 (+30) | +4 (+31) | +5 (+13) | +4 (+12) |
+| schbench -m1 wakeup p99 | +2 (+6) | +13 (+17) | +6 (+20) | +4 (+19) |
+| schbench -m4 -t2 request p99 | +10 (-9) | +3 (-17) | -1 (+7) | -8 (+0) |
+| schbench -m4 -t2 wakeup p99 | +21 (-6) | +41 (+22) | +11 (+40) | +4 (+35) |
+| schbench -m4 -t2 RPS | +2 (+8) | -7 (-1) | +1 (+1) | +0 (-0) |
+
+Kernel compile (`kbuild-long.sh`, median of 5, seconds): 4 CPUs `b7` 26.85, `M3` 26.87, `M3s1` 27.17; 8 CPUs `b7` 21.58, `M3` 21.32, `M3s1` 20.70. Both candidates kept the scheduler enabled through the 13-stressor battery and passed the nice mix 6 of 6.
+
+`M3s1` loses 13% in perf messaging with processes on 8 CPUs and fails the 10% rule. `M3` is worse than `b7` by at most 3% anywhere, within 0.1% on the kernel compile, and becomes the default: `--slice-max-us` (port) and `--max-slice-us` (product) now default to 3,000. Rebuilt as `b8` (port) and the product build, both passed `gate.sh` (6 and 2 runs; nice 19 at 2,026 and 1,931 bogo ops).
+
+### README numbers for the 3 ms slice cap, 2026-11-17
+
+`pool_ratio.py` with `LERTICK_SESSION=r8,r8c LERTICK_ARM=M3` (kernel compile from `r8c` only). Better/same/worse, 4 CPUs then 8 CPUs: EEVDF 6/2/3 and 4/7/0, scx_bpfland 8/1/2 and 7/4/0, scx_lavd 7/2/2 and 4/6/1, scx_p2dq 7/2/2 and 7/3/1, scx_flash 7/2/2 and 7/4/0. On 4 CPUs scx_bpfland moves from 10/1/0 to 8/1/2: Lertick's schbench -m1 request p99 is level with EEVDF's in these two sessions (17% better in the previous two), which puts it 16% behind scx_bpfland's ratio from its own sessions, and the kernel compile reads 5.5% behind.
