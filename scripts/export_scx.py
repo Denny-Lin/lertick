@@ -4,8 +4,8 @@
 The policy (src/bpf/policy.h) and the in-kernel model (src/shared/model.h)
 have one source. This script writes their upstream copies under
 upstream/scx_lertick/src/bpf, dropping product-only regions of model.h
-(between "#ifndef LERTICK_UPSTREAM" and "#endif /* !LERTICK_UPSTREAM */")
-and giving model.h the dual GPL-2.0 OR MIT licence used upstream.
+and policy.h (between "#ifndef LERTICK_UPSTREAM" and
+"#endif /* !LERTICK_UPSTREAM */") and giving model.h the dual GPL-2.0 OR MIT licence used upstream.
 
   scripts/export_scx.py            update the upstream copies
   scripts/export_scx.py --check    fail if they are out of date (CI)
@@ -48,13 +48,11 @@ def model_h():
     note_end = text.index("*/\n", note_start) + 3
     text = text[:note_start] + text[note_end:]
     assert text.startswith(head)
-    return ("/* SPDX-License-Identifier: GPL-2.0 OR MIT */\n"
-            "/* Generated from Lertick src/shared/model.h by scripts/export_scx.py. */\n"
-            + text[len(head):])
+    return "/* SPDX-License-Identifier: GPL-2.0 OR MIT */\n" + text[len(head):]
 
 
 def policy_h():
-    return (ROOT / "src/bpf/policy.h").read_text()
+    return strip_product((ROOT / "src/bpf/policy.h").read_text())
 
 
 FILES = {"src/bpf/model.h": model_h, "src/bpf/policy.h": policy_h}

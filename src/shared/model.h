@@ -12,8 +12,8 @@
 #include <linux/types.h>
 #else
 #include <stdint.h>
-typedef int32_t __s32;
-typedef int64_t __s64;
+typedef int32_t	 __s32;
+typedef int64_t	 __s64;
 typedef uint64_t __u64;
 #endif
 #endif
@@ -32,7 +32,8 @@ typedef uint64_t __u64;
 struct lertick_model {
 	__s32 weight_q16[LERTICK_FEATURES];
 #ifndef LERTICK_UPSTREAM
-	__s32 carry_q16[LERTICK_FEATURES];	/* fractional weight updates, carry mode only */
+	/* Fractional weight updates, carry mode only. */
+	__s32 carry_q16[LERTICK_FEATURES];
 #endif /* !LERTICK_UPSTREAM */
 	__u64 updates;
 };
@@ -82,7 +83,7 @@ LERTICK_INLINE void lertick_model_init(struct lertick_model *model)
 #endif /* !LERTICK_UPSTREAM */
 	}
 	model->weight_q16[0] = LERTICK_Q / 4;
-	model->updates = 0;
+	model->updates	     = 0;
 }
 
 #ifndef LERTICK_UPSTREAM
@@ -97,11 +98,12 @@ LERTICK_INLINE void lertick_model_init_ewma(struct lertick_model *model)
 }
 
 #endif /* !LERTICK_UPSTREAM */
-LERTICK_INLINE __s32 lertick_model_raw_q16(const struct lertick_model *model,
-				       const __s32 features[LERTICK_FEATURES])
+LERTICK_INLINE __s32
+lertick_model_raw_q16(const struct lertick_model *model,
+		      const __s32		  features[LERTICK_FEATURES])
 {
 	__s64 dot = 0;
-	int i;
+	int   i;
 
 #ifdef __clang__
 #pragma clang loop unroll(disable)
@@ -112,8 +114,9 @@ LERTICK_INLINE __s32 lertick_model_raw_q16(const struct lertick_model *model,
 	return (__s32)lertick_trunc_shift(dot, 16);
 }
 
-LERTICK_INLINE __s32 lertick_model_predict_q16(const struct lertick_model *model,
-				 const __s32 features[LERTICK_FEATURES])
+LERTICK_INLINE __s32
+lertick_model_predict_q16(const struct lertick_model *model,
+			  const __s32 features[LERTICK_FEATURES])
 {
 	return lertick_clip_q16(lertick_model_raw_q16(model, features));
 }
@@ -122,10 +125,11 @@ LERTICK_INLINE __s32 lertick_model_predict_q16(const struct lertick_model *model
  * clipped, but training uses raw output, so saturated predictions can recover.
  */
 LERTICK_INLINE __s32 lertick_model_train(struct lertick_model *model,
-			 const __s32 features[LERTICK_FEATURES], __s32 target_q16)
+					 const __s32 features[LERTICK_FEATURES],
+					 __s32	     target_q16)
 {
 	__s64 error = (__s64)lertick_clip_q16(target_q16) -
-		     lertick_model_raw_q16(model, features);
+		      lertick_model_raw_q16(model, features);
 	int i;
 
 	if (error > LERTICK_Q)
@@ -139,9 +143,10 @@ LERTICK_INLINE __s32 lertick_model_train(struct lertick_model *model,
 		__s64 update = (__s64)LERTICK_ALPHA_Q16 * error *
 			       lertick_clip_q16(features[i]);
 
-		update = lertick_trunc_shift(update, 32);
+		update		     = lertick_trunc_shift(update, 32);
 		model->weight_q16[i] = lertick_clip_weight(
-			(__s64)lertick_clip_weight(model->weight_q16[i]) + update);
+			(__s64)lertick_clip_weight(model->weight_q16[i]) +
+			update);
 	}
 	if (model->updates != ~(__u64)0)
 		model->updates++;
@@ -154,11 +159,12 @@ LERTICK_INLINE __s32 lertick_model_train(struct lertick_model *model,
  * Q16. With clipped inputs, |gradient| <= 2^42, |sum| < 2^27 and each stored
  * carry is strictly inside (-Q,Q). Signed divisions remain constant shifts.
  */
-LERTICK_INLINE __s32 lertick_model_train_carry(struct lertick_model *model,
-			 const __s32 features[LERTICK_FEATURES], __s32 target_q16)
+LERTICK_INLINE __s32 lertick_model_train_carry(
+	struct lertick_model *model, const __s32 features[LERTICK_FEATURES],
+	__s32 target_q16)
 {
 	__s64 error = (__s64)lertick_clip_q16(target_q16) -
-		     lertick_model_raw_q16(model, features);
+		      lertick_model_raw_q16(model, features);
 	int i;
 
 	if (error > LERTICK_Q)
@@ -176,14 +182,16 @@ LERTICK_INLINE __s32 lertick_model_train_carry(struct lertick_model *model,
 			carry = LERTICK_Q - 1;
 		if (carry <= -LERTICK_Q)
 			carry = 1 - LERTICK_Q;
-		gradient = (__s64)LERTICK_ALPHA_Q16 * error * lertick_clip_q16(features[i]);
-		sum = carry + lertick_trunc_shift(gradient, 16);
+		gradient = (__s64)LERTICK_ALPHA_Q16 * error *
+			   lertick_clip_q16(features[i]);
+		sum   = carry + lertick_trunc_shift(gradient, 16);
 		delta = lertick_trunc_shift(sum, 16);
 		next = (__s64)lertick_clip_weight(model->weight_q16[i]) + delta;
 		model->weight_q16[i] = lertick_clip_weight(next);
 		/* Discard outward residual at the weight rail, avoiding wind-up. */
 		model->carry_q16[i] = model->weight_q16[i] == next ?
-			(__s32)(sum - delta * LERTICK_Q) : 0;
+					      (__s32)(sum - delta * LERTICK_Q) :
+					      0;
 	}
 	if (model->updates != ~(__u64)0)
 		model->updates++;
@@ -198,8 +206,8 @@ LERTICK_INLINE __s32 lertick_model_train_carry(struct lertick_model *model,
 LERTICK_INLINE __s32 lertick_scale_ns_q16(__u64 ns, __u64 cap_ns)
 {
 	__u64 remainder = ns;
-	__s32 fraction = 0;
-	int bit;
+	__s32 fraction	= 0;
+	int   bit;
 
 	if (!cap_ns)
 		return 0;

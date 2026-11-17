@@ -11,6 +11,9 @@
 - Move the scheduling policy into `src/bpf/policy.h`, shared with the
   sched-ext/scx port in `upstream/scx_lertick`. `scripts/export_scx.py` keeps
   the port's copies of the policy and model in sync, and CI checks them.
+- Prepare the port for submission: scx kernel-style constants and
+  clang-format with the scx style, no references to this repository in the
+  exported files, and a build and stress test on current scx main.
 
 ## Unreleased — 2026-11-16
 

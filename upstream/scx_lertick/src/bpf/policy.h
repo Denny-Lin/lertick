@@ -2,18 +2,14 @@
 /*
  * Copyright (c) 2026 Hungyu Lin <dennylin0707@gmail.com>
  *
- * Lertick scheduling policy shared by the product scheduler
- * (src/bpf/scx_lertick.bpf.c) and the sched-ext/scx port
- * (upstream/scx_lertick, copied there by scripts/export_scx.py). Change the
- * policy here only.
- *
- * Queues and CPU selection follow scx_simple; cgroup weights follow
- * scx_flatcg (Tejun Heo).
+ * scx_lertick scheduling policy: per-LLC queues, continuation of the running
+ * task, cache-affine pick, sync wakeups and cgroup weights. Queues and CPU
+ * selection follow scx_simple; cgroup weights follow scx_flatcg (Tejun Heo).
  *
  * The including file defines, before including this header:
  *   struct task_ctx with u64 runtime_start_ns, bool running, u32 rq_weight,
  *     bool cg_counted and u32 eff_weight;
- *   LERTICK_MAX_CPUS (a power of two) and LERTICK_MAX_DOMAINS;
+ *   NSEC_PER_MSEC, LERTICK_MAX_CPUS (a power of two) and LERTICK_MAX_DOMAINS;
  *   LERTICK_MOVE_TO_LOCAL(dsq), its kernel's scx_bpf_dsq_move_to_local();
  *   LERTICK_TASK_CGROUP(p), its kernel's scx_bpf_task_cgroup().
  */
@@ -27,19 +23,19 @@ static u64 runnable_weight;
  * Sleeper credit: a woken task is placed at most this far behind the clock,
  * about one fixed slice, as EEVDF bounds lag to about one slice.
  */
-#define LAG_NS 2000000ULL
+#define LAG_NS (2ULL * NSEC_PER_MSEC)
 /*
  * When taking the next task, prefer one that last ran on this CPU among the
  * first AFFINE_DEPTH queued tasks within AFFINE_WINDOW_NS of the head in
  * vtime.
  */
-#define AFFINE_WINDOW_NS 2000000ULL
+#define AFFINE_WINDOW_NS (2ULL * NSEC_PER_MSEC)
 #define AFFINE_DEPTH 8
 /* A sync wakeup may queue on the waker's CPU if within this much vtime of the queue head. */
-#define SYNC_WINDOW_NS 2000000ULL
+#define SYNC_WINDOW_NS (2ULL * NSEC_PER_MSEC)
 /* Queued tasks examined, and the longest unbroken run, when prev may keep its CPU. */
 #define HEAD_SCAN 16
-#define KEEP_MAX_NS 20000000ULL
+#define KEEP_MAX_NS (20ULL * NSEC_PER_MSEC)
 
 /*
  * One vtime-ordered queue per last-level cache domain; DSQ id d serves domain
@@ -48,8 +44,8 @@ static u64 runnable_weight;
  * share one virtual clock, so vtimes compare across domains. A CPU takes work
  * from its own domain first and steals from the others when that is empty.
  */
-const volatile u32 nr_domains = 1;
-const volatile u8 cpu_domain[LERTICK_MAX_CPUS];
+const volatile u32	   nr_domains = 1;
+const volatile u8	   cpu_domain[LERTICK_MAX_CPUS];
 
 static __always_inline u32 domain_count(void)
 {
@@ -78,8 +74,7 @@ static __always_inline u64 nr_queued_all(void)
 	u64 sum = 0;
 	u32 d;
 
-	bpf_for(d, 0, domain_count())
-		sum += scx_bpf_dsq_nr_queued(d);
+	bpf_for(d, 0, domain_count()) sum += scx_bpf_dsq_nr_queued(d);
 	return sum;
 }
 
@@ -91,10 +86,10 @@ static __always_inline u64 nr_queued_all(void)
 static __always_inline bool sync_local(struct task_struct *p, s32 *cpu)
 {
 	struct bpf_iter_scx_dsq it;
-	struct task_struct *head;
-	s32 this = bpf_get_smp_processor_id();
-	u64 vtime = p->scx.dsq_vtime;
-	bool ok = true;
+	struct task_struct     *head;
+	s32 this   = bpf_get_smp_processor_id();
+	u64  vtime = p->scx.dsq_vtime;
+	bool ok	   = true;
 
 	if (!bpf_cpumask_test_cpu(this, p->cpus_ptr))
 		return false;
@@ -102,13 +97,14 @@ static __always_inline bool sync_local(struct task_struct *p, s32 *cpu)
 		vtime = vtime_now - LAG_NS;
 	if (bpf_iter_scx_dsq_new(&it, domain_of(this), 0) == 0) {
 		head = bpf_iter_scx_dsq_next(&it);
-		ok = !head || !time_before(head->scx.dsq_vtime + SYNC_WINDOW_NS, vtime);
+		ok   = !head ||
+		     !time_before(head->scx.dsq_vtime + SYNC_WINDOW_NS, vtime);
 	}
 	bpf_iter_scx_dsq_destroy(&it);
 	if (!ok)
 		return false;
 	p->scx.dsq_vtime = vtime;
-	*cpu = this;
+	*cpu		 = this;
 	return true;
 }
 
@@ -125,13 +121,13 @@ static __always_inline bool sync_local(struct task_struct *p, s32 *cpu)
 #define HWEIGHT_ONE (1ULL << 16)
 
 struct cgrp_ctx {
-	u32 nr_active;		/* this cgroup or a descendant has runnable tasks */
-	u32 nr_runnable;	/* runnable tasks directly in this cgroup */
+	u32 nr_active; /* this cgroup or a descendant has runnable tasks */
+	u32 nr_runnable; /* runnable tasks directly in this cgroup */
 	u32 weight;
-	u32 hweight;		/* share of the whole machine, HWEIGHT_ONE = all */
-	u64 child_weight_sum;	/* weights of active children */
+	u32 hweight; /* share of the whole machine, HWEIGHT_ONE = all */
+	u64 child_weight_sum; /* weights of active children */
 	u64 hweight_gen;
-	u64 task_weight_sum;	/* weights of runnable tasks directly in this cgroup */
+	u64 task_weight_sum; /* weights of runnable tasks directly in this cgroup */
 };
 
 struct {
@@ -142,7 +138,7 @@ struct {
 } cgrp_ctx_stor SEC(".maps");
 
 private(LERTICK_CGRP) struct bpf_spin_lock cgrp_lock;
-static u64 hweight_gen = 1;
+static u64				hweight_gen = 1;
 
 static __always_inline struct cgrp_ctx *cgrp_ctx(struct cgroup *cgrp)
 {
@@ -167,15 +163,16 @@ static void cgrp_refresh_hweight(struct cgroup *cgrp, struct cgrp_ctx *cgc)
 
 	if (!cgc->nr_active || cgc->hweight_gen == hweight_gen)
 		return;
-	bpf_for(level, 0, cgrp->level + 1) {
+	bpf_for(level, 0, cgrp->level + 1)
+	{
 		struct cgrp_ctx *c, *pc;
-		bool active;
+		bool		 active;
 
 		c = cgrp_ancestor_ctx(cgrp, level);
 		if (!c)
 			break;
 		if (!level) {
-			c->hweight = HWEIGHT_ONE;
+			c->hweight     = HWEIGHT_ONE;
 			c->hweight_gen = hweight_gen;
 			continue;
 		}
@@ -186,7 +183,8 @@ static void cgrp_refresh_hweight(struct cgroup *cgrp, struct cgrp_ctx *cgc)
 		active = c->nr_active;
 		if (active && pc->child_weight_sum) {
 			c->hweight_gen = pc->hweight_gen;
-			c->hweight = (u64)pc->hweight * c->weight / pc->child_weight_sum;
+			c->hweight     = (u64)pc->hweight * c->weight /
+				     pc->child_weight_sum;
 			if (!c->hweight)
 				c->hweight = 1;
 		}
@@ -197,10 +195,11 @@ static void cgrp_refresh_hweight(struct cgroup *cgrp, struct cgrp_ctx *cgc)
 }
 
 /* A cgroup gains or loses its first or last runnable task: update active sums upward. */
-static void cgrp_update_active(struct cgroup *cgrp, struct cgrp_ctx *cgc, bool runnable)
+static void cgrp_update_active(struct cgroup *cgrp, struct cgrp_ctx *cgc,
+			       bool runnable)
 {
 	bool updated = false;
-	int idx;
+	int  idx;
 
 	if (runnable) {
 		if (__sync_fetch_and_add(&cgc->nr_runnable, 1))
@@ -210,12 +209,13 @@ static void cgrp_update_active(struct cgroup *cgrp, struct cgrp_ctx *cgc, bool r
 			return;
 		cgrp_refresh_hweight(cgrp, cgc);
 	}
-	bpf_for(idx, 0, cgrp->level) {
-		int level = cgrp->level - idx;
+	bpf_for(idx, 0, cgrp->level)
+	{
+		int		 level = cgrp->level - idx;
 		struct cgrp_ctx *c, *pc = NULL;
-		bool propagate = false;
+		bool		 propagate = false;
 
-		c = cgrp_ancestor_ctx(cgrp, level);
+		c			   = cgrp_ancestor_ctx(cgrp, level);
 		if (!c)
 			break;
 		if (level) {
@@ -251,7 +251,8 @@ static void cgrp_update_active(struct cgroup *cgrp, struct cgrp_ctx *cgc, bool r
 		cgrp_refresh_hweight(cgrp, cgc);
 }
 
-static void cgrp_account(struct cgroup *cgrp, struct task_ctx *tctx, bool runnable)
+static void cgrp_account(struct cgroup *cgrp, struct task_ctx *tctx,
+			 bool runnable)
 {
 	struct cgrp_ctx *cgc = cgrp_ctx(cgrp);
 
@@ -265,7 +266,8 @@ static void cgrp_account(struct cgroup *cgrp, struct task_ctx *tctx, bool runnab
 	tctx->cg_counted = runnable;
 }
 
-static void cgrp_task_runnable(struct task_struct *p, struct task_ctx *tctx, bool runnable)
+static void cgrp_task_runnable(struct task_struct *p, struct task_ctx *tctx,
+			       bool runnable)
 {
 	struct cgroup *cgrp;
 
@@ -279,11 +281,12 @@ static void cgrp_task_runnable(struct task_struct *p, struct task_ctx *tctx, boo
 }
 
 /* Weight to charge service against: the task's share of its cgroup's share. */
-static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx, u32 weight)
+static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx,
+				 u32 weight)
 {
 	struct cgrp_ctx *cgc;
-	struct cgroup *cgrp;
-	u64 eff, tws, rw = runnable_weight;
+	struct cgroup	*cgrp;
+	u64		 eff, tws, rw = runnable_weight;
 
 	if (!tctx || !tctx->cg_counted)
 		return weight;
@@ -323,9 +326,10 @@ static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx, u
 static __always_inline bool other_head_before(u32 home, s32 cpu, u64 vtime)
 {
 	struct task_struct *q;
-	u32 n = domain_count(), i;
+	u32		    n = domain_count(), i;
 
-	bpf_for(i, 1, n) {
+	bpf_for(i, 1, n)
+	{
 		u32 d = home + i;
 
 		if (d >= n)
@@ -340,16 +344,19 @@ static __always_inline bool other_head_before(u32 home, s32 cpu, u64 vtime)
 	return false;
 }
 
-static __always_inline bool keep_prev(struct task_struct *prev, struct task_ctx *tctx, s32 cpu)
+static __always_inline bool keep_prev(struct task_struct *prev,
+				      struct task_ctx *tctx, s32 cpu)
 {
 	struct task_struct *q;
-	u64 vtime = prev->scx.dsq_vtime, ran = 0;
+	u64		    vtime = prev->scx.dsq_vtime, ran = 0;
 	u32 weight = tctx && tctx->eff_weight ? tctx->eff_weight :
-		     prev->scx.weight ? prev->scx.weight : 1;
-	u32 home = domain_of(cpu);
-	int n = 0;
+		     prev->scx.weight	      ? prev->scx.weight :
+						1;
+	u32 home   = domain_of(cpu);
+	int n	   = 0;
 
-	if (tctx && tctx->running && prev->se.sum_exec_runtime > tctx->runtime_start_ns)
+	if (tctx && tctx->running &&
+	    prev->se.sum_exec_runtime > tctx->runtime_start_ns)
 		ran = prev->se.sum_exec_runtime - tctx->runtime_start_ns;
 	if (ran >= KEEP_MAX_NS)
 		return false;
@@ -373,7 +380,8 @@ static __always_inline bool steal(u32 home)
 {
 	u32 n = domain_count(), i;
 
-	bpf_for(i, 1, n) {
+	bpf_for(i, 1, n)
+	{
 		u32 d = home + i;
 
 		if (d >= n)
@@ -387,14 +395,15 @@ static __always_inline bool steal(u32 home)
 static __always_inline bool take_next(s32 cpu)
 {
 	struct task_struct *q;
-	u32 home = domain_of(cpu);
-	u64 head = 0;
-	int n = 0;
+	u32		    home = domain_of(cpu);
+	u64		    head = 0;
+	int		    n	 = 0;
 
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (!n)
 			head = q->scx.dsq_vtime;
-		if (n >= AFFINE_DEPTH || time_before(head + AFFINE_WINDOW_NS, q->scx.dsq_vtime))
+		if (n >= AFFINE_DEPTH ||
+		    time_before(head + AFFINE_WINDOW_NS, q->scx.dsq_vtime))
 			break;
 		if (scx_bpf_task_cpu(q) == cpu &&
 		    scx_bpf_dsq_move(BPF_FOR_EACH_ITER, q, SCX_DSQ_LOCAL, 0))

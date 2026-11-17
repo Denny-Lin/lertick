@@ -404,6 +404,8 @@ static __always_inline struct task_ctx *task_ctx(struct task_struct *p)
 	return bpf_task_storage_get(&task_ctx_stor, p, 0, 0);
 }
 
+#define NSEC_PER_USEC 1000ULL
+#define NSEC_PER_MSEC (1000ULL * NSEC_PER_USEC)
 #define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq)
 #define LERTICK_TASK_CGROUP(p) __COMPAT_scx_bpf_task_cgroup(p)
 #include "policy.h"
