@@ -129,8 +129,6 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 		slice = tctx->prediction_ns - consumed_ns;
 		__sync_fetch_and_add(&nr_adaptive_slices, 1);
 	}
-	if (overran(tctx, consumed_ns))
-		slice = OVERRUN_SLICE_NS;
 
 	return CLAMP(slice, slice_min, slice_max);
 }
@@ -173,7 +171,7 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	    time_before(vtime, vtime_now - LAG_NS))
 		vtime = vtime_now - LAG_NS;
 
-	scx_bpf_dsq_insert_vtime(p, enqueue_dsq(p, tctx, enq_flags), slice,
+	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice,
 				 vtime, enq_flags);
 	__sync_fetch_and_add(&nr_shared_dispatches, 1);
 }
@@ -398,7 +396,17 @@ void BPF_STRUCT_OPS(lertick_cgroup_move, struct task_struct *p,
 
 s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 {
-	return policy_init();
+	u32 d;
+	s32 ret;
+
+	bpf_for(d, 0, domain_count())
+	{
+		ret = scx_bpf_create_dsq(d, -1);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
 }
 
 void BPF_STRUCT_OPS(lertick_exit, struct scx_exit_info *ei)

@@ -1,0 +1,179 @@
+diff --git a/src/bpf/policy.h b/src/bpf/policy.h
+index e5f16be..ddec89e 100644
+--- a/src/bpf/policy.h
++++ b/src/bpf/policy.h
+@@ -336,12 +336,11 @@ static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx,
+  * its cache, and any lock it holds, is. Moving such a task mid-burst leaves
+  * threads that wait for it on the old CPU. Short bursts and woken tasks
+  * balance through the LLC queue. A CPU runs its own queue's head unless the
+- * LLC head is more than CPU_WINDOW_NS earlier, and idle CPUs steal from
+- * other CPUs' queues once the LLC queues are empty.
++ * LLC head is earlier in vtime, and idle CPUs steal from other CPUs' queues
++ * once the LLC queues are empty.
+  */
+ #define CPU_DSQ(cpu) ((u64)LERTICK_MAX_DOMAINS + (u32)(cpu))
+ #define CPU_REQUEUE_MIN_NS (1ULL * NSEC_PER_MSEC)
+-#define CPU_WINDOW_NS (2ULL * NSEC_PER_MSEC)
+ 
+ static __always_inline bool dsq_head(u64 dsq, u64 *vtime)
+ {
+@@ -362,13 +361,38 @@ static __always_inline u64 enqueue_dsq(struct task_struct *p,
+ {
+ 	s32 cpu = scx_bpf_task_cpu(p);
+ 
++	/*
++	 * Only a task not ahead of the clock may skip the LLC's fair order. A
++	 * CPU whose queue held only tasks far ahead (low weight, e.g. nice 19)
++	 * would run them anyway and push vtime_now forward, leaving woken tasks
++	 * placed behind every heavier task on the other CPUs' queues.
++	 */
+ 	if (!(enq_flags & SCX_ENQ_WAKEUP) && tctx && tctx->episode_active &&
+-	    tctx->episode_runtime_ns >= CPU_REQUEUE_MIN_NS && cpu >= 0 &&
++	    tctx->episode_runtime_ns >= CPU_REQUEUE_MIN_NS &&
++	    !time_after(p->scx.dsq_vtime, vtime_now) && cpu >= 0 &&
+ 	    cpu < LERTICK_MAX_CPUS && bpf_cpumask_test_cpu(cpu, p->cpus_ptr))
+ 		return CPU_DSQ(cpu);
+ 	return domain_of(cpu);
+ }
+ 
++/*
++ * Insert a task in the queue enqueue_dsq() picks. A CPU's own queue does not
++ * balance with the other CPUs, so tasks on a crowded CPU can fall far behind
++ * the clock; a woken task that can run only there would then wait behind
++ * them for seconds. Like a woken task, a task entering a CPU's queue is
++ * placed at most LAG_NS behind the clock.
++ */
++static __always_inline void enqueue_task(struct task_struct *p,
++					 struct task_ctx *tctx, u64 slice,
++					 u64 vtime, u64 enq_flags)
++{
++	u64 dsq = enqueue_dsq(p, tctx, enq_flags);
++
++	if (dsq >= LERTICK_MAX_DOMAINS && time_before(vtime, vtime_now - LAG_NS))
++		vtime = vtime_now - LAG_NS;
++	scx_bpf_dsq_insert_vtime(p, dsq, slice, vtime, enq_flags);
++}
++
+ /* Create the LLC queues and one queue per CPU. */
+ static __always_inline s32 policy_init(void)
+ {
+@@ -513,9 +537,14 @@ static __always_inline bool take_next(s32 cpu)
+ 	u64		    head = 0, hv, dv;
+ 	int		    n	 = 0;
+ 
+-	/* This CPU's own queue first, unless the LLC queue is well ahead. */
++	/*
++	 * This CPU's own queue first unless the LLC queue's head is earlier.
++	 * Only fair order may decide: a woken task is placed at most LAG_NS
++	 * behind the clock, so any extra margin here lets this CPU's queue
++	 * shut out a task that can run only here.
++	 */
+ 	if (dsq_head(CPU_DSQ(cpu), &hv) &&
+-	    (!dsq_head(home, &dv) || !time_before(dv + CPU_WINDOW_NS, hv)) &&
++	    (!dsq_head(home, &dv) || !time_before(dv, hv)) &&
+ 	    LERTICK_MOVE_TO_LOCAL(CPU_DSQ(cpu)))
+ 		return true;
+ 	bpf_for_each(scx_dsq, q, home, 0) {
+diff --git a/src/bpf/scx_lertick.bpf.c b/src/bpf/scx_lertick.bpf.c
+index 9670378..1238bfc 100644
+--- a/src/bpf/scx_lertick.bpf.c
++++ b/src/bpf/scx_lertick.bpf.c
+@@ -603,7 +603,7 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
+ 	if ((enq_flags & SCX_ENQ_WAKEUP) && time_before(vtime, vtime_now - LAG_NS))
+ 		vtime = vtime_now - LAG_NS;
+ 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
+-	scx_bpf_dsq_insert_vtime(p, enqueue_dsq(p, tctx, enq_flags), slice, vtime, enq_flags);
++	enqueue_task(p, tctx, slice, vtime, enq_flags);
+ 	if (tctx)
+ 		publish(tctx);
+ }
+diff --git a/upstream/scx_lertick/src/bpf/main.bpf.c b/upstream/scx_lertick/src/bpf/main.bpf.c
+index bed0994..8e39763 100644
+--- a/upstream/scx_lertick/src/bpf/main.bpf.c
++++ b/upstream/scx_lertick/src/bpf/main.bpf.c
+@@ -173,8 +173,7 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
+ 	    time_before(vtime, vtime_now - LAG_NS))
+ 		vtime = vtime_now - LAG_NS;
+ 
+-	scx_bpf_dsq_insert_vtime(p, enqueue_dsq(p, tctx, enq_flags), slice,
+-				 vtime, enq_flags);
++	enqueue_task(p, tctx, slice, vtime, enq_flags);
+ 	__sync_fetch_and_add(&nr_shared_dispatches, 1);
+ }
+ 
+diff --git a/upstream/scx_lertick/src/bpf/policy.h b/upstream/scx_lertick/src/bpf/policy.h
+index d26c5ce..d2c53a5 100644
+--- a/upstream/scx_lertick/src/bpf/policy.h
++++ b/upstream/scx_lertick/src/bpf/policy.h
+@@ -329,12 +329,11 @@ static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx,
+  * its cache, and any lock it holds, is. Moving such a task mid-burst leaves
+  * threads that wait for it on the old CPU. Short bursts and woken tasks
+  * balance through the LLC queue. A CPU runs its own queue's head unless the
+- * LLC head is more than CPU_WINDOW_NS earlier, and idle CPUs steal from
+- * other CPUs' queues once the LLC queues are empty.
++ * LLC head is earlier in vtime, and idle CPUs steal from other CPUs' queues
++ * once the LLC queues are empty.
+  */
+ #define CPU_DSQ(cpu) ((u64)LERTICK_MAX_DOMAINS + (u32)(cpu))
+ #define CPU_REQUEUE_MIN_NS (1ULL * NSEC_PER_MSEC)
+-#define CPU_WINDOW_NS (2ULL * NSEC_PER_MSEC)
+ 
+ static __always_inline bool dsq_head(u64 dsq, u64 *vtime)
+ {
+@@ -355,13 +354,38 @@ static __always_inline u64 enqueue_dsq(struct task_struct *p,
+ {
+ 	s32 cpu = scx_bpf_task_cpu(p);
+ 
++	/*
++	 * Only a task not ahead of the clock may skip the LLC's fair order. A
++	 * CPU whose queue held only tasks far ahead (low weight, e.g. nice 19)
++	 * would run them anyway and push vtime_now forward, leaving woken tasks
++	 * placed behind every heavier task on the other CPUs' queues.
++	 */
+ 	if (!(enq_flags & SCX_ENQ_WAKEUP) && tctx && tctx->episode_active &&
+-	    tctx->episode_runtime_ns >= CPU_REQUEUE_MIN_NS && cpu >= 0 &&
++	    tctx->episode_runtime_ns >= CPU_REQUEUE_MIN_NS &&
++	    !time_after(p->scx.dsq_vtime, vtime_now) && cpu >= 0 &&
+ 	    cpu < LERTICK_MAX_CPUS && bpf_cpumask_test_cpu(cpu, p->cpus_ptr))
+ 		return CPU_DSQ(cpu);
+ 	return domain_of(cpu);
+ }
+ 
++/*
++ * Insert a task in the queue enqueue_dsq() picks. A CPU's own queue does not
++ * balance with the other CPUs, so tasks on a crowded CPU can fall far behind
++ * the clock; a woken task that can run only there would then wait behind
++ * them for seconds. Like a woken task, a task entering a CPU's queue is
++ * placed at most LAG_NS behind the clock.
++ */
++static __always_inline void enqueue_task(struct task_struct *p,
++					 struct task_ctx *tctx, u64 slice,
++					 u64 vtime, u64 enq_flags)
++{
++	u64 dsq = enqueue_dsq(p, tctx, enq_flags);
++
++	if (dsq >= LERTICK_MAX_DOMAINS && time_before(vtime, vtime_now - LAG_NS))
++		vtime = vtime_now - LAG_NS;
++	scx_bpf_dsq_insert_vtime(p, dsq, slice, vtime, enq_flags);
++}
++
+ /* Create the LLC queues and one queue per CPU. */
+ static __always_inline s32 policy_init(void)
+ {
+@@ -506,9 +530,14 @@ static __always_inline bool take_next(s32 cpu)
+ 	u64		    head = 0, hv, dv;
+ 	int		    n	 = 0;
+ 
+-	/* This CPU's own queue first, unless the LLC queue is well ahead. */
++	/*
++	 * This CPU's own queue first unless the LLC queue's head is earlier.
++	 * Only fair order may decide: a woken task is placed at most LAG_NS
++	 * behind the clock, so any extra margin here lets this CPU's queue
++	 * shut out a task that can run only here.
++	 */
+ 	if (dsq_head(CPU_DSQ(cpu), &hv) &&
+-	    (!dsq_head(home, &dv) || !time_before(dv + CPU_WINDOW_NS, hv)) &&
++	    (!dsq_head(home, &dv) || !time_before(dv, hv)) &&
+ 	    LERTICK_MOVE_TO_LOCAL(CPU_DSQ(cpu)))
+ 		return true;
+ 	bpf_for_each(scx_dsq, q, home, 0) {

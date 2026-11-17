@@ -8,9 +8,7 @@
  *
  * The including file defines, before including this header:
  *   struct task_ctx with u64 runtime_start_ns, bool running, u32 rq_weight,
- *     bool cg_counted, u32 eff_weight, bool episode_valid,
- *     u64 episode_runtime_ns, u64 prediction_ns and struct lertick_model model;
- *   const volatile u32 mode and min_train_samples;
+ *     bool cg_counted and u32 eff_weight;
  *   NSEC_PER_MSEC, LERTICK_MAX_CPUS (a power of two) and LERTICK_MAX_DOMAINS;
  *   LERTICK_MOVE_TO_LOCAL(dsq), its kernel's scx_bpf_dsq_move_to_local();
  *   LERTICK_TASK_CGROUP(p), its kernel's scx_bpf_task_cgroup().
@@ -315,108 +313,6 @@ static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx,
 }
 
 /*
- * A task past its predicted burst gets OVERRUN_SLICE_NS slices. It may be
- * spinning on a lock whose holder waits, or simply mispredicted: shorter
- * slices let woken tasks in sooner, while 1 ms still leaves a lock holder
- * time to finish. Shorter values and dropping the keep_prev continuation
- * both cost lock holders more than they gained.
- */
-#define OVERRUN_SLICE_NS (1ULL * NSEC_PER_MSEC)
-
-/*
- * A task preempted after running at least CPU_REQUEUE_MIN_NS of its burst
- * waits on a queue of its own CPU instead of its LLC's, so it resumes where
- * its cache, and any lock it holds, is. Moving such a task mid-burst leaves
- * threads that wait for it on the old CPU. Short bursts and woken tasks
- * balance through the LLC queue. A CPU runs its own queue's head unless the
- * LLC head is more than CPU_WINDOW_NS earlier, and idle CPUs steal from
- * other CPUs' queues once the LLC queues are empty.
- */
-#define CPU_DSQ(cpu) ((u64)LERTICK_MAX_DOMAINS + (u32)(cpu))
-#define CPU_REQUEUE_MIN_NS (1ULL * NSEC_PER_MSEC)
-#define CPU_WINDOW_NS (2ULL * NSEC_PER_MSEC)
-
-static __always_inline bool dsq_head(u64 dsq, u64 *vtime)
-{
-	struct task_struct *q;
-
-	if (!scx_bpf_dsq_nr_queued(dsq))
-		return false;
-	bpf_for_each(scx_dsq, q, dsq, 0) {
-		*vtime = q->scx.dsq_vtime;
-		return true;
-	}
-	return false;
-}
-
-/* The queue for an enqueued task: its CPU's own after a long preemption. */
-static __always_inline u64 enqueue_dsq(struct task_struct *p,
-				       struct task_ctx *tctx, u64 enq_flags)
-{
-	s32 cpu = scx_bpf_task_cpu(p);
-
-	if (!(enq_flags & SCX_ENQ_WAKEUP) && tctx && tctx->episode_active &&
-	    tctx->episode_runtime_ns >= CPU_REQUEUE_MIN_NS && cpu >= 0 &&
-	    cpu < LERTICK_MAX_CPUS && bpf_cpumask_test_cpu(cpu, p->cpus_ptr))
-		return CPU_DSQ(cpu);
-	return domain_of(cpu);
-}
-
-/* Create the LLC queues and one queue per CPU. */
-static __always_inline s32 policy_init(void)
-{
-	u32 d, nr = scx_bpf_nr_cpu_ids();
-	s32 ret;
-
-	bpf_for(d, 0, domain_count())
-	{
-		ret = scx_bpf_create_dsq(d, -1);
-		if (ret)
-			return ret;
-	}
-	bpf_for(d, 0, nr)
-	{
-		if (d >= LERTICK_MAX_CPUS)
-			break;
-		ret = scx_bpf_create_dsq(CPU_DSQ(d), -1);
-		if (ret)
-			return ret;
-	}
-	return 0;
-}
-
-/* With every LLC queue empty, take a task waiting on another CPU's queue. */
-static __always_inline bool steal_cpu_queue(s32 cpu)
-{
-	u32 nr = scx_bpf_nr_cpu_ids(), i;
-
-	bpf_for(i, 0, nr)
-	{
-		if (i >= LERTICK_MAX_CPUS)
-			break;
-		if (i != (u32)cpu && scx_bpf_dsq_nr_queued(CPU_DSQ(i)) &&
-		    LERTICK_MOVE_TO_LOCAL(CPU_DSQ(i)))
-			return true;
-	}
-	return false;
-}
-
-/*
- * A learned burst that has run past its prediction, for example a thread
- * spinning on a lock whose holder waits in the queue.
- */
-static __always_inline bool predicted(struct task_ctx *tctx)
-{
-	return tctx && mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
-	       tctx->model.updates >= min_train_samples && tctx->prediction_ns;
-}
-
-static __always_inline bool overran(struct task_ctx *tctx, u64 consumed)
-{
-	return predicted(tctx) && consumed >= tctx->prediction_ns;
-}
-
-/*
  * Whether prev should keep its CPU instead of taking the next queued task.
  * A task whose slice ends otherwise always yields, so two tasks sharing a
  * CPU alternate and get equal time whatever their weights. prev stays while
@@ -452,7 +348,7 @@ static __always_inline bool keep_prev(struct task_struct *prev,
 				      struct task_ctx *tctx, s32 cpu)
 {
 	struct task_struct *q;
-	u64		    vtime = prev->scx.dsq_vtime, ran = 0, hv;
+	u64		    vtime = prev->scx.dsq_vtime, ran = 0;
 	u32 weight = tctx && tctx->eff_weight ? tctx->eff_weight :
 		     prev->scx.weight	      ? prev->scx.weight :
 						1;
@@ -465,9 +361,6 @@ static __always_inline bool keep_prev(struct task_struct *prev,
 	if (ran >= KEEP_MAX_NS)
 		return false;
 	vtime += ran * 100 / weight;
-	/* A task waiting on this CPU's own queue ahead of prev takes over. */
-	if (dsq_head(CPU_DSQ(cpu), &hv) && time_before(hv, vtime))
-		return false;
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (n++ >= HEAD_SCAN)
 			return false;
@@ -503,14 +396,9 @@ static __always_inline bool take_next(s32 cpu)
 {
 	struct task_struct *q;
 	u32		    home = domain_of(cpu);
-	u64		    head = 0, hv, dv;
+	u64		    head = 0;
 	int		    n	 = 0;
 
-	/* This CPU's own queue first, unless the LLC queue is well ahead. */
-	if (dsq_head(CPU_DSQ(cpu), &hv) &&
-	    (!dsq_head(home, &dv) || !time_before(dv + CPU_WINDOW_NS, hv)) &&
-	    LERTICK_MOVE_TO_LOCAL(CPU_DSQ(cpu)))
-		return true;
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (!n)
 			head = q->scx.dsq_vtime;
@@ -522,10 +410,7 @@ static __always_inline bool take_next(s32 cpu)
 			return true;
 		n++;
 	}
-	return LERTICK_MOVE_TO_LOCAL(home) || steal(home) ||
-	       (scx_bpf_dsq_nr_queued(CPU_DSQ(cpu)) &&
-		LERTICK_MOVE_TO_LOCAL(CPU_DSQ(cpu))) ||
-	       steal_cpu_queue(cpu);
+	return LERTICK_MOVE_TO_LOCAL(home) || steal(home);
 }
 
 #endif /* __LERTICK_POLICY_H */
