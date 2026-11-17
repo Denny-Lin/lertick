@@ -717,3 +717,9 @@ With `C1` in place, schbench -m4 -t2 wakeup p99 on 4 CPUs is still about 50% abo
 Short load tests (one run, 4 CPUs, wakeup p99 / request p99 us): `W1` 3,924 / 74,624, `W2` 3,980 / 54,976, `W3` 3,956 / 62,912, `W4` 3,012 / 103,040, against about 5,200 / 59,000 for `b1`.
 
 **Screening** (`wake-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `b1` and `W1` to `W4`. A candidate goes on if, against `b1` on 4 CPUs, -m4 -t2 wakeup p99 is lower by more than 10% and request p99 is not higher by more than 10%, and no other measure is worse than `b1` by more than 10% on either CPU count.
+
+### Wakeup screening result: `W2` goes on, 2026-11-17
+
+`wake-run.sh` ran 08:10 to 08:38 UTC with no fallbacks; raw sets in `wake-sets.tar.gz`. On 4 CPUs against `b1` (EEVDF in brackets), -m4 -t2 wakeup / request p99: `W1` +10 / -38, `W2` +12 (-29) / -8 (-32), `W3` +10 / -18, `W4` +28 (-5) / -87. Cutting the continuation (`W1`, `W4`) or using 0.5 ms (`W3`) costs lock holders too much. `W2` (1 ms slice past the prediction) meets the rule: wakeup better by more than 10%, request within 10%, and no other measure more than 10% worse on either CPU count (worst: hackbench threads -9 on 4 CPUs).
+
+**Confirmation** (`w2-run.sh`): held-out and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions, arms EEVDF, `b1` and `W2`. `W2` replaces `b1` if -m4 -t2 wakeup p99 on 4 CPUs is lower by more than 5% and no measure is more than 10% worse than `b1` on either CPU count, with the kernel compile within 3%.
