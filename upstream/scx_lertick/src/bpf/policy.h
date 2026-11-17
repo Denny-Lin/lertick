@@ -53,19 +53,29 @@ static u64 runnable_weight;
 #define LAG_NS (2ULL * NSEC_PER_MSEC)
 /*
  * A queued task may sit at most AHEAD_NS (scaled by its own weight) ahead of
- * the clock. Charges use the cgroup-effective weight, which drops while
- * sibling cgroups have runnable tasks; a task charged in such a moment can
- * land far ahead of the clock, and the clock catches up at service over the
- * runnable weight, which with hundreds of runnable tasks takes seconds. EEVDF
- * bounds lag the same way in both directions.
+ * the clock, as EEVDF bounds lag in both directions, and never further than
+ * the clock covers in WAIT_MAX_NS. The clock advances by service over the
+ * runnable weight, about nr_cpus x 100 / runnable_weight per nanosecond, so
+ * with dozens of runnable tasks a nice-19 task (weight 1, up to 2 s ahead by
+ * the first bound) would wait over 10 s and trip the watchdog. The second
+ * bound keeps that wait near WAIT_MAX_NS; under such load a light task gets a
+ * little more than its weight's share instead of none.
  */
 #define AHEAD_NS (20ULL * NSEC_PER_MSEC)
+#define WAIT_MAX_NS (500ULL * NSEC_PER_MSEC)
 
 static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
 {
-	u32 w	= p->scx.weight ? p->scx.weight : 1;
-	u64 cap = vtime_now + AHEAD_NS * 100 / w;
+	u32 w	   = p->scx.weight ? p->scx.weight : 1;
+	u64 rw	   = runnable_weight;
+	u64 ahead  = AHEAD_NS * 100 / w;
+	u64 by_now = WAIT_MAX_NS / NSEC_PER_MSEC * scx_bpf_nr_cpu_ids() * 100 /
+		     (rw < 100 ? 100 : rw) * NSEC_PER_MSEC;
+	u64 cap;
 
+	if (by_now < ahead)
+		ahead = by_now;
+	cap = vtime_now + ahead;
 	return time_before(cap, vtime) ? cap : vtime;
 }
 /*
