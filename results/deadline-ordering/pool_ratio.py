@@ -1,5 +1,6 @@
-# README numbers for the current version: Lertick against EEVDF from one
-# session (LERTICK_SESSION, arm LERTICK_ARM), and against each sched_ext
+# README numbers for the current version: Lertick against EEVDF from the
+# sessions in LERTICK_SESSION (comma-separated; the median of their ratios),
+# arm LERTICK_ARM, and against each sched_ext
 # scheduler through EEVDF: per session, each scheduler's median over EEVDF's
 # median in that session; the median of those ratios over every session that
 # ran the scheduler is set against Lertick's ratio. Run from a directory
@@ -64,7 +65,8 @@ def pct(rl, ro, hib):
 
 
 for cpu in (4, 8):
-    lt = ratios(f'{LT_SESSION}-cpu{cpu}', LT_ARM)
+    per_lt = [ratios(f'{s}-cpu{cpu}', LT_ARM) for s in LT_SESSION.split(',')]
+    lt = {k: st.median([r[k] for r in per_lt if k in r]) for k in ORDER}
     print(f'{cpu}: "EEVDF": {[pct(lt[k], 1.0, M[k][2]) for k in ORDER]}')
     for o, sessions in OTHERS.items():
         per = [ratios(s.format(c=cpu), o) for s in sessions]

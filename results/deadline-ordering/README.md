@@ -796,3 +796,19 @@ The window, not the depth, is what matters.
 - `D16W4`: request p99 +44 on 4 CPUs, but -m4 -t2 wakeup p99 -18 on 8 CPUs. `D32W4`: schbench -m1 -t1 latencies 19 to 65% worse. Both stop here.
 
 **Confirmation** (`d16w8-run.sh`): held-out and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions, arms EEVDF, `b0` and `D16W8`, then `stress-run.sh` and `gate.sh`. `D16W8` replaces `b0` if no measure is more than 10% worse on either CPU count, the kernel compile is within 3%, and the battery and the gate pass.
+
+### Confirmation result: `D16W8` accepted, 2026-11-17
+
+`d16w8-run.sh` ran 11:45 to 12:38 UTC with no fallbacks; raw sets in `d16w8-sets.tar.gz`. `D16W8` against `b0` (EEVDF in brackets), 5 repetitions:
+
+- 4 CPUs: schbench -m4 -t2 request p99 +54 (-10, from -140 for `b0`), wakeup p99 +18 (-19), RPS +5; perf messaging processes +15 (-11), schbench -m1 -t1 wakeup p99 +16; the rest within 4.
+- 8 CPUs: schbench -m1 -t1 request and wakeup p99 +19 and +22, hackbench threads +11, messaging processes +8; hackbench 16 groups -16 and -m4 -t2 wakeup p99 -52 (see below).
+- Kernel compile (`kbuild-long`): 30.68 s against 30.25 s for `b0` and 31.00 s for EEVDF on 4 CPUs; 27.10 s against 28.30 s and 25.58 s on 8 CPUs.
+- The 8-CPU -m4 -t2 wakeup p99 values were 65 to 241 us for every arm, overlapping completely, and hackbench 16 groups 1.23 to 1.65 s. Ten further alternating repetitions of both on 8 CPUs (`d16w8-extra8.txt`) gave medians of 1.335 s against 1.305 s (-2%) and 94 us against 99 us (+5%), so neither is a regression.
+- `stress-run.sh`: all 13 stressors with no state change and no watchdog message. `gate.sh`: nice mix 3 of 3, nice -5 / 0 / 19 shares 93,570 / 187,023 / 2,105, 816 migrations in one schbench run.
+
+`D16W8` replaces `b0`: `AFFINE_DEPTH` 16 and `AFFINE_WINDOW_NS` 8 ms. The final source was rebuilt (`b6`, which differs from the `D16W8` binary only in source text kept in the BPF line info) and passed `gate.sh` twice; the product with the same policy passed it once; the port passes `cargo fmt --check`, clang-format with the scx style and clippy.
+
+### README numbers for the wider affine pick, 2026-11-17
+
+The README charts show this version. Against EEVDF: `pool_ratio.py` with `LERTICK_SESSION=d16w8,aff`, the median of the two sessions that ran it with EEVDF (kernel compile from `d16w8` only). Against the sched_ext schedulers: through EEVDF, as before. Better/same/worse, 4 CPUs then 8 CPUs: EEVDF 5/2/4 and 3/6/2, scx_bpfland 10/1/0 and 7/3/1, scx_lavd 6/4/1 and 3/6/2, scx_p2dq 8/1/2 and 6/3/2, scx_flash 9/1/1 and 7/3/1. The 8-CPU kernel compile reads -6%, from one session in which EEVDF's compile was itself faster than in any earlier session.
