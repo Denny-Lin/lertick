@@ -625,3 +625,19 @@ From here on the scx port (`Denny-Lin/scx` branch `scx_lertick`, built on scx ma
 Better/same/worse at 5%: 5/3/3 on 4 CPUs and 4/5/2 on 8 CPUs. `prod` in the same sessions: 4/5/2 and 4/6/1. `scx` against `prod`: within 5% on most measures; perf pipe is slower in `scx` (-22 and -34) though still far ahead of EEVDF, perf messaging threads +15 on 8 CPUs, schbench -m4 -t2 request p99 -14 on 8 CPUs.
 
 Against the submission bar (no measure more than 5% worse than EEVDF, at least 4 wins), the scx build fails on schbench -m4 -t2 request and wakeup p99 on 4 CPUs and, on 8 CPUs, perf messaging threads and -m4 -t2 request p99 by 10%.
+
+## Diagnosis: schbench -m 4 -t 2 on 4 CPUs, 2026-11-17
+
+schbench workers take a per-CPU mutex with a `trylock` spin (`lock_this_cpu()`) around their CPU work. A worker preempted while holding it leaves the next worker on that CPU spinning until its own slice ends. `-L` disables the lock. `lock-run.sh` ran `-m 4 -t 2 -r 20 -w 3` on CPUs 0-3 under EEVDF and the scx build, with and without `-L`, 3 repetitions, no fallbacks; raw sets in `lock-sets.tar.gz`. Medians (us):
+
+| | wakeup p99 | request p99 | RPS |
+|---|---|---|---|
+| EEVDF, lock | 3756 | 52160 | 188 |
+| scx, lock | 5528 | 137984 | 191 |
+| EEVDF, no lock | 3788 | 31008 | 382 |
+| scx, no lock | 6504 | 29216 | 367 |
+
+Two separate losses:
+
+- **Request p99 is the lock.** Without the lock, scx is 6% better than EEVDF; with it, 2.6 times worse. Lertick lets a spinning worker keep its CPU (a burst past its prediction falls back to the 2 ms fixed slice, and `keep_prev` can extend it to 20 ms) while the lock holder waits in the queue, so a lock handoff can cost several milliseconds. EEVDF's shorter effective slices under contention cut the spin sooner.
+- **Wakeup p99 is not the lock.** It is 47 to 72% worse with or without it, so a woken worker waits behind running tasks for another reason, most likely the absence of wakeup preemption: EEVDF lets an eligible wakee with an earlier deadline preempt, while Lertick waits for the running slice to end.
