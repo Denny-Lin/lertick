@@ -641,3 +641,17 @@ Two separate losses:
 
 - **Request p99 is the lock.** Without the lock, scx is 6% better than EEVDF; with it, 2.6 times worse. Lertick lets a spinning worker keep its CPU (a burst past its prediction falls back to the 2 ms fixed slice, and `keep_prev` can extend it to 20 ms) while the lock holder waits in the queue, so a lock handoff can cost several milliseconds. EEVDF's shorter effective slices under contention cut the spin sooner.
 - **Wakeup p99 is not the lock.** It is 47 to 72% worse with or without it, so a woken worker waits behind running tasks for another reason, most likely the absence of wakeup preemption: EEVDF lets an eligible wakee with an earlier deadline preempt, while Lertick waits for the running slice to end.
+
+### Migration is the cause, and three candidates, hypothesis fixed 2026-11-17 before the run
+
+`perf stat` over `schbench -m 4 -t 2` on CPUs 0-3: EEVDF makes 1,349 migrations, the scx build 5,908. With workers and message threads pinned (`-M 0-3 -W auto`) the scx build beats EEVDF on both measures (wakeup p99 381 against 947 us, request p99 20,768 against 29,344 us). schbench's lock is per CPU and checked only when taken, so a holder preempted and resumed on another CPU leaves workers on its old CPU spinning until its whole request ends. The shared queue lets any CPU pick up a preempted task.
+
+Candidates, as switches in `policy.h` (all off in the default build):
+
+- `A`, `LERTICK_OVERRUN_YIELD`: a task past its predicted burst gets the minimum slice and no `keep_prev` continuation.
+- `B`, `LERTICK_WAKE_PREEMPT`: a woken task that finds no idle CPU preempts its previous CPU or one of two random CPUs if the task there has overrun its prediction.
+- `C`, `LERTICK_CPU_REQUEUE`: a task preempted mid-burst waits on a queue of its own CPU; that CPU runs it unless the LLC queue's head is more than 2 ms earlier, and idle CPUs steal from other CPUs' queues when the LLC queues are empty. Woken tasks still go to the LLC queue.
+
+Short load tests (one run each, 4 CPUs): wakeup p99 / request p99 in us were `A` 4,004 / 149,760, `B` 5,112 / 131,328, `AB` 2,996 / 169,728, `C` 4,504 / 54,464, `AC` 2,116 / 115,072, `ABC` 1,998 / 124,800, against about 5,500 / 130,000 for the current build and 3,760 / 50,000 for EEVDF.
+
+**Screening** (`cand-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `base` (the current scx build), `A`, `C`, `AC` and `ABC`. A candidate goes on if, against `base` on 4 CPUs, schbench `-m 4 -t 2` request p99 or wakeup p99 is lower by more than 10% and neither is higher by more than 10%, and no other measure is worse than `base` by more than 10% on either CPU count.

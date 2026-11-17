@@ -129,6 +129,8 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 		slice = tctx->prediction_ns - consumed_ns;
 		__sync_fetch_and_add(&nr_adaptive_slices, 1);
 	}
+	if (LERTICK_OVERRUN_YIELD && overran(tctx, consumed_ns))
+		slice = slice_min;
 
 	return CLAMP(slice, slice_min, slice_max);
 }
@@ -171,9 +173,11 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	    time_before(vtime, vtime_now - LAG_NS))
 		vtime = vtime_now - LAG_NS;
 
-	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice,
+	scx_bpf_dsq_insert_vtime(p, enqueue_dsq(p, tctx, enq_flags), slice,
 				 vtime, enq_flags);
 	__sync_fetch_and_add(&nr_shared_dispatches, 1);
+	if (enq_flags & SCX_ENQ_WAKEUP)
+		wake_preempt(p);
 }
 
 void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
@@ -238,6 +242,7 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 		return;
 	tctx->runtime_start_ns = p->se.sum_exec_runtime;
 	tctx->running	       = true;
+	policy_running(p, tctx);
 }
 
 void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
@@ -246,6 +251,7 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	u32		 weight = p->scx.weight ? p->scx.weight : 1;
 	u64		 delta, rw;
 
+	policy_stopping(p);
 	if (!tctx || !tctx->running)
 		return;
 	tctx->running = false;
@@ -396,17 +402,7 @@ void BPF_STRUCT_OPS(lertick_cgroup_move, struct task_struct *p,
 
 s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 {
-	u32 d;
-	s32 ret;
-
-	bpf_for(d, 0, domain_count())
-	{
-		ret = scx_bpf_create_dsq(d, -1);
-		if (ret)
-			return ret;
-	}
-
-	return 0;
+	return policy_init();
 }
 
 void BPF_STRUCT_OPS(lertick_exit, struct scx_exit_info *ei)

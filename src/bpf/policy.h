@@ -8,7 +8,9 @@
  *
  * The including file defines, before including this header:
  *   struct task_ctx with u64 runtime_start_ns, bool running, u32 rq_weight,
- *     bool cg_counted and u32 eff_weight;
+ *     bool cg_counted, u32 eff_weight, bool episode_valid,
+ *     u64 episode_runtime_ns, u64 prediction_ns and struct lertick_model model;
+ *   const volatile u32 mode and min_train_samples;
  *   NSEC_PER_MSEC, LERTICK_MAX_CPUS (a power of two) and LERTICK_MAX_DOMAINS;
  *   LERTICK_MOVE_TO_LOCAL(dsq), its kernel's scx_bpf_dsq_move_to_local();
  *   LERTICK_TASK_CGROUP(p), its kernel's scx_bpf_task_cgroup().
@@ -320,6 +322,190 @@ static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx,
 }
 
 /*
+ * Experimental switches, off by default; screening builds turn them on.
+ * LERTICK_OVERRUN_YIELD: a task past its predicted burst gets the minimum
+ * slice and loses the continuation of keep_prev.
+ * LERTICK_WAKE_PREEMPT: a woken task that finds no idle CPU preempts a CPU
+ * whose task has run past its predicted burst.
+ */
+#ifndef LERTICK_OVERRUN_YIELD
+#define LERTICK_OVERRUN_YIELD 0
+#endif
+#ifndef LERTICK_WAKE_PREEMPT
+#define LERTICK_WAKE_PREEMPT 0
+#endif
+/*
+ * LERTICK_CPU_REQUEUE: a task preempted in the middle of a burst waits on a
+ * queue of its own CPU instead of its LLC's, so it resumes where its cache
+ * (and any lock it holds) is; woken tasks still balance through the LLC
+ * queue. A CPU runs its own queue's head unless the LLC head is more than
+ * CPU_WINDOW_NS earlier; idle CPUs steal from other CPUs' queues.
+ */
+#ifndef LERTICK_CPU_REQUEUE
+#define LERTICK_CPU_REQUEUE 0
+#endif
+#define CPU_DSQ(cpu)	((u64)LERTICK_MAX_DOMAINS + (u32)(cpu))
+#define CPU_WINDOW_NS	(2ULL * NSEC_PER_MSEC)
+
+static __always_inline bool dsq_head(u64 dsq, u64 *vtime)
+{
+	struct task_struct *q;
+
+	bpf_for_each(scx_dsq, q, dsq, 0) {
+		*vtime = q->scx.dsq_vtime;
+		return true;
+	}
+	return false;
+}
+
+/* The queue for an enqueued task: its CPU's own after a preemption, else its LLC's. */
+static __always_inline u64 enqueue_dsq(struct task_struct *p,
+				       struct task_ctx *tctx, u64 enq_flags)
+{
+	s32 cpu = scx_bpf_task_cpu(p);
+
+	if (LERTICK_CPU_REQUEUE && !(enq_flags & SCX_ENQ_WAKEUP) && tctx &&
+	    tctx->episode_active && tctx->episode_runtime_ns && cpu >= 0 &&
+	    cpu < LERTICK_MAX_CPUS && bpf_cpumask_test_cpu(cpu, p->cpus_ptr))
+		return CPU_DSQ(cpu);
+	return domain_of(cpu);
+}
+
+/* Create the LLC queues and, with LERTICK_CPU_REQUEUE, one queue per CPU. */
+static __always_inline s32 policy_init(void)
+{
+	u32 d, nr = scx_bpf_nr_cpu_ids();
+	s32 ret;
+
+	bpf_for(d, 0, domain_count()) {
+		ret = scx_bpf_create_dsq(d, -1);
+		if (ret)
+			return ret;
+	}
+	if (!LERTICK_CPU_REQUEUE)
+		return 0;
+	bpf_for(d, 0, nr) {
+		if (d >= LERTICK_MAX_CPUS)
+			break;
+		ret = scx_bpf_create_dsq(CPU_DSQ(d), -1);
+		if (ret)
+			return ret;
+	}
+	return 0;
+}
+
+/* With every LLC queue empty, take a task waiting on another CPU's queue. */
+static __always_inline bool steal_cpu_queue(s32 cpu)
+{
+	u32 nr = scx_bpf_nr_cpu_ids(), i;
+
+	if (!LERTICK_CPU_REQUEUE)
+		return false;
+	bpf_for(i, 0, nr) {
+		if (i >= LERTICK_MAX_CPUS)
+			break;
+		if (i != (u32)cpu && LERTICK_MOVE_TO_LOCAL(CPU_DSQ(i)))
+			return true;
+	}
+	return false;
+}
+
+/*
+ * A learned burst that has run past its prediction, for example a thread
+ * spinning on a lock whose holder waits in the queue.
+ */
+static __always_inline bool predicted(struct task_ctx *tctx)
+{
+	return tctx && mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
+	       tctx->model.updates >= min_train_samples && tctx->prediction_ns;
+}
+
+static __always_inline bool overran(struct task_ctx *tctx, u64 consumed)
+{
+	return predicted(tctx) && consumed >= tctx->prediction_ns;
+}
+
+/* When the task now running on each CPU passes its prediction; 0 if never. */
+struct cpu_run {
+	u64 overrun_at;
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(max_entries, LERTICK_MAX_CPUS);
+	__type(key, u32);
+	__type(value, struct cpu_run);
+} cpu_run_map SEC(".maps");
+
+static __always_inline void policy_running(struct task_struct *p,
+					   struct task_ctx *tctx)
+{
+	u32 key = scx_bpf_task_cpu(p);
+	struct cpu_run *r;
+	u64 now, at = 0;
+
+	if (!LERTICK_WAKE_PREEMPT)
+		return;
+	r = bpf_map_lookup_elem(&cpu_run_map, &key);
+	if (!r)
+		return;
+	now = bpf_ktime_get_ns();
+	if (predicted(tctx)) {
+		if (tctx->prediction_ns > tctx->episode_runtime_ns)
+			at = now + tctx->prediction_ns -
+			     tctx->episode_runtime_ns;
+		else
+			at = now;
+	}
+	r->overrun_at = at;
+}
+
+static __always_inline void policy_stopping(struct task_struct *p)
+{
+	u32 key = scx_bpf_task_cpu(p);
+	struct cpu_run *r;
+
+	if (!LERTICK_WAKE_PREEMPT)
+		return;
+	r = bpf_map_lookup_elem(&cpu_run_map, &key);
+	if (r)
+		r->overrun_at = 0;
+}
+
+/*
+ * A woken task queued for lack of an idle CPU preempts the first of its
+ * previous CPU and two random CPUs whose task has overrun its prediction.
+ */
+static __always_inline void wake_preempt(struct task_struct *p)
+{
+	u32 nr = scx_bpf_nr_cpu_ids();
+	u64 now = bpf_ktime_get_ns();
+	s32 cand[3];
+	int i;
+
+	if (!LERTICK_WAKE_PREEMPT || !nr)
+		return;
+	cand[0] = scx_bpf_task_cpu(p);
+	cand[1] = bpf_get_prandom_u32() % nr;
+	cand[2] = bpf_get_prandom_u32() % nr;
+	bpf_for(i, 0, 3) {
+		u32 key;
+		struct cpu_run *r;
+		s32 cpu = cand[i & 3];
+
+		if (cpu < 0 || !bpf_cpumask_test_cpu(cpu, p->cpus_ptr))
+			continue;
+		key = cpu;
+		r = bpf_map_lookup_elem(&cpu_run_map, &key);
+		if (r && r->overrun_at && !time_before(now, r->overrun_at)) {
+			r->overrun_at = 0;
+			scx_bpf_kick_cpu(cpu, SCX_KICK_PREEMPT);
+			return;
+		}
+	}
+}
+
+/*
  * Whether prev should keep its CPU instead of taking the next queued task.
  * A task whose slice ends otherwise always yields, so two tasks sharing a
  * CPU alternate and get equal time whatever their weights. prev stays while
@@ -367,7 +553,16 @@ static __always_inline bool keep_prev(struct task_struct *prev,
 		ran = prev->se.sum_exec_runtime - tctx->runtime_start_ns;
 	if (ran >= KEEP_MAX_NS)
 		return false;
+	if (LERTICK_OVERRUN_YIELD && tctx &&
+	    overran(tctx, tctx->episode_runtime_ns + ran))
+		return false;
 	vtime += ran * 100 / weight;
+	if (LERTICK_CPU_REQUEUE) {
+		u64 hv;
+
+		if (dsq_head(CPU_DSQ(cpu), &hv) && time_before(hv, vtime))
+			return false;
+	}
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (n++ >= HEAD_SCAN)
 			return false;
@@ -406,6 +601,15 @@ static __always_inline bool take_next(s32 cpu)
 	u64		    head = 0;
 	int		    n	 = 0;
 
+	if (LERTICK_CPU_REQUEUE) {
+		u64 hv, dv;
+
+		if (dsq_head(CPU_DSQ(cpu), &hv) &&
+		    (!dsq_head(home, &dv) ||
+		     !time_before(dv + CPU_WINDOW_NS, hv)) &&
+		    LERTICK_MOVE_TO_LOCAL(CPU_DSQ(cpu)))
+			return true;
+	}
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (!n)
 			head = q->scx.dsq_vtime;
@@ -417,7 +621,9 @@ static __always_inline bool take_next(s32 cpu)
 			return true;
 		n++;
 	}
-	return LERTICK_MOVE_TO_LOCAL(home) || steal(home);
+	return LERTICK_MOVE_TO_LOCAL(home) || steal(home) ||
+	       (LERTICK_CPU_REQUEUE && LERTICK_MOVE_TO_LOCAL(CPU_DSQ(cpu))) ||
+	       steal_cpu_queue(cpu);
 }
 
 #endif /* __LERTICK_POLICY_H */
