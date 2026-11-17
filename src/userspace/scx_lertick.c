@@ -500,7 +500,7 @@ static void usage(FILE *out, const char *argv0)
 		"  --track-all             Learn all tasks (includes compiler descendants)\n"
 		"  --fixed-slice-us N      Fixed/warmup slice (default 2000)\n"
 		"  --min-slice-us N        Prediction slice lower bound (default 500)\n"
-		"  --max-slice-us N        Prediction slice upper bound (default 5000)\n"
+		"  --max-slice-us N        Prediction slice upper bound (default 3000)\n"
 		"  --partial               Schedule only explicit SCHED_EXT tasks\n"
 		"  --cpuperf auto|util|max CPU frequency requests to schedutil (default auto:\n"
 		"                          util when a policy uses schedutil or with --lerwatt;\n"
@@ -562,7 +562,7 @@ int main(int argc, char **argv)
 	struct rlimit memlock = { RLIM_INFINITY, RLIM_INFINITY };
 	const char *stats_path = "-", *mode_name = "online";
 	unsigned duration = 0, sample_ms = 1000, mode = LERTICK_MODE_ONLINE;
-	unsigned fixed_us = 2000, min_us = 500, max_us = 5000, tracked_tgid = 0, stall_tgid = 0;
+	unsigned fixed_us = 2000, min_us = 500, max_us = 3000, tracked_tgid = 0, stall_tgid = 0;
 	bool check = false, partial = false, fault = false, danger = false, expect_watchdog = false, profile = false;
 	bool verify = false, maintenance = false;
 	bool summary_only = false, full_stats = false, sample_explicit = false;

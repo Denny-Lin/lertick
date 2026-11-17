@@ -851,3 +851,25 @@ Lertick switches contexts 5 to 10 times less than EEVDF in perf messaging, and s
 `r8-run.sh` ran 14:13 to 14:37 UTC with no fallbacks; raw sets in `r8-sets.tar.gz`. Against `b7` (EEVDF in brackets), 4 CPUs: `M3s1` -m4 -t2 wakeup p99 +37 (+16), perf messaging threads +15 (+11), RPS -9; `M3` wakeup p99 +20 (-6), messaging threads +11. On 8 CPUs neither is worse than 8% on any measure. `W16` costs perf messaging threads 18% on 8 CPUs and stops here.
 
 **Confirmation** (`r8c-run.sh`): held-out and `kbuild-long.sh` on 4 and 8 CPUs, 5 repetitions, arms EEVDF, `b7`, `M3` and `M3s1`, then `stress-run.sh` and `gate.sh` for each. The better candidate that has no measure more than 10% worse than `b7`, the kernel compile within 3%, and passes the battery and the gate becomes the default slice bounds.
+
+### Round 8 confirmation: `M3` accepted, 2026-11-17
+
+`r8c-run.sh` ran 14:38 to 15:52 UTC with no fallbacks; raw sets, battery and gate logs in `r8c-sets.tar.gz`. Against `b7`, 5 repetitions (EEVDF in brackets):
+
+| Measure | `M3` 4 CPUs | `M3s1` 4 CPUs | `M3` 8 CPUs | `M3s1` 8 CPUs |
+|---|---|---|---|---|
+| perf messaging, processes | +1 (-5) | +5 (-2) | -3 (-3) | **-13** (-13) |
+| perf messaging, threads | +11 (+12) | +19 (+19) | -1 (-1) | +8 (+9) |
+| hackbench threads | +3 (+30) | +4 (+31) | +5 (+13) | +4 (+12) |
+| schbench -m1 wakeup p99 | +2 (+6) | +13 (+17) | +6 (+20) | +4 (+19) |
+| schbench -m4 -t2 request p99 | +10 (-9) | +3 (-17) | -1 (+7) | -8 (+0) |
+| schbench -m4 -t2 wakeup p99 | +21 (-6) | +41 (+22) | +11 (+40) | +4 (+35) |
+| schbench -m4 -t2 RPS | +2 (+8) | -7 (-1) | +1 (+1) | +0 (-0) |
+
+Kernel compile (`kbuild-long.sh`, median of 5, seconds): 4 CPUs `b7` 26.85, `M3` 26.87, `M3s1` 27.17; 8 CPUs `b7` 21.58, `M3` 21.32, `M3s1` 20.70. Both candidates kept the scheduler enabled through the 13-stressor battery and passed the nice mix 6 of 6.
+
+`M3s1` loses 13% in perf messaging with processes on 8 CPUs and fails the 10% rule. `M3` is worse than `b7` by at most 3% anywhere, within 0.1% on the kernel compile, and becomes the default: `--slice-max-us` (port) and `--max-slice-us` (product) now default to 3,000. Rebuilt as `b8` (port) and the product build, both passed `gate.sh` (6 and 2 runs; nice 19 at 2,026 and 1,931 bogo ops).
+
+### README numbers for the 3 ms slice cap, 2026-11-17
+
+`pool_ratio.py` with `LERTICK_SESSION=r8,r8c LERTICK_ARM=M3` (kernel compile from `r8c` only). Better/same/worse, 4 CPUs then 8 CPUs: EEVDF 6/2/3 and 4/7/0, scx_bpfland 8/1/2 and 7/4/0, scx_lavd 7/2/2 and 4/6/1, scx_p2dq 7/2/2 and 7/3/1, scx_flash 7/2/2 and 7/4/0. On 4 CPUs scx_bpfland moves from 10/1/0 to 8/1/2: Lertick's schbench -m1 request p99 is level with EEVDF's in these two sessions (17% better in the previous two), which puts it 16% behind scx_bpfland's ratio from its own sessions, and the kernel compile reads 5.5% behind.

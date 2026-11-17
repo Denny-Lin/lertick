@@ -40,7 +40,7 @@ char _license[] SEC("license") = "GPL";
 const volatile u32 mode		     = LERTICK_MODE_ONLINE;
 const volatile u64 slice_fixed	     = 2ULL * NSEC_PER_MSEC;
 const volatile u64 slice_min	     = 500ULL * NSEC_PER_USEC;
-const volatile u64 slice_max	     = 5ULL * NSEC_PER_MSEC;
+const volatile u64 slice_max	     = 3ULL * NSEC_PER_MSEC;
 const volatile u32 min_train_samples = 8;
 
 /* Statistics, read by user space. */

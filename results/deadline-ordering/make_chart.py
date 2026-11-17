@@ -15,24 +15,24 @@ ROWS = [  # label, higher_is_better, kind
     ("schbench 4 msg threads, throughput", True, "rps"),
     ("Kernel compile (kernel/)", False, "time"),
 ]
-# Current version (wider affine pick), from pool_ratio.py with
-# LERTICK_SESSION=d16w8,aff (median of the two sessions; kernel compile from
-# kbuild-long in d16w8), in ROWS order. Against the sched_ext schedulers
-# through EEVDF: each one's ratio to EEVDF in its own two sessions against
-# Lertick's ratio to EEVDF.
+# Current version (3 ms slice cap), from pool_ratio.py with
+# LERTICK_SESSION=r8,r8c LERTICK_ARM=M3 (median of the two sessions; kernel
+# compile from kbuild-long in r8c), in ROWS order. Against the sched_ext
+# schedulers through EEVDF: each one's ratio to EEVDF in its own two sessions
+# against Lertick's ratio to EEVDF.
 EEVDF = {  # 2 sessions
-    4: [-7.0, -10.0, 89.3, 33.4, 15.4, 17.1, 34.8, -11.2, -21.1, 4.2, 1.0],
-    8: [3.2, 0.9, 92.1, 14.7, 0.6, -0.0, 20.7, -3.9, -5.1, -2.0, -6.0],
+    4: [-6.7, 9.0, 94.1, 30.3, 9.7, -1.8, 14.9, -7.3, -5.8, 9.5, -3.3],
+    8: [2.3, -0.3, 93.8, 13.8, 4.8, 0.5, 27.1, -1.0, 14.1, -0.6, -0.2],
 }
 OTHERS = {  # through EEVDF, 2 sessions each
-    "scx_bpfland": {4: [11.7, 17.3, 6.7, 24.6, 36.6, 5.5, 21.2, 81.7, 15.4, 15.2, -1.1],
-                    8: [28.5, 34.6, 18.2, 4.4, 27.0, -3.5, 12.2, 6.9, 53.5, -4.5, -5.2]},
-    "scx_lavd": {4: [1.5, 4.8, 89.4, 31.4, 32.2, 14.8, 45.6, 65.9, -9369.1, 0.1, -0.8],
-                 8: [4.4, -3.6, 92.1, -5.3, 5.7, 0.9, 43.4, 1.4, 3.9, -1.4, -7.0]},
-    "scx_p2dq": {4: [13.5, 11.8, 80.7, 26.5, 31.6, 19.3, -16.9, 61.8, -53.5, 15.8, 1.3],
-                 8: [12.2, 7.0, 91.7, -8.1, 10.4, 8.8, 20.3, -1.7, -13.6, -4.2, -4.6]},
-    "scx_flash": {4: [10.9, 24.0, 89.7, 43.9, 46.1, 14.6, 17.5, 63.8, -176.4, 11.1, -0.1],
-                  8: [33.1, 43.6, 92.5, 38.6, 44.0, 1.7, 12.3, -2.5, 31.7, -1.6, -5.8]},
+    "scx_bpfland": {4: [11.9, 31.6, 49.0, 21.0, 32.4, -16.0, -2.8, 82.4, 26.1, 21.2, -5.5],
+                    8: [27.9, 33.8, 35.4, 3.4, 30.1, -3.0, 19.3, 9.5, 62.0, -3.2, 0.6]},
+    "scx_lavd": {4: [1.8, 21.2, 94.2, 28.2, 27.7, -4.6, 29.0, 67.1, -8175.7, 5.3, -5.2],
+                 8: [3.6, -4.8, 93.8, -6.4, 9.6, 1.4, 47.9, 4.2, 21.4, -0.1, -1.1]},
+    "scx_p2dq": {4: [13.6, 27.1, 89.5, 23.0, 27.0, 0.9, -52.6, 63.1, -34.2, 21.8, -2.9],
+                 8: [11.4, 5.9, 93.5, -9.2, 14.2, 9.3, 26.7, 1.2, 7.2, -2.9, 1.1]},
+    "scx_flash": {4: [11.1, 37.1, 94.4, 41.3, 42.5, -4.8, -7.8, 65.0, -141.6, 16.9, -4.5],
+                  8: [32.5, 42.9, 94.1, 37.9, 46.4, 2.2, 19.3, 0.4, 44.2, -0.3, -0.0]},
 }
 SAME = 5.0  # percent; matches the held-out verdict
 CAP = 40.0  # bars longer than this are clipped and marked with an arrow
