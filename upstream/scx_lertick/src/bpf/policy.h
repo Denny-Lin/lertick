@@ -338,6 +338,10 @@ static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx,
 #define LERTICK_CPU_REQUEUE 0
 #endif
 #define CPU_DSQ(cpu)	((u64)LERTICK_MAX_DOMAINS + (u32)(cpu))
+/* Only a burst that has already run this long is kept on its CPU. */
+#ifndef CPU_REQUEUE_MIN_NS
+#define CPU_REQUEUE_MIN_NS 0
+#endif
 #define CPU_WINDOW_NS	(2ULL * NSEC_PER_MSEC)
 
 static __always_inline bool dsq_head(u64 dsq, u64 *vtime)
@@ -368,7 +372,8 @@ static __always_inline u64 enqueue_dsq(struct task_struct *p,
 	s32 cpu = scx_bpf_task_cpu(p), idle;
 
 	if (LERTICK_CPU_REQUEUE && !(enq_flags & SCX_ENQ_WAKEUP) && tctx &&
-	    tctx->episode_active && tctx->episode_runtime_ns && cpu >= 0 &&
+	    tctx->episode_active && tctx->episode_runtime_ns &&
+	    tctx->episode_runtime_ns >= CPU_REQUEUE_MIN_NS && cpu >= 0 &&
 	    cpu < LERTICK_MAX_CPUS && bpf_cpumask_test_cpu(cpu, p->cpus_ptr)) {
 		if (LERTICK_CPU_KICK) {
 			idle = scx_bpf_pick_idle_cpu(p->cpus_ptr, 0);

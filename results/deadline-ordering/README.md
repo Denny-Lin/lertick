@@ -656,8 +656,24 @@ Short load tests (one run each, 4 CPUs): wakeup p99 / request p99 in us were `A`
 
 **Screening** (`cand-run.sh`): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `base` (the current scx build), `A`, `C`, `AC` and `ABC`. A candidate goes on if, against `base` on 4 CPUs, schbench `-m 4 -t 2` request p99 or wakeup p99 is lower by more than 10% and neither is higher by more than 10%, and no other measure is worse than `base` by more than 10% on either CPU count.
 
-### Screening result: `AC` closes the schbench gap but costs elsewhere, 2026-11-17
+### Screening result: `A` fixes wakeup, `C` fixes request, not both, 2026-11-17
 
-`cand-run.sh` ran 06:06 to 06:35 UTC with no fallbacks; raw sets in `cand-sets.tar.gz`. `AC` against EEVDF on 4 CPUs: schbench `-m 4 -t 2` request p99 -2% and wakeup p99 -6%, against -147% and -49% for `base`. Against `base` it is +46% and +20% there, but perf messaging processes is 15% worse on 4 CPUs, perf messaging threads 12% worse on 8 CPUs and perf pipe 54% slower on 8 CPUs (still 91% faster than EEVDF). `C` alone worsens messaging by 15 to 21% and -m4 -t2 wakeup p99 by 12%; `A` alone worsens request p99 by 18%; `ABC` collapses on 8 CPUs (-m4 -t2 request p99 -191%). None passes as screened.
+`cand-run.sh` ran 06:06 to 06:35 UTC with no fallbacks; raw sets in `cand-sets.tar.gz`. schbench `-m 4 -t 2` on 4 CPUs, against `base` and (in brackets) against EEVDF:
+
+| Arm | request p99 | wakeup p99 | perf messaging processes |
+|---|---|---|---|
+| `base` | 0 (-147) | 0 (-49) | 0 (-4) |
+| `A` | -18 (-191) | -11 (-66) | +1 (-3) |
+| `C` | +55 (-12) | +5 (-41) | -21 (-26) |
+| `AC` | -2 (-152) | +46 (+20) | -15 (-19) |
+| `ABC` | -1 (-150) | +64 (+46) | -2 (-5) |
+
+`C` removes most of the request loss and `A` with `C` turns the wakeup loss into a win, but no arm does both: with `A`, a lock holder past its prediction also gets minimum slices, which undoes `C`'s gain. `C` costs perf messaging processes 21% on 4 CPUs and 17% on 8 CPUs, and perf pipe 29 to 53% (still about 90% faster than EEVDF). `ABC` collapses on 8 CPUs (-m4 -t2 wakeup p99 -191%). None passes as screened.
 
 Two likely costs of the CPU queues: an idle CPU is not told about a task queued on another CPU's queue, so messaging bunches up, and every dispatch now iterates two queue heads, which shows on perf pipe's microsecond round trips. Next round: `AC2` (AC with a cheap `scx_bpf_dsq_nr_queued()` check before each head iteration), `ACK` (AC2 plus `LERTICK_CPU_KICK`, which wakes an idle CPU to steal when a task is queued on a CPU's queue) and `CK` (C with both), screened by the same rule (`cand2-run.sh`).
+
+### Round 2 result and round 3, 2026-11-17
+
+`cand2-run.sh` ran 06:37 to 07:01 UTC with no fallbacks; raw sets in `cand2-sets.tar.gz`. Against `base` (EEVDF in brackets), 4 CPUs: `AC2` request p99 -10 (-183), wakeup p99 +48 (+20), messaging processes -6 (-10); `ACK` -18 (-205), +48 (+20), +1 (-4), with perf messaging threads -55 on 8 CPUs; `CK` +51 (-28), +3 (-50), -5 (-10), with messaging processes -27 on 8 CPUs. The idle kick does not cure the messaging loss of `C` and hurts with `A`.
+
+perf messaging runs hundreds of tasks whose bursts last microseconds, while schbench workers run for milliseconds. Round 3 keeps a preempted task on its CPU only once its current burst has run at least 1 ms (`CPU_REQUEUE_MIN_NS`): `C1` (C with the threshold) and `C1K` (with the kick), against `base` and `CK`, by the same rule (`cand3-run.sh`).
