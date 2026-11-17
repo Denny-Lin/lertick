@@ -532,3 +532,21 @@ Positive is worse for `dl`. The target measure does not improve and several othe
 **Change** (`LERTICK_AI_KEEP=1`): when prev's slice ends and its current burst has a trained prediction, keep prev if it is predicted to sleep within 0.5 ms, and yield to a queued task if it is predicted to run more than 2 ms longer. Otherwise the fair rule decides. CPU-bound tasks have no valid burst and fixed mode has no prediction, so both are unchanged; only the learned mode can change.
 
 **Screening** (`ek-run.sh`, starts when the evening round ends): held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `base` online, `base` fixed and `ek` online, built from the same source. `ek` goes on if schbench `-m 4 -t 2` wakeup p99 is lower than `base` online by more than 10% on both CPU counts and no other measure is worse than `base` online by more than 10%. The `base` online and fixed arms also measure what the learned slice adds today.
+
+### Screening result: learned continuation rejected, 2026-11-16
+
+`ek-run.sh` ran 16:47 to 17:06 host time with no fallbacks. Change against `base` online (positive is better for `ek`):
+
+| Test | 4 CPUs | 8 CPUs |
+|---|---|---|
+| schbench -m4 -t2 wakeup p99 (target) | +2 | -16 |
+| schbench -m4 -t2 request p99 | -2 | -5 |
+| schbench -m1 -t1 wakeup p99 | -15 | +9 |
+| hackbench msg processes | +12 | +6 |
+| hackbench 16 groups | +12 | -1 |
+| hackbench pipe threads | -9 | -3 |
+| perf bench sched pipe | +1 | -7 |
+
+The target moved by +2% and -16%, not by more than 10% on both CPU counts, and schbench -m1 -t1 wakeup p99 was 15% worse on 4 CPUs. `ek` is rejected and the `LERTICK_AI_KEEP` switch is removed from the source; `BPF_DEFS` stays in the Makefile for later screening builds.
+
+What the learned slice adds today (`base` online against `base` fixed, same session): on 4 CPUs perf pipe +24% but schbench -m4 -t2 wakeup p99 -18%, hackbench msg processes -12% and 16 groups -10%; on 8 CPUs schbench -m1 -t1 wakeup p99 +18% and hackbench pipe threads +6%, the rest within 3%. The signs disagree between CPU counts and with earlier sessions, so with 3 repetitions this is still noise rather than a measured gain or loss from learning.
