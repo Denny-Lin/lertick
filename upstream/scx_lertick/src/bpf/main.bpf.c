@@ -100,6 +100,20 @@ static struct task_ctx *task_ctx(struct task_struct *p)
 	return bpf_task_storage_get(&task_ctx_stor, p, 0, 0);
 }
 
+#ifndef LERTICK_MEASURE
+#define LERTICK_MEASURE 0
+#endif
+/*
+ * Measurement only (LERTICK_MEASURE): how well three predictors guess a
+ * completed burst, and how often a slice actually ends a burst. Bursts are
+ * capped at REFERENCE_NS as the model's target is.
+ */
+u64 m_bursts, m_err_lin, m_err_ewma, m_err_last;
+u64 m_under_lin, m_under_ewma;
+u64 m_over_fixed, m_over_cap;
+u64 m_cls_lin, m_cls_ewma, m_cls_last;
+u64 m_stops, m_expired;
+
 #ifndef LERTICK_PROG_TABLE
 #define LERTICK_PROG_TABLE 0
 #endif
@@ -389,6 +403,12 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	u32		 weight = p->scx.weight ? p->scx.weight : 1;
 	u64		 delta, rw;
 
+	if (LERTICK_MEASURE) {
+		__sync_fetch_and_add(&m_stops, 1);
+		if (runnable)
+			__sync_fetch_and_add(&m_expired, 1);
+	}
+
 	if (!tctx || !tctx->running)
 		return;
 	tctx->running = false;
@@ -442,6 +462,34 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 	if (tctx->episode_active && tctx->episode_valid && burst &&
 	    !(p->flags & PF_EXITING)) {
 		__s32 target = lertick_scale_ns_q16(burst, REFERENCE_NS);
+
+		if (LERTICK_MEASURE && tctx->model.updates >= min_train_samples) {
+			u64 b	 = MIN(burst, REFERENCE_NS);
+			u64 lin	 = tctx->prediction_ns;
+			u64 ew	 = tctx->ewma_burst_ns;
+			u64 last = MIN(tctx->last_burst_ns, REFERENCE_NS);
+			bool fin = b <= slice_fixed;
+
+			__sync_fetch_and_add(&m_bursts, 1);
+			__sync_fetch_and_add(&m_err_lin, lin > b ? lin - b : b - lin);
+			__sync_fetch_and_add(&m_err_ewma, ew > b ? ew - b : b - ew);
+			__sync_fetch_and_add(&m_err_last,
+					     last > b ? last - b : b - last);
+			if (lin < b)
+				__sync_fetch_and_add(&m_under_lin, 1);
+			if (ew < b)
+				__sync_fetch_and_add(&m_under_ewma, 1);
+			if (burst > slice_fixed)
+				__sync_fetch_and_add(&m_over_fixed, 1);
+			if (burst > slice_max)
+				__sync_fetch_and_add(&m_over_cap, 1);
+			if ((lin <= slice_fixed) == fin)
+				__sync_fetch_and_add(&m_cls_lin, 1);
+			if ((ew <= slice_fixed) == fin)
+				__sync_fetch_and_add(&m_cls_ewma, 1);
+			if ((last <= slice_fixed) == fin)
+				__sync_fetch_and_add(&m_cls_last, 1);
+		}
 
 		if (mode == LERTICK_MODE_ONLINE) {
 			lertick_model_train(&tctx->model, tctx->features,
