@@ -306,6 +306,10 @@ static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 #ifndef LERTICK_SLICE_FINISH
 #define LERTICK_SLICE_FINISH 0
 #endif
+/* A burst predicted past slice_max gets slice_fixed, not slice_max. */
+#ifndef LONG_TO_FIXED
+#define LONG_TO_FIXED 0
+#endif
 
 /* Remaining slice: the predicted burst less what already ran, within bounds. */
 static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
@@ -317,7 +321,12 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 	    tctx->prediction_ns > consumed_ns) {
 		u64 rest = tctx->prediction_ns - consumed_ns;
 
-		if (!LERTICK_SLICE_FINISH) {
+		if (LONG_TO_FIXED && tctx->prediction_ns > slice_max) {
+			/*
+			 * The burst will be cut anyway: a longer slice would
+			 * only make waiting tasks wait longer.
+			 */
+		} else if (!LERTICK_SLICE_FINISH) {
 			slice = rest;
 			__sync_fetch_and_add(&nr_adaptive_slices, 1);
 		} else if (rest > slice_fixed && rest <= slice_max) {

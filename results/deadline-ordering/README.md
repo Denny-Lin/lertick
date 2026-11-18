@@ -1216,3 +1216,17 @@ The schbench error is one thread alternating between a long and a short kind of 
 | kernel build | 91 (99.3%) | 79 (99.8%) | 85 (99.6%) |
 
 `N` keeps `J`'s gain where bursts alternate and goes back to the average where they do not: the schbench -m4 -t2 error is a fifth of `F`'s, and every workload is classified at least 99% right. Next: whether this shows in latency and throughput.
+
+## Waker model on the benchmarks, 2026-11-18
+
+Hypothesis: the more accurate predictions of `N` change latency or throughput against `F` and the PR build (`pr`, origin/main). Builds without measurement counters, `--min-train-samples 2` for `f` and `n`. `wn-run.sh`: `heldout.sh`, 5 runs, shuffled arms, raw data in `wn-sets.tar.gz`. Change against EEVDF in the same session, verdict at 5%:
+
+| | 4 CPUs (win/tie/loss) | 8 CPUs |
+|---|---|---|
+| pr | 5 / 3 / 3 | 4 / 6 / 1 |
+| f | 5 / 5 / 1 | 4 / 6 / 1 |
+| n | 5 / 4 / 2 | 5 / 6 / 0 |
+
+On 4 CPUs `f` brings schbench -m4 -t2 request p99 from +12% to -1% against EEVDF; `n` reaches +0%, but its wakeup p99 is +6% where `f` is -0%. On 8 CPUs `n` has no loss. `pipe` is bimodal in every arm (about 1.2 or 2.5 to 5.8 us per op, by whether the two tasks share a CPU); `n` drew the slow mode 3 times of 5 on 8 CPUs, `pr` twice. Five runs do not separate `f` from `n`.
+
+A likely reason for `n`'s wakeup p99 on 4 CPUs: it predicts a schbench worker's long bursts as long, so they get the 3 ms maximum slice, which they overrun anyway; `f` blurred them toward 2 ms. `LONG_TO_FIXED` gives a burst predicted past `slice_max` the fixed slice instead. `wo-run.sh` compares `f`, `n` and both with that switch (`fo`, `no`), 8 runs on 4 and 8 CPUs.
