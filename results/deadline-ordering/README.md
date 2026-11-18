@@ -1302,3 +1302,21 @@ Against EEVDF, verdict at 5%: `pr` 5 / 5 / 1 and the new build 5 / 5 / 1 on both
 Directly against each scheduler, better/same/worse at 5%: scx_bpfland 9/2/0, scx_lavd 8/2/1, scx_p2dq 7/2/2, scx_flash 8/2/1. Compared through EEVDF with their earlier sessions, the counts were 8/2/1, 7/3/1, 8/1/2 and 7/3/1. The schedulers that preempt on wakeup (lavd, p2dq, flash) have the lowest schbench -m4 -t2 wakeup p99 and a request p99 3.3 to 3.6 times Lertick's.
 
 Against EEVDF the README uses the median over the five sessions with both EEVDF and the release candidate on 4 CPUs (`final`, `x1`, `x2`, `x3`, `brawl`; `brawl_ratio.py`): 5/5/1. The -m4 -t2 wakeup p99 is level there (4.9% better; +7, +7, -5, -5 and -6% per session), and perf messaging with processes is the loss (7.8%; +5 to +9% per session).
+
+8 CPUs, the same session (`brawl-cpu8-sets.tar.gz`), medians:
+
+| Test | EEVDF | Lertick | bpfland | lavd | p2dq | flash |
+|---|---|---|---|---|---|---|
+| perf messaging processes (s) | 0.490 | 0.540 | 0.665 | 0.507 | 0.572 | 0.690 |
+| perf messaging threads (s) | 0.367 | 0.359 | 0.568 | 0.367 | 0.396 | 0.641 |
+| perf pipe (us/op) | 19.87 | 2.45 | 2.68 | 19.71 | 19.42 | 19.94 |
+| schbench -m4 -t2 wakeup p99 (us) | 149 | 67 | 256 | 86 | 70 | 202 |
+| schbench -m4 -t2 request p99 (ms) | 27.7 | 25.6 | 27.8 | 26.2 | 25.3 | 27.0 |
+| schbench -m4 -t2 rps | 464 | 459 | 461 | 462 | 463 | 457 |
+| schbench -m1 -t1 wakeup p99 (us) | 63 | 48 | 54 | 98 | 59 | 66 |
+| schbench -m1 -t1 request p99 (us) | 9,504 | 9,152 | 9,104 | 9,472 | 9,216 | 9,392 |
+| hackbench threads (s) | 0.872 | 0.765 | 0.879 | 0.737 | 0.730 | 1.212 |
+| hackbench 16 groups (s) | 1.296 | 1.265 | 1.804 | 1.353 | 1.504 | 2.368 |
+| kernel/sched build (s) | 2.39 | 2.40 | 2.43 | 2.39 | 2.41 | 2.40 |
+
+Directly, better/same/worse: scx_bpfland 8/3/0, scx_lavd 4/6/1, scx_p2dq 5/6/0, scx_flash 8/3/0. Against EEVDF, the median over the three 8-CPU sessions with both (`final`, `x3`, `brawl`): 4/6/1, the loss being perf messaging with processes (10.3%). On 8 CPUs Lertick has the lowest schbench -m4 -t2 wakeup p99 of the six.

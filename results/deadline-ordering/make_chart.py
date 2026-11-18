@@ -17,27 +17,26 @@ ROWS = [  # label, higher_is_better, kind
 ]
 # 4 CPUs: from brawl_ratio.py (EEVDF: median over the sessions final, x1, x2,
 # x3 and brawl; the others: directly in the brawl session; kernel compile is
-# the kernel/sched rebuild). 8 CPUs: current version (waker model), from pool_ratio.py with LERTICK_SESSION=final
-# LERTICK_ARM=v2 (8 runs; kernel compile from kbuild-long/final, 5 runs), in
-# ROWS order. Against the sched_ext schedulers through EEVDF: each one's ratio
-# to EEVDF in its own two sessions against Lertick's ratio to EEVDF.
-EEVDF = {  # 8 runs, one session
+# the kernel/sched rebuild). 8 CPUs: the same, over the sessions final, x3
+# and brawl.
+# In ROWS order; positive is better for Lertick.
+EEVDF = {  # median over sessions of 8 runs
     4: [-7.8, 2.7, 93.7, 26.6, 9.0, -1.2, 18.0, -1.1, 4.9, 22.4, -0.4],
-    8: [-9.9, 0.5, 90.8, 13.8, 7.4, -0.4, 20.2, -0.4, 38.4, 0.1, 1.6],
+    8: [-10.3, 2.2, 88.2, 12.3, 3.5, -0.2, 20.2, -0.4, 38.4, 0.0, -0.3],
 }
-OTHERS = {  # through EEVDF, 2 sessions each
+OTHERS = {  # same session (brawl), 8 runs
     "scx_bpfland": {4: [13.2, 29.5, 69.0, 20.0, 21.2, -1.9, 11.8, 85.6, 38.2, 32.3, -3.6],
-                    8: [18.9, 34.4, 4.6, 3.3, 32.0, -3.9, 11.6, 10.0, 72.7, -2.5, 2.3]},
+                    8: [18.7, 36.8, 8.5, 13.0, 29.9, -0.5, 11.1, 7.9, 73.8, -0.5, 1.1]},
     "scx_lavd": {4: [8.2, 16.5, 93.7, 20.5, 21.5, -1.9, 35.2, 72.1, -19522.2, 13.6, -1.8],
-                 8: [-8.5, -4.0, 90.8, -6.5, 12.1, 0.5, 43.0, 4.8, 43.7, 0.7, 0.6]},
+                 8: [-6.6, 2.2, 87.6, -3.7, 6.5, 3.4, 51.0, 2.4, 21.6, -0.7, -0.7]},
     "scx_p2dq": {4: [11.8, 14.2, 88.6, 21.1, 23.8, -3.3, -36.4, 69.7, -20.8, 32.3, 1.1],
-                 8: [0.3, 6.7, 90.4, -9.3, 16.5, 8.5, 19.8, 1.8, 33.5, -2.2, 2.8]},
+                 8: [5.5, 9.2, 87.4, -4.8, 15.9, 0.7, 17.9, -1.1, 4.3, -0.9, 0.2]},
     "scx_flash": {4: [11.8, 32.4, 93.9, 35.7, 34.6, -0.7, 16.0, 71.9, -114.6, 29.4, -3.1],
-                  8: [24.1, 43.4, 91.3, 37.8, 47.9, 1.4, 11.7, 1.0, 60.0, 0.5, 1.7]},
+                  8: [21.7, 44.0, 87.7, 36.9, 46.6, 2.6, 26.7, 5.3, 66.8, 0.4, -0.3]},
 }
 SAME = 5.0  # percent; matches the held-out verdict
-RUNS = {4: "median of 5 sessions", 8: "median of 8 runs"}  # how the EEVDF numbers were taken
-OTHER_NOTE = {4: "same session", 8: "via EEVDF"}  # how the other schedulers were compared
+RUNS = {4: "median of 5 sessions", 8: "median of 3 sessions"}  # how the EEVDF numbers were taken
+OTHER_NOTE = {4: "same session", 8: "same session"}  # how the other schedulers were compared
 CAP = 40.0  # bars longer than this are clipped and marked with an arrow
 LABEL_END = 400  # right edge of the longest benchmark label
 FONT = "-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif"
