@@ -100,6 +100,10 @@ static struct task_ctx *task_ctx(struct task_struct *p)
 	return bpf_task_storage_get(&task_ctx_stor, p, 0, 0);
 }
 
+#ifndef LERTICK_MODEL_V2
+#define LERTICK_MODEL_V2 0
+#endif
+
 #ifndef LERTICK_MEASURE
 #define LERTICK_MEASURE 0
 #endif
@@ -147,6 +151,43 @@ u64 nr_prog_hits;
 #define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq, 0)
 #define LERTICK_TASK_CGROUP(p) scx_bpf_task_cgroup(p)
 #include "policy.h"
+
+/*
+ * LERTICK_MODEL_V2: the model starts as the burst average (weight 1 on that
+ * feature, 0 elsewhere), so it predicts no worse than the average before it
+ * has learned anything, and learns with a step that starts large and shrinks
+ * (1/8 for 8 updates, 1/16 up to 32, then the usual 1/64).
+ */
+static void model_train_v2(struct lertick_model *model,
+			   const __s32 features[LERTICK_FEATURES],
+			   __s32 target_q16)
+{
+	__s64 error = (__s64)lertick_clip_q16(target_q16) -
+		      lertick_model_raw_q16(model, features);
+	__s64 alpha = model->updates < 8  ? LERTICK_Q / 8 :
+		      model->updates < 32 ? LERTICK_Q / 16 :
+					    LERTICK_ALPHA_Q16;
+	int   i;
+
+	if (error > LERTICK_Q)
+		error = LERTICK_Q;
+	if (error < -LERTICK_Q)
+		error = -LERTICK_Q;
+	bpf_for(i, 0, LERTICK_FEATURES)
+	{
+		__s64 update;
+
+		if (i >= LERTICK_FEATURES)
+			break;
+		update = lertick_trunc_shift(
+			alpha * error * lertick_clip_q16(features[i]), 32);
+		model->weight_q16[i] = lertick_clip_weight(
+			(__s64)lertick_clip_weight(model->weight_q16[i]) +
+			update);
+	}
+	if (model->updates != ~(__u64)0)
+		model->updates++;
+}
 
 /*
  * A wakeup starts an episode. Only an episode that starts with a verified
@@ -496,8 +537,12 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 		}
 
 		if (mode == LERTICK_MODE_ONLINE) {
-			lertick_model_train(&tctx->model, tctx->features,
-					    target);
+			if (LERTICK_MODEL_V2)
+				model_train_v2(&tctx->model, tctx->features,
+					       target);
+			else
+				lertick_model_train(&tctx->model,
+						    tctx->features, target);
 			__sync_fetch_and_add(&nr_training_updates, 1);
 			prog_save(p, tctx);
 		}
@@ -529,6 +574,10 @@ s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 	if (!tctx)
 		return -ENOMEM;
 	lertick_model_init(&tctx->model);
+	if (LERTICK_MODEL_V2) {
+		tctx->model.weight_q16[0] = 0;
+		tctx->model.weight_q16[2] = LERTICK_Q;
+	}
 
 	return 0;
 }
