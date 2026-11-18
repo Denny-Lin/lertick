@@ -1337,3 +1337,16 @@ In perf messaging and hackbench no guess beats a coin, so placing wakees by this
 | d200 | 2,884 to 2,956 | 45 to 70 | +10.4% |
 
 Every deadline build holds the 4-CPU wakeup p99 at about 3 ms in every run, 20% under EEVDF's 3.75 ms, where `v2` jumps between 3 and 4 to 5 ms. `d100` and `d200` cost perf messaging; `d50` does not. `x4-run.sh` checks `d50` against `v2` and EEVDF on all eleven measures, 8 runs on 4 and 8 CPUs.
+
+### Deadline ordering, full check of `d50`
+
+`x4-run.sh`, 8 runs, shuffled arms, raw data in `x4-sets.tar.gz`. Against EEVDF, better/same/worse at 5%:
+
+| | 4 CPUs | 8 CPUs |
+|---|---|---|
+| v2 | 5 / 4 / 2 | 4 / 7 / 0 |
+| d50 | **7 / 4 / 0** | 4 / 6 / 1 |
+
+4 CPUs, medians (EEVDF, v2, d50): perf messaging processes 0.567, 0.608, 0.575 s; perf messaging threads 0.440, 0.419, 0.402 s; -m4 -t2 wakeup p99 3,740, 3,976, 3,032 us (`d50` 3,020 to 3,052 in all eight runs); request p99 47.2, 49.0, 45.0 ms; rps 187, 232, 226. 8 CPUs: perf messaging processes 0.498, 0.512, 0.534 s (`d50` +7%, `v2` +3%; in the 40-run screen they were level, +4.8% and +5.4%); -m4 -t2 wakeup p99 110, 79, 76 us; request p99 26.5, 26.7, 27.7 ms; perf pipe 19.7, 2.8, 1.3 us.
+
+`d50` removes both 4-CPU losses of `v2` (perf messaging processes and the -m4 -t2 wakeup p99) and holds the 8-CPU results within the noise of `v2`; 3% fewer -m4 -t2 requests per second on 4 CPUs is its cost. The 8-CPU perf messaging gap remains for both. Because it changes the queue order, `d50-check.sh` runs the fairness gate, cgroup weights, the CI test with the edge cases, the stress battery and a 30-minute long run before it can be considered for the port.
