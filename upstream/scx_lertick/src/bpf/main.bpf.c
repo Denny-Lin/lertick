@@ -13,7 +13,7 @@
  * In online mode each task trains a small linear model inside BPF on its own
  * completed CPU bursts (wake to sleep). At the next wakeup the prediction sets
  * the task's time slice, bounded by slice_min and slice_max. A new process
- * starts from the model its program's earlier processes trained, and a
+ * starts from the model earlier tasks with the same name trained, and a
  * thread whose bursts depend on who wakes it is told apart by its waker.
  * Fixed mode uses slice_fixed for every task. Fairness always charges the CPU
  * time actually used, never the prediction.
@@ -56,7 +56,9 @@ const volatile u64 slice_fixed = 2ULL * NSEC_PER_MSEC;
 const volatile u64 slice_min   = 500ULL * NSEC_PER_USEC;
 const volatile u64 slice_max   = 3ULL * NSEC_PER_MSEC;
 /*
- * Completed bursts a task needs before its prediction sets its slice.
+ * Bursts a task's model must have learned from before its prediction sets
+ * its slice. A task that takes over its program's model counts as having
+ * learned PROG_INHERIT_UPDATES of them.
  */
 const volatile u32 min_train_samples = 2;
 
@@ -116,11 +118,12 @@ static struct task_ctx *task_ctx(struct task_struct *p)
 }
 
 /*
- * A model per program (by comm), trained with every completed burst of the
- * program's tasks. Short-lived processes, such as a compiler's, then predict
- * from their first burst with what earlier processes of the program learned.
- * A task that renames itself only changes which model it starts from: the
- * prediction sets the slice, never the vtime charge.
+ * A model per task name (comm), trained with every completed burst of the
+ * tasks with that name. Short-lived processes, such as a compiler's, then
+ * predict from their first burst with what earlier processes of the program
+ * learned. A task that renames itself only changes which model it starts
+ * from: the prediction sets the slice, never the vtime charge. Updates take
+ * no lock, so concurrent ones can be lost; that only slows the learning.
  */
 struct prog_key {
 	char comm[16];
@@ -198,9 +201,10 @@ static bool same_comm(const char *a, const char *b)
 }
 
 /*
- * When @p starts running a program (first wakeup, exec), take over the
- * program's model. Its update count is capped, since threads of one program
- * can behave differently and each must still adapt to its own bursts.
+ * When @p's name differs from the one its model was taken for (first wakeup,
+ * exec, rename), take over the model of its new name. Its update count is
+ * capped, since threads of one program can behave differently and each must
+ * still adapt to its own bursts.
  */
 static void prog_sync(struct task_struct *p, struct task_ctx *tctx)
 {
