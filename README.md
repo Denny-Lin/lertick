@@ -8,30 +8,30 @@
 
 ## Performance
 
-**Against Linux's default scheduler (EEVDF), Lertick is clearly faster on 4 to 6 of 11 standard kernel scheduler benchmarks, level on 2 to 7 and slower on 0 to 3.** The wins include `perf bench pipe`, hackbench threads and schbench wakeup latency; on 8 CPUs it is slower on none. The losses, all on 4 CPUs and 6 to 7% each, are `perf bench messaging` with processes and schbench latency when many message threads wake groups of workers. Against the community sched_ext schedulers it wins far more than it loses: scx_bpfland 8 to 2 and 7 to 0, scx_lavd 7 to 2 and 4 to 1, scx_p2dq 7 to 2 and 7 to 1, scx_flash 7 to 2 and 7 to 0 (4 and 8 CPUs).
+**Against Linux's default scheduler (EEVDF), Lertick is clearly faster on 5 to 6 of 11 standard kernel scheduler benchmarks, level on 4 to 5 and slower on 1.** The wins include `perf bench pipe`, hackbench and schbench wakeup latency and throughput. The losses are schbench wakeup latency when many message threads wake groups of workers on 4 CPUs (7%) and `perf bench messaging` with processes on 8 CPUs (10%). Against the community sched_ext schedulers it wins far more than it loses: scx_bpfland 8 to 1 and 6 to 0, scx_lavd 7 to 1 and 4 to 2, scx_p2dq 8 to 2 and 6 to 1, scx_flash 7 to 1 and 7 to 0 (4 and 8 CPUs).
 
 <p align="center">
-  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 6, the same on 2 and worse on 3; against scx_bpfland, better on 8, the same on 1 and worse on 2; against scx_lavd, better on 7, the same on 2 and worse on 2; against scx_p2dq, better on 7, the same on 2 and worse on 2; against scx_flash, better on 7, the same on 2 and worse on 2." width="1120" />
+  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 6, the same on 4 and worse on 1; against scx_bpfland, better on 8, the same on 2 and worse on 1; against scx_lavd, better on 7, the same on 3 and worse on 1; against scx_p2dq, better on 8, the same on 1 and worse on 2; against scx_flash, better on 7, the same on 3 and worse on 1." width="1120" />
 </p>
 
 <p align="center">
-  <img src="docs/assets/lertick-scoreboard-cpu8.svg" alt="8 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 4, the same on 7 and worse on 0; against scx_bpfland, better on 7, the same on 4 and worse on 0; against scx_lavd, better on 4, the same on 6 and worse on 1; against scx_p2dq, better on 7, the same on 3 and worse on 1; against scx_flash, better on 7, the same on 4 and worse on 0." width="1120" />
+  <img src="docs/assets/lertick-scoreboard-cpu8.svg" alt="8 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 5, the same on 5 and worse on 1; against scx_bpfland, better on 6, the same on 5 and worse on 0; against scx_lavd, better on 4, the same on 5 and worse on 2; against scx_p2dq, better on 6, the same on 4 and worse on 1; against scx_flash, better on 7, the same on 4 and worse on 0." width="1120" />
 </p>
 
 <details>
 <summary><strong>Each benchmark against Linux EEVDF</strong></summary>
 
 <p align="center">
-  <img src="docs/assets/lertick-vs-eevdf-cpu4.svg" alt="4 CPUs, median of 2 sessions: Lertick is better than Linux EEVDF on perf messaging threads, perf pipe, hackbench threads and 16 groups, schbench 1-thread wakeup latency and schbench 4-thread throughput; the same on schbench 1-thread request latency and kernel compile; worse on perf messaging processes and schbench 4 message threads request and wakeup latency." width="1120" />
+  <img src="docs/assets/lertick-vs-eevdf-cpu4.svg" alt="4 CPUs, median of 8 runs: Lertick is better than Linux EEVDF on perf pipe, hackbench threads and 16 groups, schbench 1-thread wakeup latency, schbench 4 message threads throughput and kernel compile; the same on perf messaging processes and threads, schbench 1-thread request latency and schbench 4 message threads request latency; worse on schbench 4 message threads wakeup latency." width="1120" />
 </p>
 
 <p align="center">
-  <img src="docs/assets/lertick-vs-eevdf-cpu8.svg" alt="8 CPUs, median of 2 sessions: Lertick is better than Linux EEVDF on perf pipe, hackbench threads, schbench 1-thread wakeup latency and schbench 4 message threads wakeup latency; the same on the other seven, and worse on none." width="1120" />
+  <img src="docs/assets/lertick-vs-eevdf-cpu8.svg" alt="8 CPUs, median of 8 runs: Lertick is better than Linux EEVDF on perf pipe, hackbench threads and 16 groups, and schbench wakeup latency with 1 and with 4 message threads; the same on perf messaging threads, schbench request latency, schbench throughput and kernel compile; worse on perf messaging processes." width="1120" />
 </p>
 
 </details>
 
-<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Against EEVDF: the current version, median of 2 sessions (3 and 5 runs). Against the other schedulers: through EEVDF, comparing Lertick's ratio to EEVDF with each scheduler's ratio to EEVDF in its own two sessions, so treat those counts as indicative. The charts were measured before the three stability bounds added on 2026-11-17 (lag, wait and root-cgroup bounds); a rerun on a busy host showed no consistent change and an idle-host rerun is pending. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#readme-numbers-for-the-3-ms-slice-cap-2026-11-17)</sub>
+<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Against EEVDF: the current version (waker model, 2026-11-18), median of 8 runs; the kernel compile rebuilds kernel/, median of 5. Against the other schedulers: through EEVDF, comparing Lertick's ratio to EEVDF with each scheduler's ratio to EEVDF in its own two earlier sessions, so treat those counts as indicative. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#readme-numbers-for-the-waker-model-2026-11-18)</sub>
 
 ## Get started
 

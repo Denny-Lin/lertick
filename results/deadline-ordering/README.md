@@ -1276,3 +1276,7 @@ Benchmarks, 8 runs, shuffled arms, against EEVDF and the PR build (`pr`, origin/
 | kernel/sched build (s) | 2.34 | 2.31 | 2.32 | 2.32 | 2.35 | 2.33 |
 
 Against EEVDF, verdict at 5%: `pr` 5 / 5 / 1 and the new build 5 / 5 / 1 on both CPU counts. The new build's loss is schbench -m4 -t2 wakeup p99 on 4 CPUs (+7%; `pr` +2%), `pr`'s is perf messaging with processes on 4 CPUs (+9%; new +5%). On 8 CPUs both are 10% behind on perf messaging with processes. Against `pr`, the new build raises schbench -m4 -t2 throughput on 4 CPUs by 9% and is otherwise within run-to-run noise. The `wo` session's 7% perf messaging gain on 8 CPUs was against `f`; against `pr` there is none here. The lower prediction error is not by itself a scheduling gain.
+
+### README numbers for the waker model, 2026-11-18
+
+`pool_ratio.py` with `LERTICK_SESSION=final LERTICK_ARM=v2`, after `kbuild-long.sh` on 4 and 8 CPUs (EEVDF and the release candidate, 5 runs each; raw data in `final-kbuild-sets.tar.gz`). The kernel compile here rebuilds all of `kernel/`, so the 4-CPU count against EEVDF reads 6 / 4 / 1 where the partial build of the release checks above reads 5 / 5 / 1 (full build 5.2% faster, partial build level). Better/same/worse, 4 CPUs then 8 CPUs: EEVDF 6/4/1 and 5/5/1, scx_bpfland 8/2/1 and 6/5/0, scx_lavd 7/3/1 and 4/5/2, scx_p2dq 8/1/2 and 6/4/1, scx_flash 7/3/1 and 7/4/0. The other schedulers' sessions are the earlier ones, so those rows compare this build's ratio to EEVDF with ratios taken on other days.
