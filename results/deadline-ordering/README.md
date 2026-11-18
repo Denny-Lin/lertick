@@ -1286,3 +1286,16 @@ Every form of preemption raised both the wakeup and the request p99 by a third o
 | perf messaging processes (s) | 0.580 | 0.606 | 0.590 | 0.632 | 0.643 |
 
 None improves on `v2`; the 4 ms affine window costs 17% on the request p99. All three rejected. In this session `v2` is 5 / 6 / 0 against EEVDF on 4 CPUs. Over the three sessions with 8 runs its -m4 -t2 wakeup p99 against EEVDF reads +7%, -5% and -5%: it sits at the tie line, and neither shorter slices, preemption nor narrower queue rules move the 1 ms that would make it a steady win.
+
+## 8-CPU perf messaging with processes, 2026-11-18
+
+In the 8-run sessions the release candidate trailed EEVDF on `perf bench sched messaging` (processes, 8 CPUs) by 10% (`final`) and 19% (`x3`), with every run slower than EEVDF's slowest. `msg-run.sh` runs only this benchmark, arms shuffled each round, 5 runs per attach, 10 to 12 rounds; raw times in `msg-sets.tar.gz`. Medians against EEVDF in the same set:
+
+| Set | b8 (before the stability bounds) | cap | rootfix | lag | wait | pr | v2 |
+|---|---|---|---|---|---|---|---|
+| `bis8` | | +5.9% | +4.5% | +5.2% | +4.7% | +4.6% | +4.3% |
+| `pre8` | +2.1% | +4.4% | | | | | +2.5% |
+
+Every build since the stability bounds trails EEVDF by 3 to 6% here, and the release candidate is no worse than the PR build. The first run after attach was 7 to 17% slower for `v2` in three sets (`bis8`, `t8m`, `pre8`), which would explain the larger losses in `heldout.sh`, where this benchmark runs first. Two fixes aimed at that start were tried: trusting a fresh model only after 8 bursts while an inherited one stays at 2 (`TRUST_FRESH`, `t8`, `t4`), and taking over a program model only once it has 32 or 256 updates (`PROG_MIN_UPDATES`, `p32`, `p256`, against the idea that perf's workers inherit the model of the perf parent, which shares their name). Neither changed the first run beyond the noise, and in a fifth set (`bis9`) the first-run gap was gone for `v2` and absent from builds without the waker model or with a trust threshold of 8. The cold-start effect is not reproducible, so no change is kept; the steady 3 to 6% gap belongs to the stability bounds and remains open.
+
+The VM's disk filled during a build of more schedulers for a same-session comparison (`/` at 38 of 38 GB: LLVM 11 GB and the scx build trees about 2 GB each). Only the apt package cache was cleared; the build trees are kept. `brawl-run.sh` compares EEVDF, `v2`, scx_bpfland 1.1.2 and scx_lavd, scx_p2dq and scx_flash 1.1.4 in one session, 8 runs on 4 and 8 CPUs.

@@ -87,6 +87,7 @@ struct task_ctx {
 	u64  wk_burst[4]; /* ... and the last burst each of them started */
 	u32  wk_next;
 	u64  e_wk, e_avg; /* WAKER_PICK: recent error of each burst guess */
+	bool inherited; /* the model was taken over from the program table */
 };
 
 struct {
@@ -107,6 +108,22 @@ static struct task_ctx *task_ctx(struct task_struct *p)
 #ifndef LERTICK_MODEL_V2
 #define LERTICK_MODEL_V2 0
 #endif
+
+/*
+ * Experimental (TRUST_FRESH): a model that did not start from its program's
+ * needs TRUST_FRESH updates before its prediction is used; one taken over
+ * from the program table needs min_train_samples.
+ */
+#ifndef TRUST_FRESH
+#define TRUST_FRESH 0
+#endif
+
+static __always_inline bool model_trusted(struct task_ctx *tctx)
+{
+	return tctx->model.updates >= min_train_samples &&
+	       (!TRUST_FRESH || tctx->inherited ||
+		tctx->model.updates >= TRUST_FRESH);
+}
 
 #ifndef LERTICK_MEASURE
 #define LERTICK_MEASURE 0
@@ -134,6 +151,11 @@ u64 m_all, m_err_used, m_cls_used;
  * such as a compiler's, predict from their first burst with what all
  * earlier processes of the program learned.
  */
+/* Experimental: a program model is taken over only once it has this many updates. */
+#ifndef PROG_MIN_UPDATES
+#define PROG_MIN_UPDATES 0ULL
+#endif
+
 #ifndef PROG_INHERIT_UPDATES
 #define PROG_INHERIT_UPDATES (~0ULL)
 #endif
@@ -336,7 +358,7 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 	u64 slice = slice_fixed;
 
 	if (tctx && mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
-	    tctx->model.updates >= min_train_samples &&
+	    model_trusted(tctx) &&
 	    tctx->prediction_ns > consumed_ns) {
 		u64 rest = tctx->prediction_ns - consumed_ns;
 
@@ -392,10 +414,11 @@ static void prog_sync(struct task_struct *p, struct task_ctx *tctx)
 	__builtin_memcpy(tctx->comm, p->comm, sizeof(tctx->comm));
 	__builtin_memcpy(key.comm, p->comm, sizeof(key.comm));
 	v = bpf_map_lookup_elem(&prog_stor, &key);
-	if (!v)
+	if (!v || v->model.updates < PROG_MIN_UPDATES)
 		return;
 	tctx->model	    = v->model;
 	tctx->ewma_burst_ns = v->ewma_burst_ns;
+	tctx->inherited	    = true;
 	/*
 	 * Keep the program's weights but not its update count, so the task
 	 * still learns with a large step and adapts to its own behaviour
@@ -757,7 +780,7 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 
 		if (LERTICK_MEASURE) {
 			u64  b	  = MIN(burst, REFERENCE_NS);
-			bool tr	  = tctx->model.updates >= min_train_samples;
+			bool tr	  = model_trusted(tctx);
 			u64  used = tr ? tctx->prediction_ns : slice_fixed;
 
 			__sync_fetch_and_add(&m_all, 1);
@@ -766,7 +789,7 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 			if ((used <= slice_fixed) == (b <= slice_fixed))
 				__sync_fetch_and_add(&m_cls_used, 1);
 		}
-		if (LERTICK_MEASURE && tctx->model.updates >= min_train_samples) {
+		if (LERTICK_MEASURE && model_trusted(tctx)) {
 			u64 b	 = MIN(burst, REFERENCE_NS);
 			u64 lin	 = tctx->prediction_ns;
 			u64 ew	 = tctx->ewma_burst_ns;
