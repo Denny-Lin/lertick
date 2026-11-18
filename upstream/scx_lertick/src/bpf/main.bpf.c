@@ -81,6 +81,8 @@ struct task_ctx {
 	u32 rq_weight; /* weight counted in runnable_weight, 0 when not counted */
 	bool cg_counted; /* rq_weight is also counted in its cgroup's sums */
 	u32 eff_weight; /* weight of the last charge; dispatch() cannot look up cgroups */
+	bool prog_checked; /* looked up in prog_stor once */
+	u32  prog_since_save; /* training updates since the last save */
 };
 
 struct {
@@ -97,6 +99,36 @@ static struct task_ctx *task_ctx(struct task_struct *p)
 {
 	return bpf_task_storage_get(&task_ctx_stor, p, 0, 0);
 }
+
+#ifndef LERTICK_PROG_TABLE
+#define LERTICK_PROG_TABLE 0
+#endif
+/* Save a task's model to its program's entry every this many updates. */
+#define PROG_SAVE_EVERY 8
+
+/*
+ * What tasks of one program (by comm) have learned: a new task of the same
+ * program starts from it instead of from scratch, so short-lived processes,
+ * such as a compiler's, use predictions from their first burst.
+ */
+struct prog_key {
+	char comm[16];
+};
+
+struct prog_val {
+	__s32 weight_q16[LERTICK_FEATURES];
+	u64   updates;
+	u64   ewma_burst_ns;
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(max_entries, 4096);
+	__type(key, struct prog_key);
+	__type(value, struct prog_val);
+} prog_stor SEC(".maps");
+
+u64 nr_prog_hits;
 
 #define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq, 0)
 #define LERTICK_TASK_CGROUP(p) scx_bpf_task_cgroup(p)
@@ -174,6 +206,54 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
  * wakeup that sync_local() accepts, gets the task on its local DSQ right
  * away; otherwise ops.enqueue() queues it.
  */
+/* Start an untrained task from what its program has learned, once. */
+static void prog_load(struct task_struct *p, struct task_ctx *tctx)
+{
+	struct prog_key key = {};
+	struct prog_val *v;
+	int		 i;
+
+	if (!LERTICK_PROG_TABLE || tctx->prog_checked)
+		return;
+	tctx->prog_checked = true;
+	if (tctx->model.updates)
+		return;
+	__builtin_memcpy(key.comm, p->comm, sizeof(key.comm));
+	v = bpf_map_lookup_elem(&prog_stor, &key);
+	if (!v || v->updates < min_train_samples)
+		return;
+	bpf_for(i, 0, LERTICK_FEATURES)
+	{
+		if (i < LERTICK_FEATURES)
+			tctx->model.weight_q16[i] = v->weight_q16[i];
+	}
+	tctx->model.updates = v->updates;
+	tctx->ewma_burst_ns = v->ewma_burst_ns;
+	__sync_fetch_and_add(&nr_prog_hits, 1);
+}
+
+/* Save a trained task's model to its program's entry now and then. */
+static void prog_save(struct task_struct *p, struct task_ctx *tctx)
+{
+	struct prog_key key = {};
+	struct prog_val v   = {};
+	int		i;
+
+	if (!LERTICK_PROG_TABLE || tctx->model.updates < min_train_samples ||
+	    ++tctx->prog_since_save < PROG_SAVE_EVERY)
+		return;
+	tctx->prog_since_save = 0;
+	__builtin_memcpy(key.comm, p->comm, sizeof(key.comm));
+	bpf_for(i, 0, LERTICK_FEATURES)
+	{
+		if (i < LERTICK_FEATURES)
+			v.weight_q16[i] = tctx->model.weight_q16[i];
+	}
+	v.updates	= tctx->model.updates;
+	v.ewma_burst_ns = tctx->ewma_burst_ns;
+	bpf_map_update_elem(&prog_stor, &key, &v, BPF_ANY);
+}
+
 s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		   u64 wake_flags)
 {
@@ -183,6 +263,7 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 
 	/* select_cpu() precedes runnable() on a wakeup and can insert directly. */
 	if (tctx && !tctx->episode_active) {
+		prog_load(p, tctx);
 		begin_episode(tctx, SCX_ENQ_WAKEUP);
 		tctx->started_in_select = true;
 	}
@@ -272,6 +353,7 @@ void BPF_STRUCT_OPS(lertick_runnable, struct task_struct *p, u64 enq_flags)
 
 	/* Migration can produce runnable notifications without a new wakeup. */
 	if (!tctx->episode_active) {
+		prog_load(p, tctx);
 		begin_episode(tctx, enq_flags);
 	} else if (tctx->started_in_select) {
 		/* Confirm the wakeup before admitting this episode as a label. */
@@ -365,6 +447,7 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 			lertick_model_train(&tctx->model, tctx->features,
 					    target);
 			__sync_fetch_and_add(&nr_training_updates, 1);
+			prog_save(p, tctx);
 		}
 		tctx->completed_bursts++;
 		tctx->last_burst_ns = burst;
