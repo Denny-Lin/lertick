@@ -31,7 +31,7 @@
 
 </details>
 
-<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Against EEVDF: the current version, median of 2 sessions (3 and 5 runs). Against the other schedulers: through EEVDF, comparing Lertick's ratio to EEVDF with each scheduler's ratio to EEVDF in its own two sessions, so treat those counts as indicative. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#readme-numbers-for-the-3-ms-slice-cap-2026-11-17)</sub>
+<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Against EEVDF: the current version, median of 2 sessions (3 and 5 runs). Against the other schedulers: through EEVDF, comparing Lertick's ratio to EEVDF with each scheduler's ratio to EEVDF in its own two sessions, so treat those counts as indicative. The charts were measured before the three stability bounds added on 2026-11-17 (lag, wait and root-cgroup bounds); a rerun on a busy host showed no consistent change and an idle-host rerun is pending. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#readme-numbers-for-the-3-ms-slice-cap-2026-11-17)</sub>
 
 ## Get started
 
