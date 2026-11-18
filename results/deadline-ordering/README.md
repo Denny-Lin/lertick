@@ -1013,3 +1013,11 @@ These sessions neither show nor rule out a regression, so the README charts stay
 ## Learned against fixed slices on the release build, plan fixed 2026-11-17 before the run
 
 The 2026-11-16 sessions found online and fixed modes alike (geometric mean against EEVDF 0.887 and 0.888), because most tasks sleep before a slice ends. The policy has changed a lot since (affine pick, slice cap, lag bounds), so `ab-run.sh` measures the current build both ways in one session: held-out on 4 and 8 CPUs with 5 repetitions, then `kbuild-long.sh` with 3, arms EEVDF, `online` and `fixed` (`--fixed`). If no measure differs by more than 5% between `online` and `fixed` on both CPU counts, learning has no measurable effect on this policy, and the next step is a change that gives the prediction a decision where it matters.
+
+## Learned wakeup preemption (`lp`), hypothesis fixed 2026-11-17 before the run
+
+**Why.** If the prediction only sets the slice it changes little, because most tasks sleep before a slice ends. Where a slice does matter is a woken task waiting for a running one: the remaining 4-CPU losses against EEVDF are schbench -m4 -t2 wakeup and request p99, and woken tasks never preempt. Earlier preemption without predictions (`kickA`, `kickB`, `B`) interrupted the wrong tasks and made the 8-CPU tail worse.
+
+**Change** (`LERTICK_LEARNED_PREEMPT`, port only, off by default): a woken task whose prediction is at most 0.5 ms preempts its previous CPU when the task there has run at least 1 ms and is predicted to run at least 2 ms more, or has run 2 ms with no prediction or past its prediction, and the wakee's vtime is not after the running task's. The decision uses both tasks' predictions, which fixed mode does not have.
+
+**Test** (`lp-run.sh`, after `ab-run.sh`): `gate.sh` 4 runs and the scx CI stress test twice, then held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `lp0` (switch off) and `lp`. `lp` goes on if 4-CPU -m4 -t2 wakeup or request p99 improves by more than 10% against `lp0` and no measure is more than 7% worse on both CPU counts.
