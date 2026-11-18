@@ -997,3 +997,15 @@ Raw dumps in `stall-fixes-sets.tar.gz`.
 - **CPU hotplug is untestable in this VM.** Taking CPU 3 offline panics the guest in `cpu_die()` (`kernel BUG at arch/arm64/kernel/smp.c:385`: the PSCI CPU_OFF call returned) with Lertick loaded, and again after a reboot with no sched_ext scheduler loaded at all (console tail in the archive). The edge-case script no longer offlines CPUs. The reboot also moved the guest kernel from 7.0.0-38 to 7.0.0-43.
 - Held-out performance was not rerun for these two bounds; they change ordering only for tasks more than 20 ms behind or far ahead of the clock.
 - **Long run with all fixes** (`long/lag`, 75 minutes): 41 cycles of the nice mix, hackbench with 640 to 2,560 processes, perf messaging, schbench, a stress-ng mix and a kernel compile, with no exit. The two earlier long runs were ejected in cycles 10 and 38. Edge cases with the same build: the scx CI test 8 of 8 (exit code 0), 20 attach/detach cycles, cgroup churn, SCHED_IDLE and SCHED_BATCH tasks, a SCHED_FIFO hog, fork/exec storms and thread/timer churn, all without an exit.
+
+## Benchmarks of the release build, plan fixed 2026-11-17 before the run
+
+The three stability bounds (root cgroup, wait-bounded lead, lag behind the clock) were accepted on stability evidence alone. `rel-run.sh` measures the release build (`lag`) against EEVDF and `b8` (the 3 ms default the README charts show): held-out and `kbuild-long.sh` on 4 and 8 CPUs, two sessions (`rel1` with 5 repetitions, `rel2` with 3). The README charts move to `lag` from these two sessions (`pool_ratio.py`, `LERTICK_SESSION=rel1,rel2`). If `lag` is more than 10% worse than `b8` on any measure in both sessions, that is reported in the README and investigated before release.
+
+### Release-build benchmarks: too noisy to use, 2026-11-17
+
+`rel-run.sh` ran 01:38 to 02:48 UTC with no fallbacks in about 90 runs; raw sets in `rel-sets.tar.gz`. The host was in use throughout (load average 4 to 8): the 4-CPU kernel compile took 31.9 to 49.8 s against about 26 s on an idle host, and `b8` itself moved by up to 40 points against EEVDF between the two sessions (4-CPU -m1 request p99 +10 then -31; 4-CPU -m4 -t2 request p99 +5 then +35).
+
+`lag` against `b8`, session 1 then session 2: no measure is more than 10% worse in both sessions. The largest single readings are 4-CPU perf messaging threads +3 / -55, 8-CPU perf messaging processes +10 / -108 and 8-CPU -m4 -t2 request p99 -21 / +5, each contradicted by the other session. Kernel compile, `lag` against `b8`: 4 CPUs 31.85 against 33.07 s and 41.16 against 49.83 s; 8 CPUs 23.66 against 22.24 s and 37.15 against 38.05 s.
+
+These sessions neither show nor rule out a regression, so the README charts stay on the `b8` sessions (`r8`, `r8c`) and note that. The comparison is to be rerun on an idle host before the charts move to the release build.
