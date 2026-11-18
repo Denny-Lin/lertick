@@ -1055,3 +1055,19 @@ The owner's direction: make the learned part real by adding predictions one at a
 5. **Acceptance**: better than the plain baseline on a workload set where the decision matters, then no regression on the held-out set, the stress battery, the gate and the scx CI test.
 
 Order: (1) burst length with confidence, asked as "ends within the slice?" for the slice decision; (2) waker-wakee pairs, to avoid ping-pong; (3) cost of preempting a task (how much longer it runs after being preempted); (4) whether preempting a task makes others wait (a lock-holder proxy); then wakeup preemption built on (1) to (4).
+
+### Slice floor and finish: result, 2026-11-17
+
+`floor-run.sh` ran 06:44 to 07:24 UTC with no fallbacks; raw sets in `floor-sets.tar.gz` (and `ab-sets.tar.gz` for the run before). Host load about 5.5 throughout. Against `fixed`, 5 repetitions, 4 CPUs then 8 CPUs:
+
+| Measure | `online` | `floor` | `finish` |
+|---|---|---|---|
+| perf messaging processes | +5 / +1 | +10 / +9 | +2 / -10 |
+| perf messaging threads | -5 / -2 | -14 / -3 | -12 / -5 |
+| hackbench 16 groups | +9 / -16 | +13 / -3 | +14 / +2 |
+| -m1 wakeup p99 | -2 / -6 | -25 / -10 | +2 / +2 |
+| -m4 -t2 request p99 | -7 / -5 | -5 / -1 | -19 / -9 |
+| -m4 -t2 wakeup p99 | -23 / +8 | -6 / +19 | -26 / +0 |
+| short kernel compile | +15 / -7 | +9 / +0 | +16 / -0 |
+
+None meets the rule (no measure more than 5% worse than `fixed` on both CPU counts). `finish` gains on 4-CPU throughput (16 groups, compile) and loses -m4 -t2 latency on both counts: letting a burst finish delays the tasks waiting behind it, and the workers of -m4 -t2 are exactly such tasks. The same comparison of `online` and `fixed` moved by up to 30 points between this run and `ab-run.sh` (4-CPU -m1 wakeup -31 then -2), so differences under about 15% are not separable from noise on this host tonight. Next for the slice: make the extension depend on who is waiting (extend only when the waiting tasks are themselves long-running), after the step 1 measurement.
