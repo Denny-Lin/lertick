@@ -96,7 +96,7 @@ static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
  * first AFFINE_DEPTH queued tasks within AFFINE_WINDOW_NS of the head in
  * vtime. A preempted task then usually resumes on its own CPU instead of
  * the next CPU whose slice ends, which matters most to tasks that leave
- * others waiting on per-CPU state such as a lock; fair order moves by at
+ * others waiting on per-CPU state such as a lock; vtime order moves by at
  * most the window. A 2 ms window migrated 2.5 times as often as EEVDF under
  * schbench -m 4 -t 2; 8 ms migrates less than EEVDF.
  */
@@ -151,8 +151,9 @@ static __always_inline u64 nr_queued_all(void)
 
 /*
  * A sync waker is about to sleep, so its CPU is the next free one and its
- * cache holds what the wakee will read. Queue the wakee there, unless that
- * would put it well ahead of tasks already waiting in fair order.
+ * cache holds what the wakee will read. Queue the wakee there, unless its
+ * vtime is more than SYNC_WINDOW_NS after the queue head's: it would then run
+ * before tasks that precede it in vtime order.
  */
 static __always_inline bool sync_local(struct task_struct *p, s32 *cpu)
 {
@@ -210,13 +211,15 @@ struct {
 } cgrp_ctx_stor SEC(".maps");
 
 private(LERTICK_CGRP) struct bpf_spin_lock cgrp_lock;
-static u64				hweight_gen = 1;
+static u64 hweight_gen = 1;
 
+/* Return the context of @cgrp, or NULL. */
 static __always_inline struct cgrp_ctx *cgrp_ctx(struct cgroup *cgrp)
 {
 	return bpf_cgrp_storage_get(&cgrp_ctx_stor, cgrp, 0, 0);
 }
 
+/* Return the context of @cgrp's ancestor at @level, or NULL. */
 static struct cgrp_ctx *cgrp_ancestor_ctx(struct cgroup *cgrp, int level)
 {
 	struct cgrp_ctx *cgc;
@@ -229,6 +232,11 @@ static struct cgrp_ctx *cgrp_ancestor_ctx(struct cgroup *cgrp, int level)
 	return cgc;
 }
 
+/*
+ * Recompute @cgrp's hierarchical weight from the root down, unless it is
+ * still current: hweight_gen changes whenever a weight or the set of active
+ * cgroups does.
+ */
 static void cgrp_refresh_hweight(struct cgroup *cgrp, struct cgrp_ctx *cgc)
 {
 	int level;
@@ -323,6 +331,7 @@ static void cgrp_update_active(struct cgroup *cgrp, struct cgrp_ctx *cgc,
 		cgrp_refresh_hweight(cgrp, cgc);
 }
 
+/* Add @tctx's weight to @cgrp's runnable sums, or remove it. */
 static void cgrp_account(struct cgroup *cgrp, struct task_ctx *tctx,
 			 bool runnable)
 {
@@ -338,6 +347,7 @@ static void cgrp_account(struct cgroup *cgrp, struct task_ctx *tctx,
 	tctx->cg_counted = runnable;
 }
 
+/* Count @p in its cgroup while it is runnable. */
 static void cgrp_task_runnable(struct task_struct *p, struct task_ctx *tctx,
 			       bool runnable)
 {
@@ -403,15 +413,8 @@ static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx,
 }
 
 /*
- * Whether prev should keep its CPU instead of taking the next queued task.
- * A task whose slice ends otherwise always yields, so two tasks sharing a
- * CPU alternate and get equal time whatever their weights. prev stays while
- * it is ahead in vtime (its current run included) of the first queued task
- * that can run here. It yields after KEEP_MAX_NS without a break, and when
- * no such task is within the first HEAD_SCAN queued: a task that can
- * run only here must not wait behind prev indefinitely. The own domain is
- * scanned; when it holds nothing for this CPU, the head of each other domain
- * is compared too, since this CPU would steal from it.
+ * Whether the head of another domain's queue can run on @cpu and precedes
+ * @vtime.
  */
 static __always_inline bool other_head_before(u32 home, s32 cpu, u64 vtime)
 {
@@ -434,6 +437,17 @@ static __always_inline bool other_head_before(u32 home, s32 cpu, u64 vtime)
 	return false;
 }
 
+/*
+ * Whether prev should keep its CPU instead of taking the next queued task.
+ * A task whose slice ends otherwise always yields, so two tasks sharing a
+ * CPU alternate and get equal time whatever their weights. prev stays while
+ * its vtime (its current run included) is not after that of the first queued
+ * task that can run here. It yields after KEEP_MAX_NS without a break, and
+ * when no such task is within the first HEAD_SCAN queued: a task that can
+ * run only here must not wait behind prev indefinitely. The own domain is
+ * scanned; when it holds nothing for this CPU, the head of each other domain
+ * is compared too, since this CPU would steal from it.
+ */
 static __always_inline bool keep_prev(struct task_struct *prev,
 				      struct task_ctx *tctx, s32 cpu)
 {
@@ -460,12 +474,7 @@ static __always_inline bool keep_prev(struct task_struct *prev,
 	return !other_head_before(home, cpu, vtime);
 }
 
-/*
- * Take the next task for this CPU. Among the first few queued tasks whose
- * vtime is within a small window of the head, prefer one that last ran here
- * and may still have a warm cache; fair order moves by at most the window.
- * With the own domain empty, steal the head of the next domain that has work.
- */
+/* Take a task from the next domain that has one for this CPU. */
 static __always_inline bool steal(u32 home)
 {
 	u32 n = domain_count(), i;
@@ -482,6 +491,12 @@ static __always_inline bool steal(u32 home)
 	return false;
 }
 
+/*
+ * Take the next task for this CPU. Among the first few queued tasks whose
+ * vtime is within a small window of the head, prefer one that last ran here
+ * and may still have a warm cache; vtime order moves by at most the window.
+ * With the own domain empty, steal from the next domain that has work.
+ */
 static __always_inline bool take_next(s32 cpu)
 {
 	struct task_struct *q;

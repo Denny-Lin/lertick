@@ -4,11 +4,11 @@
  *
  * scx_lertick: weighted virtual-time scheduling with learned time slices.
  *
- * Tasks wait in one queue per last-level cache, ordered by weighted virtual
- * time; an idle CPU steals from another cache's queue. The virtual
- * clock advances with the CPU time actually delivered over the total runnable
- * weight, so tasks that keep waking cannot hold back tasks that have already
- * run. A woken task is placed at most LAG_NS behind the clock.
+ * Tasks wait in one DSQ per LLC, ordered by weighted virtual time; an idle
+ * CPU steals from another LLC's DSQ. The virtual clock advances with the CPU
+ * time actually delivered over the total runnable weight, so tasks that keep
+ * waking cannot hold back tasks that have already run. A woken task is placed
+ * at most LAG_NS behind the clock.
  *
  * In online mode each task trains a small linear model inside BPF on its own
  * completed CPU bursts (wake to sleep). At the next wakeup the prediction sets
@@ -37,18 +37,32 @@ char _license[] SEC("license") = "GPL";
 #define REFERENCE_NS (10ULL * NSEC_PER_MSEC)
 #define QUEUE_REFERENCE 16U
 
-const volatile u32 mode		     = LERTICK_MODE_ONLINE;
-const volatile u64 slice_fixed	     = 2ULL * NSEC_PER_MSEC;
-const volatile u64 slice_min	     = 500ULL * NSEC_PER_USEC;
-const volatile u64 slice_max	     = 3ULL * NSEC_PER_MSEC;
+/*
+ * Scheduling mode and slice bounds, set by user space before load.
+ */
+const volatile u32 mode	       = LERTICK_MODE_ONLINE;
+const volatile u64 slice_fixed = 2ULL * NSEC_PER_MSEC;
+const volatile u64 slice_min   = 500ULL * NSEC_PER_USEC;
+const volatile u64 slice_max   = 3ULL * NSEC_PER_MSEC;
+/*
+ * Completed bursts a task needs before its prediction sets its slice.
+ */
 const volatile u32 min_train_samples = 8;
 
 /* Statistics, read by user space. */
 u64 nr_local_dispatches, nr_shared_dispatches, nr_continuations;
 u64 nr_adaptive_slices, nr_training_updates;
 
+/*
+ * Define struct user_exit_info, shared between BPF and user space to
+ * communicate the exit status.
+ */
 UEI_DEFINE(uei);
 
+/*
+ * Per-task context: the model, the current wake-to-sleep episode and the
+ * weights the task is counted with.
+ */
 struct task_ctx {
 	struct lertick_model model;
 	__s32		     features[LERTICK_FEATURES];
@@ -74,8 +88,11 @@ struct {
 	__uint(map_flags, BPF_F_NO_PREALLOC);
 	__type(key, int);
 	__type(value, struct task_ctx);
-} task_ctx_stor		SEC(".maps");
+} task_ctx_stor SEC(".maps");
 
+/*
+ * Return the context of task @p, or NULL.
+ */
 static struct task_ctx *task_ctx(struct task_struct *p)
 {
 	return bpf_task_storage_get(&task_ctx_stor, p, 0, 0);
@@ -133,6 +150,11 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 	return CLAMP(slice, slice_min, slice_max);
 }
 
+/*
+ * Pick a CPU for a waking task. An idle CPU, or the waker's CPU on a sync
+ * wakeup that sync_local() accepts, gets the task on its local DSQ right
+ * away; otherwise ops.enqueue() queues it.
+ */
 s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		   u64 wake_flags)
 {
@@ -156,6 +178,10 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 	return cpu;
 }
 
+/*
+ * Queue @p on its LLC's DSQ in vtime order, with its vtime held within the
+ * lag bounds.
+ */
 void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 {
 	struct task_ctx *tctx  = task_ctx(p);
@@ -178,6 +204,10 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	__sync_fetch_and_add(&nr_shared_dispatches, 1);
 }
 
+/*
+ * @cpu needs a task. @prev continues if keep_prev() allows it; otherwise the
+ * next queued task runs, and @prev continues only when nothing is queued.
+ */
 void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 {
 	bool continuing = prev && (prev->scx.flags & SCX_TASK_QUEUED);
@@ -204,6 +234,10 @@ void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 	__sync_fetch_and_add(&nr_continuations, 1);
 }
 
+/*
+ * @p becomes runnable: count its weight toward the clock and its cgroup, and
+ * start an episode unless ops.select_cpu() already did.
+ */
 void BPF_STRUCT_OPS(lertick_runnable, struct task_struct *p, u64 enq_flags)
 {
 	struct task_ctx *tctx = task_ctx(p);
@@ -228,6 +262,10 @@ void BPF_STRUCT_OPS(lertick_runnable, struct task_struct *p, u64 enq_flags)
 	}
 }
 
+/*
+ * @p starts running: raise the clock to its vtime if the clock is behind,
+ * and note where this run starts.
+ */
 void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 {
 	struct task_ctx *tctx = task_ctx(p);
@@ -240,6 +278,10 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 	tctx->running	       = true;
 }
 
+/*
+ * @p stops running: charge the CPU time it used to its vtime, scaled by its
+ * effective weight, and advance the clock.
+ */
 void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 {
 	struct task_ctx *tctx	= task_ctx(p);
@@ -269,6 +311,10 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	tctx->episode_runtime_ns += delta;
 }
 
+/*
+ * @p is no longer runnable. When it goes to sleep, the burst that just ended
+ * becomes a training example for its model.
+ */
 void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 {
 	struct task_ctx *tctx = task_ctx(p);
@@ -316,6 +362,9 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 	tctx->episode_valid  = false;
 }
 
+/*
+ * Allocate and initialize the context of a new task.
+ */
 s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 		   struct scx_init_task_args *args)
 {
@@ -330,11 +379,17 @@ s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 	return 0;
 }
 
+/*
+ * @p joins the scheduler: start it at the clock.
+ */
 void BPF_STRUCT_OPS(lertick_enable, struct task_struct *p)
 {
 	p->scx.dsq_vtime = vtime_now;
 }
 
+/*
+ * @p leaves the scheduler: drop its unfinished episode.
+ */
 void BPF_STRUCT_OPS(lertick_disable, struct task_struct *p)
 {
 	struct task_ctx *tctx = task_ctx(p);
@@ -346,6 +401,9 @@ void BPF_STRUCT_OPS(lertick_disable, struct task_struct *p)
 	tctx->has_slept	     = false;
 }
 
+/*
+ * Allocate the context of a new cgroup and record its weight.
+ */
 s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_cgroup_init, struct cgroup *cgrp,
 			     struct scx_cgroup_init_args *args)
 {
@@ -361,6 +419,10 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_cgroup_init, struct cgroup *cgrp,
 	return 0;
 }
 
+/*
+ * cpu.weight of @cgrp changed: update its parent's sum and invalidate the
+ * cached hierarchical weights.
+ */
 void BPF_STRUCT_OPS(lertick_cgroup_set_weight, struct cgroup *cgrp, u32 weight)
 {
 	struct cgrp_ctx *cgc = cgrp_ctx(cgrp), *pc = NULL;
@@ -394,6 +456,9 @@ void BPF_STRUCT_OPS(lertick_cgroup_move, struct task_struct *p,
 	cgrp_account(to, tctx, true);
 }
 
+/*
+ * Create one vtime-ordered DSQ per LLC.
+ */
 s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 {
 	u32 d;
@@ -435,6 +500,9 @@ void BPF_STRUCT_OPS(lertick_dump_task, struct scx_dump_ctx *dctx,
 		tctx->ewma_burst_ns, tctx->model.updates, tctx->episode_valid);
 }
 
+/*
+ * Record the exit reason for user space.
+ */
 void BPF_STRUCT_OPS(lertick_exit, struct scx_exit_info *ei)
 {
 	UEI_RECORD(uei, ei);
