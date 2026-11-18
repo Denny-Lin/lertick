@@ -310,6 +310,23 @@ static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 #ifndef LONG_TO_FIXED
 #define LONG_TO_FIXED 0
 #endif
+/* With LONG_TO_FIXED: the slice of such a burst in us, 0 for slice_fixed. */
+#ifndef LONG_SLICE_US
+#define LONG_SLICE_US 0
+#endif
+/*
+ * Experimental: a wakee predicted to run less than SHORT_KICK_US preempts the
+ * task on its CPU when that task is predicted past slice_max and has run for
+ * KICK_RAN_US.
+ */
+#ifndef SHORT_KICK
+#define SHORT_KICK 0
+#endif
+#define SHORT_KICK_US 500
+#ifndef KICK_RAN_US
+#define KICK_RAN_US 1000
+#endif
+u64 nr_short_kicks;
 
 /* Remaining slice: the predicted burst less what already ran, within bounds. */
 static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
@@ -326,6 +343,8 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 			 * The burst will be cut anyway: a longer slice would
 			 * only make waiting tasks wait longer.
 			 */
+			if (LONG_SLICE_US)
+				slice = LONG_SLICE_US * NSEC_PER_USEC;
 		} else if (!LERTICK_SLICE_FINISH) {
 			slice = rest;
 			__sync_fetch_and_add(&nr_adaptive_slices, 1);
@@ -471,6 +490,27 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice,
 				 vtime, enq_flags);
 	__sync_fetch_and_add(&nr_shared_dispatches, 1);
+
+	if (SHORT_KICK && (enq_flags & SCX_ENQ_WAKEUP) && tctx &&
+	    mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
+	    tctx->model.updates >= min_train_samples &&
+	    tctx->prediction_ns < SHORT_KICK_US * NSEC_PER_USEC) {
+		s32		    cpu = scx_bpf_task_cpu(p);
+		struct task_struct *cur = __COMPAT_scx_bpf_cpu_curr(cpu);
+		struct task_ctx	   *cc;
+
+		if (!cur || cur == p)
+			return;
+		cc = task_ctx(cur);
+		if (cc && cc->running &&
+		    cc->model.updates >= min_train_samples &&
+		    cc->prediction_ns > slice_max &&
+		    cur->se.sum_exec_runtime >=
+			    cc->runtime_start_ns + KICK_RAN_US * NSEC_PER_USEC) {
+			scx_bpf_kick_cpu(cpu, SCX_KICK_PREEMPT);
+			__sync_fetch_and_add(&nr_short_kicks, 1);
+		}
+	}
 }
 
 /*
