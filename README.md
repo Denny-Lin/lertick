@@ -8,10 +8,10 @@
 
 ## Performance
 
-**Against Linux's default scheduler (EEVDF), Lertick is clearly faster on 5 to 6 of 11 standard kernel scheduler benchmarks, level on 4 to 5 and slower on 1.** The wins include `perf bench pipe`, hackbench and schbench wakeup latency and throughput. The losses are schbench wakeup latency when many message threads wake groups of workers on 4 CPUs (7%) and `perf bench messaging` with processes on 8 CPUs (10%). Against the community sched_ext schedulers it wins far more than it loses: scx_bpfland 8 to 1 and 6 to 0, scx_lavd 7 to 1 and 4 to 2, scx_p2dq 8 to 2 and 6 to 1, scx_flash 7 to 1 and 7 to 0 (4 and 8 CPUs).
+**Against Linux's default scheduler (EEVDF), Lertick is clearly faster on 5 of 11 standard kernel scheduler benchmarks, level on 5 and slower on 1, on both 4 and 8 CPUs.** The wins include `perf bench pipe`, hackbench and schbench wakeup latency and throughput. The loss is `perf bench messaging` with processes (8% on 4 CPUs, 10% on 8 CPUs). Against the community sched_ext schedulers it wins far more than it loses: scx_bpfland 9 to 0 and 6 to 0, scx_lavd 8 to 1 and 4 to 2, scx_p2dq 7 to 2 and 6 to 1, scx_flash 8 to 1 and 7 to 0 (4 and 8 CPUs).
 
 <p align="center">
-  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 6, the same on 4 and worse on 1; against scx_bpfland, better on 8, the same on 2 and worse on 1; against scx_lavd, better on 7, the same on 3 and worse on 1; against scx_p2dq, better on 8, the same on 1 and worse on 2; against scx_flash, better on 7, the same on 3 and worse on 1." width="1120" />
+  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 5, the same on 5 and worse on 1; against scx_bpfland, better on 9, the same on 2 and worse on 0; against scx_lavd, better on 8, the same on 2 and worse on 1; against scx_p2dq, better on 7, the same on 2 and worse on 2; against scx_flash, better on 8, the same on 2 and worse on 1." width="1120" />
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 <summary><strong>Each benchmark against Linux EEVDF</strong></summary>
 
 <p align="center">
-  <img src="docs/assets/lertick-vs-eevdf-cpu4.svg" alt="4 CPUs, median of 8 runs: Lertick is better than Linux EEVDF on perf pipe, hackbench threads and 16 groups, schbench 1-thread wakeup latency, schbench 4 message threads throughput and kernel compile; the same on perf messaging processes and threads, schbench 1-thread request latency and schbench 4 message threads request latency; worse on schbench 4 message threads wakeup latency." width="1120" />
+  <img src="docs/assets/lertick-vs-eevdf-cpu4.svg" alt="4 CPUs, median of 5 sessions: Lertick is better than Linux EEVDF on perf pipe, hackbench threads and 16 groups, schbench 1-thread wakeup latency and schbench 4 message threads throughput; the same on perf messaging threads, schbench 1-thread request latency, schbench 4 message threads request and wakeup latency and kernel compile; worse on perf messaging processes." width="1120" />
 </p>
 
 <p align="center">
@@ -31,7 +31,7 @@
 
 </details>
 
-<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Against EEVDF: the current version (waker model, 2026-11-18), median of 8 runs; the kernel compile rebuilds kernel/, median of 5. Against the other schedulers: through EEVDF, comparing Lertick's ratio to EEVDF with each scheduler's ratio to EEVDF in its own two earlier sessions, so treat those counts as indicative. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#readme-numbers-for-the-waker-model-2026-11-18)</sub>
+<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. 4 CPUs: against EEVDF, the current version (waker model, 2026-11-18), median of 5 sessions of 8 runs each; against the other schedulers, all six run in one session, shuffled, 8 runs; the kernel compile rebuilds kernel/sched. 8 CPUs: against EEVDF, median of 8 runs, the kernel compile rebuilds kernel/ (5 runs); against the other schedulers, through EEVDF, comparing Lertick's ratio to EEVDF with each scheduler's ratio to EEVDF in its own two earlier sessions, so treat those counts as indicative (a same-session 8-CPU run is in progress). Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#same-session-comparison-2026-11-18)</sub>
 
 ## Get started
 
