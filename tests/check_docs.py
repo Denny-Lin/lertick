@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 """Validate maintained documents and local Markdown/HTML links; no network I/O."""
 
 from pathlib import Path

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — 2026-11-18 (license)
+
+### One license: GPL-2.0-only
+
+- The original model, tools, tests, workloads and documents move from MIT to
+  GPL-2.0-only, the license the scheduler and the sched-ext/scx port already
+  use. The vendored Lerwatt contract header keeps its MIT license
+  (`LICENSES/MIT.txt`). Versions published before 2026-11-18 remain available
+  under MIT.
+
 ## Unreleased — 2026-11-17 (3 ms slice cap)
 
 ### Learned slices are capped at 3 ms

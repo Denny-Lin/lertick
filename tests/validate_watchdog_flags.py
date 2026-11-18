@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 """Check normal, expected-stall and unexpected-stall exit telemetry in QEMU."""
 import argparse
 import os

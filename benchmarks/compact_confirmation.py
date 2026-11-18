@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 """Retain every trial and audit its counter boundaries without duplicating raw logs.
 
 Full raw archives remain separately retained. This export preserves inputs to

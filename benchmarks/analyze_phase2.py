@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 """Host-only report analysis. Reads immutable Linux artifacts; executes no workloads."""
 import argparse
 import csv

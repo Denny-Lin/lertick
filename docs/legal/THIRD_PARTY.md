@@ -22,13 +22,13 @@ not require a network fetch.
 
 [vendor/lerwatt/contract.h](../../vendor/lerwatt/contract.h) is the MIT-licensed shared-map layout from
 [Lerwatt](https://github.com/Denny-Lin/lerwatt), copied unchanged; Lerwatt holds
-the canonical copy.
+the canonical copy. Its license text is in [LICENSES/MIT.txt](../../LICENSES/MIT.txt).
 
-The project's original research documents and independently authored material
-retain the [root MIT license](../../LICENSE). That license does not override the GPL notices in
-the scheduler, loader, their build scripts, or vendored helpers. Distributed
-scheduler executables and BPF objects require corresponding GPL source and
-notices.
+Everything else, including the original model, tools, tests, workloads and
+documents, is licensed under GPL-2.0-only, the [root license](../../LICENSE).
+Until 2026-11-18 that material was MIT-licensed; versions published before
+then remain available under MIT. Distributed scheduler executables and BPF
+objects require corresponding GPL source and notices.
 
 `build/vmlinux.h` is generated locally from the **running target Linux kernel's**
 `/sys/kernel/btf/vmlinux`; it is ignored by Git and must not be substituted by a

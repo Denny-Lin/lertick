@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 """Run deployment evidence and short comparisons inside an expendable Linux VM."""
 
 import argparse

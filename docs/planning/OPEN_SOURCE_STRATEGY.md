@@ -46,7 +46,7 @@ The README must let a visitor learn the problem, current maturity, candidate mec
 
 ```text
 README.md                         concise English entry point
-LICENSE                          MIT for original Phase 0 material
+LICENSE                          GPL-2.0-only for the whole project
 CONTRIBUTING.md                   workflow, style, compatibility, review
 CODE_OF_CONDUCT.md / SECURITY.md  community and reporting expectations
 CHANGELOG.md                     actual delivered changes

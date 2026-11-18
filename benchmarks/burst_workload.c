@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT */
+/* SPDX-License-Identifier: GPL-2.0-only */
 /* Calibrated CPU work plus real sleeping, for deployment evidence and small
  * policy comparisons. JSONL samples measure CPU service, wake lateness and
  * wake-to-completion latency separately. Run CPU controls as separate processes.

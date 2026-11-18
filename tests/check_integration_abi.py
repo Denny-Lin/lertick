@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 """Freeze the public Lertick/Lerwatt ABI independently of model releases.
 
 No network, BPF load, peer checkout or third-party Python package is required.

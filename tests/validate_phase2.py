@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 """Phase 2A correctness, lifecycle, fairness and repeated recovery in a Linux VM.
 
 Reuses Phase 1 process ownership and VM-guarded recovery routines. All service

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT */
+/* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef LERTICK_BURST_PROFILES_H
 #define LERTICK_BURST_PROFILES_H
 

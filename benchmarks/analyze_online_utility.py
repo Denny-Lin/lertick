@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 """Paired candidate utility versus fixed, EWMA and original online controls."""
 import argparse
 import json

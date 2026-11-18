@@ -39,6 +39,6 @@ model test do not prove verifier acceptance or Linux deployment. Record actual
 kernel/build/load results separately, following [native installation](../docs/INSTALL.md)
 or the preserved [VM reproduction](../docs/DEPLOYMENT.md).
 
-The original model is MIT. Kernel-facing sources and adapted reference material
-carry their own GPL-compatible notices; see [third-party provenance](../docs/legal/THIRD_PARTY.md)
+All sources are GPL-2.0-only. Adapted reference material keeps its original
+notices; see [third-party provenance](../docs/legal/THIRD_PARTY.md)
 and the [architecture](../docs/planning/ARCHITECTURE.md).

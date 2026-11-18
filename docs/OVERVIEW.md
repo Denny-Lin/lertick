@@ -178,4 +178,4 @@ Cross-kernel compatibility, bare-metal performance, long-term production behavio
 
 ## License
 
-Original documents, the independent model and workloads use [MIT](../LICENSE). The scheduler, loader, associated build material and vendored helpers retain their GPL notices. See [third-party provenance and license boundaries](legal/THIRD_PARTY.md).
+The whole project is licensed under [GPL-2.0-only](../LICENSE), except the vendored Lerwatt contract header, which keeps its MIT license. See [third-party provenance and license boundaries](legal/THIRD_PARTY.md).

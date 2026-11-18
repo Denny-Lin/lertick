@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 # Build the matching libbpf locally; never overwrite distribution libraries.
 set -euo pipefail
 if [[ $(uname -s) != Linux ]]; then

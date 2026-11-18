@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT */
+/* SPDX-License-Identifier: GPL-2.0-only */
 /* Host-only independent 128-bit oracle and behavioral model tests. */
 #include <assert.h>
 #include <limits.h>

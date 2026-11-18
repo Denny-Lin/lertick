@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 """Prepare and control an isolated Ubuntu ARM64 VM; never run BPF on the host."""
 
 import argparse
