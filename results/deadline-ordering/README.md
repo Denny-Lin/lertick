@@ -1113,3 +1113,17 @@ Next for the slice: initialise the model from the first burst and learn faster o
 | kernel build | 366 / 113 / 80 | 97.3 / 98.7 / 99.2% |
 
 `V2` matches or beats the average on the short-burst workloads (the old model was four to seven times worse), and is more accurate than the old model where bursts vary: 35% lower error on -m4 -t2 and 32% on -m1 -t1, four to nine times lower than the average. The kernel build is the one workload still behind the average (113 against 80 us), three times better than before. `V2` meets its rule and goes on to benchmarks against the old model and `fixed`, on an idle host.
+
+## Accuracy designs, round 1: a shared program model, 2026-11-18
+
+The program table is redesigned: every task of a program trains one model per comm with each completed burst, and a task takes that model over when it starts running a program (first wakeup, and after exec). The first table only stored models of tasks with 8 updates, which short-lived processes never reach: it was hit 28 times in a kernel build. The measurement build now also counts coverage (share of completed bursts whose task has a trusted model) and the error of the value actually used (the prediction when trusted, else the fixed slice). `acc-run.sh r1`, 4 CPUs, 2 runs each, raw dumps in `acc-r1-sets.tar.gz`. Error used (us) and coverage:
+
+| Workload | A: V2 | B: V2 + table | C: B, trust after 2 | D: A, trust after 2 |
+|---|---|---|---|---|
+| kernel build | 488 (77%) | 167 (96%) | **77 (99%)** | 311 (88%) |
+| perf messaging processes | 214 (95%) | 221 (95%) | 159 (99%) | 149 (99%) |
+| hackbench 16 groups | 286 (90%) | 299 (89%) | 154 (98%) | 161 (97%) |
+| schbench -m4 -t2 | 918 (96%) | 1,061 (98%) | 1,010 (99%) | 873 (99%) |
+| schbench -m1 -t1 | 373 (96%) | 384 (95%) | 342 (99%) | 320 (99%) |
+
+The shared model makes the kernel build six times more accurate (table hit about 5,000 times). It costs about 15% on schbench, where message and worker threads share one comm, and a thread that inherits a model with thousands of updates learns its own behaviour at the slowest step. Round 2 (`E`): inherit the program's weights but cap the update count at 8, so the task keeps the large learning step.

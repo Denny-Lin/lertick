@@ -81,8 +81,7 @@ struct task_ctx {
 	u32 rq_weight; /* weight counted in runnable_weight, 0 when not counted */
 	bool cg_counted; /* rq_weight is also counted in its cgroup's sums */
 	u32 eff_weight; /* weight of the last charge; dispatch() cannot look up cgroups */
-	bool prog_checked; /* looked up in prog_stor once */
-	u32  prog_since_save; /* training updates since the last save */
+	char comm[16]; /* program the model was last synced to */
 };
 
 struct {
@@ -117,26 +116,30 @@ u64 m_under_lin, m_under_ewma;
 u64 m_over_fixed, m_over_cap;
 u64 m_cls_lin, m_cls_ewma, m_cls_last;
 u64 m_stops, m_expired;
+/* Over all completed bursts: the value actually used (prediction when trusted, else the fixed slice). */
+u64 m_all, m_err_used, m_cls_used;
 
 #ifndef LERTICK_PROG_TABLE
 #define LERTICK_PROG_TABLE 0
 #endif
-/* Save a task's model to its program's entry every this many updates. */
-#define PROG_SAVE_EVERY 8
-
 /*
- * What tasks of one program (by comm) have learned: a new task of the same
- * program starts from it instead of from scratch, so short-lived processes,
- * such as a compiler's, use predictions from their first burst.
+ * A model per program (by comm) that every task of the program trains with
+ * each completed burst. A task takes it over when it starts running a
+ * program (at its first wakeup and after exec), so short-lived processes,
+ * such as a compiler's, predict from their first burst with what all
+ * earlier processes of the program learned.
  */
+#ifndef PROG_INHERIT_UPDATES
+#define PROG_INHERIT_UPDATES (~0ULL)
+#endif
+
 struct prog_key {
 	char comm[16];
 };
 
 struct prog_val {
-	__s32 weight_q16[LERTICK_FEATURES];
-	u64   updates;
-	u64   ewma_burst_ns;
+	struct lertick_model model;
+	u64		     ewma_burst_ns;
 };
 
 struct {
@@ -261,56 +264,75 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
  * wakeup that sync_local() accepts, gets the task on its local DSQ right
  * away; otherwise ops.enqueue() queues it.
  */
-/* Start an untrained task from what its program has learned, once. */
-static void prog_load(struct task_struct *p, struct task_ctx *tctx)
+static bool same_comm(const char *a, const char *b)
 {
-	struct prog_key key = {};
-	struct prog_val *v;
-	int		 i;
+	u64 x[2], y[2];
 
-	/*
-	 * A forked child carries its parent's comm until it execs, which it
-	 * does during its first run: look the program up only after that run.
-	 */
-	if (!LERTICK_PROG_TABLE || tctx->prog_checked || !tctx->has_slept)
+	__builtin_memcpy(x, a, sizeof(x));
+	__builtin_memcpy(y, b, sizeof(y));
+	return x[0] == y[0] && x[1] == y[1];
+}
+
+/* When @p runs a program its model is not synced to, take the program's. */
+static void prog_sync(struct task_struct *p, struct task_ctx *tctx)
+{
+	struct prog_key	 key = {};
+	struct prog_val *v;
+
+	if (!LERTICK_PROG_TABLE || same_comm(tctx->comm, p->comm))
 		return;
-	tctx->prog_checked = true;
-	if (tctx->model.updates)
-		return;
+	__builtin_memcpy(tctx->comm, p->comm, sizeof(tctx->comm));
 	__builtin_memcpy(key.comm, p->comm, sizeof(key.comm));
 	v = bpf_map_lookup_elem(&prog_stor, &key);
-	if (!v || v->updates < min_train_samples)
+	if (!v)
 		return;
-	bpf_for(i, 0, LERTICK_FEATURES)
-	{
-		if (i < LERTICK_FEATURES)
-			tctx->model.weight_q16[i] = v->weight_q16[i];
-	}
-	tctx->model.updates = v->updates;
+	tctx->model	    = v->model;
 	tctx->ewma_burst_ns = v->ewma_burst_ns;
+	/*
+	 * Keep the program's weights but not its update count, so the task
+	 * still learns with a large step and adapts to its own behaviour
+	 * (threads of one program can behave differently).
+	 */
+	if (tctx->model.updates > PROG_INHERIT_UPDATES)
+		tctx->model.updates = PROG_INHERIT_UPDATES;
 	__sync_fetch_and_add(&nr_prog_hits, 1);
 }
 
-/* Save a trained task's model to its program's entry now and then. */
-static void prog_save(struct task_struct *p, struct task_ctx *tctx)
-{
-	struct prog_key key = {};
-	struct prog_val v   = {};
-	int		i;
+static void model_train_v2(struct lertick_model *model,
+			   const __s32 features[LERTICK_FEATURES],
+			   __s32 target_q16);
 
-	if (!LERTICK_PROG_TABLE || tctx->model.updates < min_train_samples ||
-	    ++tctx->prog_since_save < PROG_SAVE_EVERY)
+/* Train @p's program model with the burst that just completed. */
+static void prog_learn(struct task_struct *p, struct task_ctx *tctx,
+		       __s32 target, u64 burst)
+{
+	struct prog_key	 key = {};
+	struct prog_val *v;
+
+	if (!LERTICK_PROG_TABLE)
 		return;
-	tctx->prog_since_save = 0;
 	__builtin_memcpy(key.comm, p->comm, sizeof(key.comm));
-	bpf_for(i, 0, LERTICK_FEATURES)
-	{
-		if (i < LERTICK_FEATURES)
-			v.weight_q16[i] = tctx->model.weight_q16[i];
+	v = bpf_map_lookup_elem(&prog_stor, &key);
+	if (!v) {
+		struct prog_val init = {};
+
+		lertick_model_init(&init.model);
+		if (LERTICK_MODEL_V2) {
+			init.model.weight_q16[0] = 0;
+			init.model.weight_q16[2] = LERTICK_Q;
+		}
+		bpf_map_update_elem(&prog_stor, &key, &init, BPF_NOEXIST);
+		v = bpf_map_lookup_elem(&prog_stor, &key);
+		if (!v)
+			return;
 	}
-	v.updates	= tctx->model.updates;
-	v.ewma_burst_ns = tctx->ewma_burst_ns;
-	bpf_map_update_elem(&prog_stor, &key, &v, BPF_ANY);
+	if (LERTICK_MODEL_V2)
+		model_train_v2(&v->model, tctx->features, target);
+	else
+		lertick_model_train(&v->model, tctx->features, target);
+	v->ewma_burst_ns = v->ewma_burst_ns ?
+				   v->ewma_burst_ns * 3 / 4 + burst / 4 :
+				   burst;
 }
 
 s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
@@ -322,7 +344,7 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 
 	/* select_cpu() precedes runnable() on a wakeup and can insert directly. */
 	if (tctx && !tctx->episode_active) {
-		prog_load(p, tctx);
+		prog_sync(p, tctx);
 		begin_episode(tctx, SCX_ENQ_WAKEUP);
 		tctx->started_in_select = true;
 	}
@@ -412,7 +434,7 @@ void BPF_STRUCT_OPS(lertick_runnable, struct task_struct *p, u64 enq_flags)
 
 	/* Migration can produce runnable notifications without a new wakeup. */
 	if (!tctx->episode_active) {
-		prog_load(p, tctx);
+		prog_sync(p, tctx);
 		begin_episode(tctx, enq_flags);
 	} else if (tctx->started_in_select) {
 		/* Confirm the wakeup before admitting this episode as a label. */
@@ -508,6 +530,17 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 	    !(p->flags & PF_EXITING)) {
 		__s32 target = lertick_scale_ns_q16(burst, REFERENCE_NS);
 
+		if (LERTICK_MEASURE) {
+			u64  b	  = MIN(burst, REFERENCE_NS);
+			bool tr	  = tctx->model.updates >= min_train_samples;
+			u64  used = tr ? tctx->prediction_ns : slice_fixed;
+
+			__sync_fetch_and_add(&m_all, 1);
+			__sync_fetch_and_add(&m_err_used,
+					     used > b ? used - b : b - used);
+			if ((used <= slice_fixed) == (b <= slice_fixed))
+				__sync_fetch_and_add(&m_cls_used, 1);
+		}
 		if (LERTICK_MEASURE && tctx->model.updates >= min_train_samples) {
 			u64 b	 = MIN(burst, REFERENCE_NS);
 			u64 lin	 = tctx->prediction_ns;
@@ -544,7 +577,7 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 				lertick_model_train(&tctx->model,
 						    tctx->features, target);
 			__sync_fetch_and_add(&nr_training_updates, 1);
-			prog_save(p, tctx);
+			prog_learn(p, tctx, target, MIN(burst, REFERENCE_NS));
 		}
 		tctx->completed_bursts++;
 		tctx->last_burst_ns = burst;
