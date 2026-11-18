@@ -1009,3 +1009,7 @@ The three stability bounds (root cgroup, wait-bounded lead, lag behind the clock
 `lag` against `b8`, session 1 then session 2: no measure is more than 10% worse in both sessions. The largest single readings are 4-CPU perf messaging threads +3 / -55, 8-CPU perf messaging processes +10 / -108 and 8-CPU -m4 -t2 request p99 -21 / +5, each contradicted by the other session. Kernel compile, `lag` against `b8`: 4 CPUs 31.85 against 33.07 s and 41.16 against 49.83 s; 8 CPUs 23.66 against 22.24 s and 37.15 against 38.05 s.
 
 These sessions neither show nor rule out a regression, so the README charts stay on the `b8` sessions (`r8`, `r8c`) and note that. The comparison is to be rerun on an idle host before the charts move to the release build.
+
+## Learned against fixed slices on the release build, plan fixed 2026-11-17 before the run
+
+The 2026-11-16 sessions found online and fixed modes alike (geometric mean against EEVDF 0.887 and 0.888), because most tasks sleep before a slice ends. The policy has changed a lot since (affine pick, slice cap, lag bounds), so `ab-run.sh` measures the current build both ways in one session: held-out on 4 and 8 CPUs with 5 repetitions, then `kbuild-long.sh` with 3, arms EEVDF, `online` and `fixed` (`--fixed`). If no measure differs by more than 5% between `online` and `fixed` on both CPU counts, learning has no measurable effect on this policy, and the next step is a change that gives the prediction a decision where it matters.
