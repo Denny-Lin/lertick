@@ -227,7 +227,11 @@ static void prog_load(struct task_struct *p, struct task_ctx *tctx)
 	struct prog_val *v;
 	int		 i;
 
-	if (!LERTICK_PROG_TABLE || tctx->prog_checked)
+	/*
+	 * A forked child carries its parent's comm until it execs, which it
+	 * does during its first run: look the program up only after that run.
+	 */
+	if (!LERTICK_PROG_TABLE || tctx->prog_checked || !tctx->has_slept)
 		return;
 	tctx->prog_checked = true;
 	if (tctx->model.updates)
