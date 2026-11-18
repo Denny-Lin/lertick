@@ -1274,3 +1274,15 @@ Every form of preemption raised both the wakeup and the request p99 by a third o
 ### Why the 4-CPU wakeup p99 is bimodal
 
 `bm-run.sh`: schbench -m4 -t2 on 4 CPUs, 20 runs of the release configuration with measurement counters (`mno`, `--min-train-samples 2`), raw data in `bm-sets.tar.gz`. The wakeup p99 read about 3.05 ms in 6 runs, about 4.0 ms in 13 and 3.37 ms once. The median wakeup latency is 1.0 ms in both groups, and nothing the scheduler counts differs between them: 63% of stops are slice expiries, and local dispatches, continuations and waker-guess hits overlap. With HZ=1000 an expired slice is noticed at the next tick, so the waits come in whole milliseconds and the p99 sits on the boundary between three and four of them. The true p99 is about 3.5 ms, a little above EEVDF's 3.75 ms only when the boundary falls on the high side. Winning this measure steadily needs about 1 ms off the tail wait. Shorter slices for long bursts did not give it (round 1), so round 3 (`x3-run.sh`) narrows the two queue rules that can pass over a woken task: the running task's continuation (`KEEP_MAX_NS` 20 to 5 ms, `km5`) and the cache-warm pick (`AFFINE_WINDOW_NS` 8 to 4 ms, `aw4`), and both (`km5aw4`).
+
+### Round 3 (4 CPUs): narrower queue rules, rejected
+
+`x3-run.sh`, 8 runs on 4 CPUs. Medians:
+
+| | EEVDF | v2 | km5 | aw4 | km5aw4 |
+|---|---|---|---|---|---|
+| -m4 -t2 wakeup p99 (us) | 3,744 | 3,560 | 3,976 | 3,992 | 3,980 |
+| -m4 -t2 request p99 (ms) | 46.3 | 46.8 | 47.8 | 54.8 | 54.8 |
+| perf messaging processes (s) | 0.580 | 0.606 | 0.590 | 0.632 | 0.643 |
+
+None improves on `v2`; the 4 ms affine window costs 17% on the request p99. All three rejected. In this session `v2` is 5 / 6 / 0 against EEVDF on 4 CPUs. Over the three sessions with 8 runs its -m4 -t2 wakeup p99 against EEVDF reads +7%, -5% and -5%: it sits at the tie line, and neither shorter slices, preemption nor narrower queue rules move the 1 ms that would make it a steady win.
