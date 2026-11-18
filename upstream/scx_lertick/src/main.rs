@@ -42,9 +42,9 @@ const SCHEDULER_NAME: &str = "scx_lertick";
 
 /// scx_lertick: weighted virtual-time scheduling with learned time slices.
 ///
-/// All tasks share one queue ordered by weighted virtual time. In online mode
-/// each task trains a small linear model inside BPF on its own completed CPU
-/// bursts, and the prediction sets its next time slice. Fairness always
+/// Tasks wait in one queue per LLC, ordered by weighted virtual time. In online
+/// mode each task trains a small linear model inside BPF on its own completed
+/// CPU bursts, and the prediction sets its next time slice. Fairness always
 /// charges the CPU time actually used.
 ///
 /// The BPF part makes all the scheduling decisions (see src/bpf/main.bpf.c).
