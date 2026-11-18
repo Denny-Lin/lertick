@@ -1071,3 +1071,23 @@ Order: (1) burst length with confidence, asked as "ends within the slice?" for t
 | short kernel compile | +15 / -7 | +9 / +0 | +16 / -0 |
 
 None meets the rule (no measure more than 5% worse than `fixed` on both CPU counts). `finish` gains on 4-CPU throughput (16 groups, compile) and loses -m4 -t2 latency on both counts: letting a burst finish delays the tasks waiting behind it, and the workers of -m4 -t2 are exactly such tasks. The same comparison of `online` and `fixed` moved by up to 30 points between this run and `ab-run.sh` (4-CPU -m1 wakeup -31 then -2), so differences under about 15% are not separable from noise on this host tonight. Next for the slice: make the extension depend on who is waiting (extend only when the waiting tasks are themselves long-running), after the step 1 measurement.
+
+### Step 1 result: where the slice matters, the model beats the average, 2026-11-17
+
+`meas-run.sh` ran 07:24 to 07:26 UTC on 4 CPUs; raw counter dumps in `meas-sets.tar.gz`. Mean absolute error per completed burst of trained tasks (learned / burst average / previous burst), share of bursts over 2 ms and 3 ms, share of stops that left the task runnable, and accuracy of "ends within 2 ms" (learned / average / previous):
+
+| Workload | Error (us) | >2 ms | >3 ms | Cut | "Ends within 2 ms" |
+|---|---|---|---|---|---|
+| perf messaging processes | 477 / 123 / 132 | 0.7% | 0.4% | 3% | 98.1 / 99.3 / 98.7% |
+| perf messaging threads | 445 / 127 / 134 | 0.6% | 0.3% | 3% | 98.7 / 99.4 / 98.9% |
+| hackbench threads | 578 / 119 / 121 | 1.4% | 0.8% | 2% | 94.6 / 98.5 / 97.9% |
+| hackbench 16 groups | 776 / 107 / 117 | 0.8% | 0.3% | 2% | 97.2 / 99.2 / 98.7% |
+| schbench -m4 -t2 | 1,307 / 3,649 / 6,380 | 32% | 32% | 63% | 90.5 / 68.0 / 36.1% |
+| schbench -m1 -t1 | 472 / 2,823 / 4,935 | 31% | 31% | 1% | 96.4 / 68.9 / 37.8% |
+| kernel build | 430 / 107 / 124 | 0.8% | 0.4% | 70% | 94.5 / 98.8 / 98.7% |
+
+- **Where bursts alternate between short and long (schbench), the model is three to six times more accurate than the average and classifies "ends within the slice" right 90 to 96% of the time against 68%.** These are the workloads where the slice matters (63% of stops cut in -m4 -t2). This is the first direct evidence that the learned predictor carries information a burst average does not.
+- **Where bursts are uniformly short, the model is about four times worse than the average.** It starts from a 2.5 ms bias and moves 1/64 of the error per update, so it overestimates for a long time. Harmless there (2 to 3% of stops cut) but a defect.
+- **In the kernel build 70% of stops are cuts, but the compiler processes are too short-lived to train,** so the trained tasks measured are make and shells. The program table targets exactly this.
+
+Next for the slice: initialise the model from the first burst and learn faster on short-burst tasks; extend slices only when the waiting tasks are long-running; test the program table.
