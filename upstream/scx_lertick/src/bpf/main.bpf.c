@@ -98,35 +98,6 @@ static struct task_ctx *task_ctx(struct task_struct *p)
 	return bpf_task_storage_get(&task_ctx_stor, p, 0, 0);
 }
 
-#ifndef LERTICK_LEARNED_PREEMPT
-#define LERTICK_LEARNED_PREEMPT 0
-#endif
-/* A woken task predicted to run at most this long may preempt... */
-#define PREEMPT_SHORT_NS (500ULL * NSEC_PER_USEC)
-/* ...a task that has run this long and is predicted to run this much more. */
-#define PREEMPT_RAN_NS (1ULL * NSEC_PER_MSEC)
-#define PREEMPT_LEFT_NS (2ULL * NSEC_PER_MSEC)
-
-/*
- * What each CPU is running: when it started, its vtime then, and when its
- * burst is predicted to end (0 when it has no trained prediction).
- */
-struct cpu_run {
-	u64  started;
-	u64  vtime;
-	u64  pred_end;
-	bool busy;
-};
-
-struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__uint(max_entries, LERTICK_MAX_CPUS);
-	__type(key, u32);
-	__type(value, struct cpu_run);
-} cpu_run_map SEC(".maps");
-
-u64 nr_learned_preempts;
-
 #define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq, 0)
 #define LERTICK_TASK_CGROUP(p) scx_bpf_task_cgroup(p)
 #include "policy.h"
@@ -164,6 +135,10 @@ static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 	tctx->prediction_ns = (u64)pred * REFERENCE_NS / LERTICK_Q;
 }
 
+#ifndef LERTICK_SLICE_FINISH
+#define LERTICK_SLICE_FINISH 0
+#endif
+
 /* Remaining slice: the predicted burst less what already ran, within bounds. */
 static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 {
@@ -172,8 +147,23 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 	if (tctx && mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
 	    tctx->model.updates >= min_train_samples &&
 	    tctx->prediction_ns > consumed_ns) {
-		slice = tctx->prediction_ns - consumed_ns;
-		__sync_fetch_and_add(&nr_adaptive_slices, 1);
+		u64 rest = tctx->prediction_ns - consumed_ns;
+
+		if (!LERTICK_SLICE_FINISH) {
+			slice = rest;
+			__sync_fetch_and_add(&nr_adaptive_slices, 1);
+		} else if (rest > slice_fixed && rest <= slice_max) {
+			/*
+			 * A burst predicted to end a little past the fixed
+			 * slice gets the rest of it, plus an eighth for the
+			 * prediction's error, so that it ends without being
+			 * preempted and queued again. Shorter bursts end
+			 * within the fixed slice anyway, and longer ones would
+			 * only make waiting tasks wait longer.
+			 */
+			slice = rest + rest / 8;
+			__sync_fetch_and_add(&nr_adaptive_slices, 1);
+		}
 	}
 
 	return CLAMP(slice, slice_min, slice_max);
@@ -184,53 +174,6 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
  * wakeup that sync_local() accepts, gets the task on its local DSQ right
  * away; otherwise ops.enqueue() queues it.
  */
-/* Whether @tctx has a trained prediction for its current burst. */
-static bool predicted(struct task_ctx *tctx)
-{
-	return tctx && mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
-	       tctx->model.updates >= min_train_samples;
-}
-
-/*
- * A woken task predicted to run briefly preempts its previous CPU when the
- * task there has run a while and is predicted to keep running much longer,
- * or has run past its prediction. The wakee goes first only if its vtime is
- * not after the running task's, so vtime order still holds.
- */
-static bool learned_preempt(struct task_struct *p, struct task_ctx *tctx,
-			    u64 vtime, u64 slice, u64 enq_flags)
-{
-	struct cpu_run *cr;
-	s32		cpu = scx_bpf_task_cpu(p);
-	u32		key = cpu;
-	u64		now;
-
-	if (!LERTICK_LEARNED_PREEMPT || !(enq_flags & SCX_ENQ_WAKEUP) ||
-	    !predicted(tctx) || tctx->prediction_ns > PREEMPT_SHORT_NS)
-		return false;
-	if (cpu < 0 || cpu >= LERTICK_MAX_CPUS ||
-	    !bpf_cpumask_test_cpu(cpu, p->cpus_ptr))
-		return false;
-	cr = bpf_map_lookup_elem(&cpu_run_map, &key);
-	if (!cr || !cr->busy)
-		return false;
-	now = bpf_ktime_get_ns();
-	if (now - cr->started < PREEMPT_RAN_NS)
-		return false;
-	if (cr->pred_end && time_before(cr->pred_end, now + PREEMPT_LEFT_NS) &&
-	    !time_before(cr->pred_end, now))
-		return false;
-	if (!cr->pred_end && now - cr->started < PREEMPT_LEFT_NS)
-		return false;
-	if (time_after(vtime, cr->vtime))
-		return false;
-	p->scx.dsq_vtime = vtime;
-	scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL_ON | cpu, slice,
-			   enq_flags | SCX_ENQ_PREEMPT);
-	__sync_fetch_and_add(&nr_learned_preempts, 1);
-	return true;
-}
-
 s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		   u64 wake_flags)
 {
@@ -274,8 +217,6 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	    time_before(vtime, vtime_now - LAG_NS))
 		vtime = vtime_now - LAG_NS;
 	vtime = clamp_ahead(p, vtime);
-	if (learned_preempt(p, tctx, vtime, slice, enq_flags))
-		return;
 
 	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice,
 				 vtime, enq_flags);
@@ -350,24 +291,6 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 
 	clock_raise(p->scx.dsq_vtime);
 
-	if (LERTICK_LEARNED_PREEMPT) {
-		u32		key = bpf_get_smp_processor_id();
-		struct cpu_run *cr  = bpf_map_lookup_elem(&cpu_run_map, &key);
-
-		if (cr) {
-			u64 now = bpf_ktime_get_ns();
-
-			cr->started  = now;
-			cr->vtime    = p->scx.dsq_vtime;
-			cr->pred_end = 0;
-			if (predicted(tctx) &&
-			    tctx->prediction_ns > tctx->episode_runtime_ns)
-				cr->pred_end = now + tctx->prediction_ns -
-					       tctx->episode_runtime_ns;
-			cr->busy = true;
-		}
-	}
-
 	if (!tctx)
 		return;
 	tctx->runtime_start_ns = p->se.sum_exec_runtime;
@@ -383,14 +306,6 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	struct task_ctx *tctx	= task_ctx(p);
 	u32		 weight = p->scx.weight ? p->scx.weight : 1;
 	u64		 delta, rw;
-
-	if (LERTICK_LEARNED_PREEMPT) {
-		u32		key = bpf_get_smp_processor_id();
-		struct cpu_run *cr  = bpf_map_lookup_elem(&cpu_run_map, &key);
-
-		if (cr)
-			cr->busy = false;
-	}
 
 	if (!tctx || !tctx->running)
 		return;
