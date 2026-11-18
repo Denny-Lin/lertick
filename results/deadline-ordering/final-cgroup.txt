@@ -1,0 +1,9 @@
+== EEVDF
+weight 200:100, 1:1 tasks: A 6.67 s, B 3.34 s, A/B 2.00
+weight 100:100, 2:1 tasks: A 5.00 s, B 5.00 s, A/B 1.00
+nice 0 vs 5 in one cgroup: ratio 3.05
+== new (v3)
+weight 200:100, 1:1 tasks: A 6.67 s, B 3.34 s, A/B 2.00
+weight 100:100, 2:1 tasks: A 5.00 s, B 5.00 s, A/B 1.00
+nice 0 vs 5 in one cgroup: ratio 3.02
+disabled

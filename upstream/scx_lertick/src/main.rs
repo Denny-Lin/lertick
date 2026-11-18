@@ -71,8 +71,10 @@ struct Opts {
     #[clap(short = 'M', long, default_value = "3000")]
     slice_max_us: u64,
 
-    /// Completed bursts a task needs before its prediction sets its slice.
-    #[clap(long, default_value = "8")]
+    /// Bursts a task's model must have learned from before its prediction
+    /// sets its slice. A task that starts from its program's model counts as
+    /// having learned 2.
+    #[clap(long, default_value = "2")]
     min_train_samples: u32,
 
     /// Enable stats monitoring with the specified interval.
