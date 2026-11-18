@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 """Longer model comparisons in an isolated QEMU guest; always restore preemption.
 
 Each environment is its own randomized five-repetition experiment. Environment

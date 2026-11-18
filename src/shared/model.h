@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT */
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Regions between #ifndef LERTICK_UPSTREAM and its #endif are product-only
  * variants; scripts/export_scx.py drops them for upstream/scx_lertick.

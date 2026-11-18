@@ -1,5 +1,5 @@
 #!/usr/bin/env bpftrace
-/* SPDX-License-Identifier: MIT */
+/* SPDX-License-Identifier: GPL-2.0-only */
 /* Read-only observer; all measured policies use identical probes. Every 16th
  * wake of each named workload thread is sampled. No preemption is mislabeled
  * as a wake. Kernel timestamps, rather than timer deadlines, define latency. */

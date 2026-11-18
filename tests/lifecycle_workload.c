@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT */
+/* SPDX-License-Identifier: GPL-2.0-only */
 /* Linux-only lifecycle and runnable-service workload. Emits measured JSONL;
  * it contains no scheduler-specific accounting oracle or performance claim.
  */

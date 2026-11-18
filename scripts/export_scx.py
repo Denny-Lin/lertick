@@ -43,7 +43,7 @@ def strip_product(text):
 
 def model_h():
     text = strip_product((ROOT / "src/shared/model.h").read_text())
-    head = "/* SPDX-License-Identifier: MIT */\n"
+    head = "/* SPDX-License-Identifier: GPL-2.0-only */\n"
     note_start = text.index("/*\n * Regions between")
     note_end = text.index("*/\n", note_start) + 3
     text = text[:note_start] + text[note_end:]

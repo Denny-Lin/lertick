@@ -1,5 +1,7 @@
 # License analysis
 
+**Decision, 2026-11-18:** the project moved from MIT to GPL-2.0-only for all original material, to match the scheduler and the sched-ext/scx port. Versions published before then remain available under MIT. The analysis below is kept as written.
+
 > Archived Phase 0 background research, superseded by Lertick's CPU-only scope.
 > Original names (ScxSprout, scx-sprout, and linux-resource-learning), proposed
 > phases, and statements below are preserved as historical reasoning. Memory

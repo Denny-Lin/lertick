@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT */
+/* SPDX-License-Identifier: GPL-2.0-only */
 /* Buffered, synchronized CPU scheduling workloads. No I/O in measured loops. */
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L

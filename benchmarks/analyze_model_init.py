@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 """Paired burst-model comparisons; trial, not episode, is the unit."""
 import argparse
 import json
