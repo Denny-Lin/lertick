@@ -72,7 +72,7 @@ struct Opts {
     slice_max_us: u64,
 
     /// Completed bursts a task needs before its prediction sets its slice.
-    #[clap(long, default_value = "8")]
+    #[clap(long, default_value = "2")]
     min_train_samples: u32,
 
     /// Enable stats monitoring with the specified interval.

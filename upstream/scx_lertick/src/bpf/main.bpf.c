@@ -12,9 +12,11 @@
  *
  * In online mode each task trains a small linear model inside BPF on its own
  * completed CPU bursts (wake to sleep). At the next wakeup the prediction sets
- * the task's time slice, bounded by slice_min and slice_max. Fixed mode uses
- * slice_fixed for every task. Fairness always charges the CPU time actually
- * used, never the prediction.
+ * the task's time slice, bounded by slice_min and slice_max. A new process
+ * starts from the model its program's earlier processes trained, and a
+ * thread whose bursts depend on who wakes it is told apart by its waker.
+ * Fixed mode uses slice_fixed for every task. Fairness always charges the CPU
+ * time actually used, never the prediction.
  *
  * The queue policy (per-LLC queues, continuation, cgroup weights) is in
  * policy.h. Queues and CPU selection follow scx_simple; cgroup weights follow
@@ -37,6 +39,15 @@ char _license[] SEC("license") = "GPL";
 #define REFERENCE_NS (10ULL * NSEC_PER_MSEC)
 #define QUEUE_REFERENCE 16U
 
+/* Wakers remembered per task. */
+#define NR_WAKERS 4
+
+/*
+ * Update count a task keeps when it takes over its program's model, so that
+ * it still learns with a large step (see train_model()).
+ */
+#define PROG_INHERIT_UPDATES 2ULL
+
 /*
  * Scheduling mode and slice bounds, set by user space before load.
  */
@@ -47,7 +58,7 @@ const volatile u64 slice_max   = 3ULL * NSEC_PER_MSEC;
 /*
  * Completed bursts a task needs before its prediction sets its slice.
  */
-const volatile u32 min_train_samples = 8;
+const volatile u32 min_train_samples = 2;
 
 /* Statistics, read by user space. */
 u64 nr_local_dispatches, nr_shared_dispatches, nr_continuations;
@@ -81,6 +92,12 @@ struct task_ctx {
 	u32 rq_weight; /* weight counted in runnable_weight, 0 when not counted */
 	bool cg_counted; /* rq_weight is also counted in its cgroup's sums */
 	u32 eff_weight; /* weight of the last charge; dispatch() cannot look up cgroups */
+	char comm[16]; /* program whose model this task last took over */
+	u32  waker; /* pid that woke the current episode */
+	u32  waker_pid[NR_WAKERS]; /* the last wakers of this task ... */
+	u64  waker_burst[NR_WAKERS]; /* ... and the last burst each one started */
+	u32  waker_next;
+	u64  waker_err, avg_err; /* recent error of the two burst guesses */
 };
 
 struct {
@@ -98,9 +115,186 @@ static struct task_ctx *task_ctx(struct task_struct *p)
 	return bpf_task_storage_get(&task_ctx_stor, p, 0, 0);
 }
 
+/*
+ * A model per program (by comm), trained with every completed burst of the
+ * program's tasks. Short-lived processes, such as a compiler's, then predict
+ * from their first burst with what earlier processes of the program learned.
+ * A task that renames itself only changes which model it starts from: the
+ * prediction sets the slice, never the vtime charge.
+ */
+struct prog_key {
+	char comm[16];
+};
+
+struct prog_val {
+	struct lertick_model model;
+	u64		     ewma_burst_ns;
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(max_entries, 4096);
+	__type(key, struct prog_key);
+	__type(value, struct prog_val);
+} prog_stor SEC(".maps");
+
 #define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq, 0)
 #define LERTICK_TASK_CGROUP(p) scx_bpf_task_cgroup(p)
 #include "policy.h"
+
+/*
+ * A new model predicts its burst guess (feature 1) as it is, so it is no
+ * worse than that guess before it has learned anything.
+ */
+static void start_model(struct lertick_model *model)
+{
+	lertick_model_init(model);
+	model->weight_q16[0] = 0;
+	model->weight_q16[1] = LERTICK_Q;
+}
+
+/*
+ * One least-mean-squares step. The step starts large and shrinks (1/8 for
+ * the first 8 updates, 1/16 up to 32, then 1/64), so a model adapts within a
+ * few bursts and is stable afterwards.
+ */
+static void train_model(struct lertick_model *model,
+			const __s32 features[LERTICK_FEATURES], __s32 target_q16)
+{
+	__s64 error = (__s64)lertick_clip_q16(target_q16) -
+		      lertick_model_raw_q16(model, features);
+	__s64 alpha = model->updates < 8  ? LERTICK_Q / 8 :
+		      model->updates < 32 ? LERTICK_Q / 16 :
+					    LERTICK_ALPHA_Q16;
+	int   i;
+
+	if (error > LERTICK_Q)
+		error = LERTICK_Q;
+	if (error < -LERTICK_Q)
+		error = -LERTICK_Q;
+	bpf_for(i, 0, LERTICK_FEATURES)
+	{
+		__s64 update;
+
+		if (i >= LERTICK_FEATURES)
+			break;
+		update = lertick_trunc_shift(
+			alpha * error * lertick_clip_q16(features[i]), 32);
+		model->weight_q16[i] = lertick_clip_weight(
+			(__s64)lertick_clip_weight(model->weight_q16[i]) +
+			update);
+	}
+	if (model->updates != ~(__u64)0)
+		model->updates++;
+}
+
+static bool same_comm(const char *a, const char *b)
+{
+	u64 x[2], y[2];
+
+	__builtin_memcpy(x, a, sizeof(x));
+	__builtin_memcpy(y, b, sizeof(y));
+	return x[0] == y[0] && x[1] == y[1];
+}
+
+/*
+ * When @p starts running a program (first wakeup, exec), take over the
+ * program's model. Its update count is capped, since threads of one program
+ * can behave differently and each must still adapt to its own bursts.
+ */
+static void prog_sync(struct task_struct *p, struct task_ctx *tctx)
+{
+	struct prog_key	 key = {};
+	struct prog_val *v;
+
+	if (mode != LERTICK_MODE_ONLINE || same_comm(tctx->comm, p->comm))
+		return;
+	__builtin_memcpy(tctx->comm, p->comm, sizeof(tctx->comm));
+	__builtin_memcpy(key.comm, p->comm, sizeof(key.comm));
+	v = bpf_map_lookup_elem(&prog_stor, &key);
+	if (!v)
+		return;
+	tctx->model	    = v->model;
+	tctx->ewma_burst_ns = v->ewma_burst_ns;
+	if (tctx->model.updates > PROG_INHERIT_UPDATES)
+		tctx->model.updates = PROG_INHERIT_UPDATES;
+}
+
+/* Train @p's program model with the burst that just completed. */
+static void prog_learn(struct task_struct *p, struct task_ctx *tctx,
+		       __s32 target, u64 burst)
+{
+	struct prog_key	 key = {};
+	struct prog_val *v;
+
+	__builtin_memcpy(key.comm, p->comm, sizeof(key.comm));
+	v = bpf_map_lookup_elem(&prog_stor, &key);
+	if (!v) {
+		struct prog_val init = {};
+
+		start_model(&init.model);
+		bpf_map_update_elem(&prog_stor, &key, &init, BPF_NOEXIST);
+		v = bpf_map_lookup_elem(&prog_stor, &key);
+		if (!v)
+			return;
+	}
+	train_model(&v->model, tctx->features, target);
+	v->ewma_burst_ns = v->ewma_burst_ns ?
+				   v->ewma_burst_ns * 3 / 4 + burst / 4 :
+				   burst;
+}
+
+/* Slot of the current episode's waker among the task's last wakers, or -1. */
+static __always_inline int waker_slot(struct task_ctx *tctx)
+{
+	int i, slot = -1;
+
+	bpf_for(i, 0, NR_WAKERS)
+	{
+		if (tctx->waker_pid[i % NR_WAKERS] == tctx->waker)
+			slot = i % NR_WAKERS;
+	}
+	return slot;
+}
+
+/*
+ * The burst guess fed to the model: the last burst this waker started, while
+ * that has recently been closer than the burst average, else the average.
+ * A thread that alternates between two kinds of work, each started by a
+ * different waker, then gets the right length for each; a task whose bursts
+ * vary at random keeps the steadier average.
+ */
+static u64 burst_guess(struct task_ctx *tctx)
+{
+	int slot = waker_slot(tctx);
+
+	if (slot >= 0 && tctx->waker_err < tctx->avg_err)
+		return tctx->waker_burst[slot % NR_WAKERS];
+	return tctx->ewma_burst_ns;
+}
+
+/*
+ * Score both burst guesses against the burst that just completed, and
+ * remember it as this waker's last.
+ */
+static void learn_waker(struct task_ctx *tctx, u64 burst)
+{
+	int slot = waker_slot(tctx);
+	u64 g	 = slot >= 0 ? tctx->waker_burst[slot % NR_WAKERS] :
+			       MIN(tctx->last_burst_ns, REFERENCE_NS);
+	u64 a	 = tctx->ewma_burst_ns;
+
+	tctx->waker_err = tctx->waker_err * 7 / 8 +
+			  (g > burst ? g - burst : burst - g) / 8;
+	tctx->avg_err	= tctx->avg_err * 7 / 8 +
+			  (a > burst ? a - burst : burst - a) / 8;
+	if (slot < 0) {
+		slot = tctx->waker_next % NR_WAKERS;
+		tctx->waker_next++;
+		tctx->waker_pid[slot % NR_WAKERS] = tctx->waker;
+	}
+	tctx->waker_burst[slot % NR_WAKERS] = burst;
+}
 
 /*
  * A wakeup starts an episode. Only an episode that starts with a verified
@@ -118,10 +312,12 @@ static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 	tctx->episode_valid  = tctx->has_slept && (enq_flags & SCX_ENQ_WAKEUP);
 	tctx->episode_runtime_ns = 0;
 	tctx->prediction_ns	 = 0;
+	/* On a wakeup the running task is the waker. */
+	tctx->waker		 = (u32)bpf_get_current_pid_tgid();
 
 	tctx->features[0]	 = LERTICK_Q;
 	tctx->features[1] =
-		lertick_scale_ns_q16(tctx->last_burst_ns, REFERENCE_NS);
+		lertick_scale_ns_q16(burst_guess(tctx), REFERENCE_NS);
 	tctx->features[2] =
 		lertick_scale_ns_q16(tctx->ewma_burst_ns, REFERENCE_NS);
 	tctx->features[3] = lertick_scale_ns_q16(sleep_ns, REFERENCE_NS);
@@ -135,13 +331,18 @@ static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 	tctx->prediction_ns = (u64)pred * REFERENCE_NS / LERTICK_Q;
 }
 
-/* Remaining slice: the predicted burst less what already ran, within bounds. */
+/*
+ * Remaining slice: the predicted burst less what already ran, within bounds.
+ * A burst predicted past slice_max is cut whatever its slice, so it gets
+ * slice_fixed: a longer slice would only make waiting tasks wait longer.
+ */
 static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 {
 	u64 slice = slice_fixed;
 
 	if (tctx && mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
 	    tctx->model.updates >= min_train_samples &&
+	    tctx->prediction_ns <= slice_max &&
 	    tctx->prediction_ns > consumed_ns) {
 		slice = tctx->prediction_ns - consumed_ns;
 		__sync_fetch_and_add(&nr_adaptive_slices, 1);
@@ -164,6 +365,7 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 
 	/* select_cpu() precedes runnable() on a wakeup and can insert directly. */
 	if (tctx && !tctx->episode_active) {
+		prog_sync(p, tctx);
 		begin_episode(tctx, SCX_ENQ_WAKEUP);
 		tctx->started_in_select = true;
 	}
@@ -253,6 +455,7 @@ void BPF_STRUCT_OPS(lertick_runnable, struct task_struct *p, u64 enq_flags)
 
 	/* Migration can produce runnable notifications without a new wakeup. */
 	if (!tctx->episode_active) {
+		prog_sync(p, tctx);
 		begin_episode(tctx, enq_flags);
 	} else if (tctx->started_in_select) {
 		/* Confirm the wakeup before admitting this episode as a label. */
@@ -343,9 +546,10 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 		__s32 target = lertick_scale_ns_q16(burst, REFERENCE_NS);
 
 		if (mode == LERTICK_MODE_ONLINE) {
-			lertick_model_train(&tctx->model, tctx->features,
-					    target);
+			train_model(&tctx->model, tctx->features, target);
 			__sync_fetch_and_add(&nr_training_updates, 1);
+			prog_learn(p, tctx, target, MIN(burst, REFERENCE_NS));
+			learn_waker(tctx, MIN(burst, REFERENCE_NS));
 		}
 		tctx->completed_bursts++;
 		tctx->last_burst_ns = burst;
@@ -374,7 +578,7 @@ s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 				    BPF_LOCAL_STORAGE_GET_F_CREATE);
 	if (!tctx)
 		return -ENOMEM;
-	lertick_model_init(&tctx->model);
+	start_model(&tctx->model);
 
 	return 0;
 }

@@ -7,9 +7,15 @@ This is a single user-defined scheduler used within [`sched_ext`](https://github
 A weighted vtime scheduler in which each task learns its own time slice.
 
 Each task trains a small fixed-point linear model inside BPF on its own CPU
-bursts, from wakeup to sleep. The inputs are the last burst, an average of
-recent bursts, the last sleep time and the queue depth. At the next wakeup the
-prediction sets the task's slice, between 0.5 and 3 ms by default. There is no
+bursts, from wakeup to sleep. The inputs are a burst guess, an average of
+recent bursts, the last sleep time and the queue depth. The guess is the last
+burst the same waker started, while that has recently been closer than the
+average: a thread that does two kinds of work, each started by a different
+waker, gets the right length for each. At the next wakeup the prediction sets
+the task's slice, between 0.5 and 3 ms by default; a burst predicted to run
+past 3 ms is cut anyway and gets the fixed 2 ms. A new process starts from
+the model that earlier processes with the same name trained, so short-lived
+processes such as a compiler's predict from their first burst. There is no
 model file and no inference in user space, and `--fixed` gives every task the
 same slice instead.
 
