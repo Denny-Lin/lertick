@@ -1141,3 +1141,17 @@ The shared model makes the kernel build six times more accurate (table hit about
 | schbench -m1 -t1 | 311 (99%) | 330 (98%) | 318 (98%) |
 
 `E` is the most accurate on the kernel build and close to `D` elsewhere. On schbench -m4 -t2 the table is hit fewer than 110 times per run, so it touches few threads; the 10% gap to `D` may be partly run-to-run noise (`C` and `D` also differ by 8% on hackbench, where the table is hit 20 times). Round 3 checks this with three runs per arm and adds `F`: `E` with the inherited count capped at 2.
+
+## Accuracy designs, round 3: inheritance cap of 2, 2026-11-18
+
+`F` is `E` with the inherited update count capped at 2. `acc-run.sh r3`, 4 CPUs, 3 runs each, raw dumps in `acc-r3-sets.tar.gz`. Error used (us), coverage in brackets:
+
+| Workload | D: no table | E: inherit at most 8 | F: inherit at most 2 |
+|---|---|---|---|
+| kernel build | 307 (88%) | **133 (99%)** | 144 (99%) |
+| perf messaging processes | 152 (99%) | 155 (99%) | 151 (99%) |
+| hackbench 16 groups | 162 (97%) | 166 (97%) | 160 (97%) |
+| schbench -m4 -t2 | **869 (99%)** | 977 (99%) | 907 (99%) |
+| schbench -m1 -t1 | 338 (98%) | 322 (98%) | 326 (99%) |
+
+The schbench -m4 -t2 gap between `D` and `E` came back (12%), so it is not noise: a thread that starts from the mixed program model of message and worker threads stays off for a while. `F` keeps the large learning step longer and closes two thirds of the gap, at a 8% cost on the kernel build. The kernel build is noisier than the other workloads: the average's own error went from 49 to about 120 us between rounds 2 and 3. `F` is the best compromise so far. On perf messaging, hackbench and the kernel build the model is still only as accurate as the decaying average, not better.
