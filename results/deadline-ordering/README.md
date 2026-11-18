@@ -1256,6 +1256,9 @@ The scx port on this branch drops every experimental switch and keeps what the s
 - Fairness gate: nice mix 3 of 3, nice shares as in earlier builds.
 - The CI scheduler test 3 of 3 with exit code 0; 20 attach/detach cycles; cgroup churn, SCHED_IDLE and SCHED_BATCH, a SCHED_FIFO hog, fork/exec storms and thread/timer churn without a stall.
 - Stress battery of 13 stressors without an exit. (`stress-ng --sched 8` exits 1 on its own option parsing, as with every earlier build.)
+- Long run: 60 minutes, 28 cycles of mixed load, without an exit or a stall in the kernel log.
+- cgroup weights (`cgp.sh`, `final-cgroup.txt`): cpu.weight 200:100 gives 2.00, equal groups with 2:1 tasks 1.00, nice 0 against 5 in one cgroup 3.02; EEVDF 2.00, 1.00, 3.05.
+- A later commit changes only comments and `--help`; rebuilt from both commits, the BPF disassembly is identical.
 
 Benchmarks, 8 runs, shuffled arms, against EEVDF and the PR build (`pr`, origin/main before this change). Medians:
 
