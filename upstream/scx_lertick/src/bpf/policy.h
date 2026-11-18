@@ -12,9 +12,16 @@
  *   NSEC_PER_MSEC, LERTICK_MAX_CPUS (a power of two) and LERTICK_MAX_DOMAINS;
  *   LERTICK_MOVE_TO_LOCAL(dsq), its kernel's scx_bpf_dsq_move_to_local();
  *   LERTICK_TASK_CGROUP(p), its kernel's scx_bpf_task_cgroup().
+ * It may define LERTICK_PREV_DEADLINE(p, tctx), the amount by which queued
+ * tasks' vtimes include a deadline offset, to compare a running task on the
+ * same terms (0 when not defined).
  */
 #ifndef __LERTICK_POLICY_H
 #define __LERTICK_POLICY_H
+
+#ifndef LERTICK_PREV_DEADLINE
+#define LERTICK_PREV_DEADLINE(p, tctx) 0
+#endif
 
 static u64 vtime_now;
 
@@ -441,8 +448,8 @@ static __always_inline bool other_head_before(u32 home, s32 cpu, u64 vtime)
  * Whether prev should keep its CPU instead of taking the next queued task.
  * A task whose slice ends otherwise always yields, so two tasks sharing a
  * CPU alternate and get equal time whatever their weights. prev stays while
- * its vtime (its current run included) is not after that of the first queued
- * task that can run here. It yields after KEEP_MAX_NS without a break, and
+ * its vtime (its current run included, plus any deadline offset the queue
+ * uses) is not after that of the first queued task that can run here. It yields after KEEP_MAX_NS without a break, and
  * when no such task is within the first HEAD_SCAN queued: a task that can
  * run only here must not wait behind prev indefinitely. The own domain is
  * scanned; when it holds nothing for this CPU, the head of each other domain
@@ -464,7 +471,7 @@ static __always_inline bool keep_prev(struct task_struct *prev,
 		ran = prev->se.sum_exec_runtime - tctx->runtime_start_ns;
 	if (ran >= KEEP_MAX_NS)
 		return false;
-	vtime += ran * 100 / weight;
+	vtime += ran * 100 / weight + LERTICK_PREV_DEADLINE(prev, tctx);
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (n++ >= HEAD_SCAN)
 			return false;

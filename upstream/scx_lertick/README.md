@@ -19,9 +19,11 @@ processes such as a compiler's predict from their first burst. There is no
 model file and no inference in user space, and `--fixed` gives every task the
 same slice instead.
 
-The prediction only sets the slice. Tasks wait in one queue per LLC, ordered by
-weighted virtual time, and are charged the CPU time they actually used, so
-`nice` values and cgroup `cpu.weight` set each task's share. An idle CPU steals
+Tasks wait in one queue per LLC, ordered by a virtual deadline: the weighted
+virtual time plus half the predicted slice, so a task about to run briefly
+goes ahead of longer ones without preempting anyone. Tasks are charged the
+CPU time they actually used, so `nice` values and cgroup `cpu.weight` set
+each task's share. An idle CPU steals
 from another LLC's queue. All queues share one virtual clock, and how far a task
 may sit ahead of it or behind it is bounded, so no task waits long for the clock
 to catch up.
