@@ -111,6 +111,9 @@ static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
 #ifndef LERTICK_LONG
 #define LERTICK_LONG(p) false
 #endif
+#ifndef LERTICK_PREV_OFF
+#define LERTICK_PREV_OFF(p, tctx) 0
+#endif
 #ifndef LERTICK_LONG_KEPT
 #define LERTICK_LONG_KEPT()
 #endif
@@ -472,6 +475,7 @@ static __always_inline bool keep_prev(struct task_struct *prev,
 	if (ran >= KEEP_MAX_NS)
 		return false;
 	vtime += ran * 100 / weight;
+	vtime += LERTICK_PREV_OFF(prev, tctx);
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (n++ >= HEAD_SCAN)
 			return false;

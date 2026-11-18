@@ -1299,3 +1299,41 @@ In the 8-run sessions the release candidate trailed EEVDF on `perf bench sched m
 Every build since the stability bounds trails EEVDF by 3 to 6% here, and the release candidate is no worse than the PR build. The first run after attach was 7 to 17% slower for `v2` in three sets (`bis8`, `t8m`, `pre8`), which would explain the larger losses in `heldout.sh`, where this benchmark runs first. Two fixes aimed at that start were tried: trusting a fresh model only after 8 bursts while an inherited one stays at 2 (`TRUST_FRESH`, `t8`, `t4`), and taking over a program model only once it has 32 or 256 updates (`PROG_MIN_UPDATES`, `p32`, `p256`, against the idea that perf's workers inherit the model of the perf parent, which shares their name). Neither changed the first run beyond the noise, and in a fifth set (`bis9`) the first-run gap was gone for `v2` and absent from builds without the waker model or with a trust threshold of 8. The cold-start effect is not reproducible, so no change is kept; the steady 3 to 6% gap belongs to the stability bounds and remains open.
 
 The VM's disk filled during a build of more schedulers for a same-session comparison (`/` at 38 of 38 GB: LLVM 11 GB and the scx build trees about 2 GB each). Only the apt package cache was cleared; the build trees are kept. `brawl-run.sh` compares EEVDF, `v2`, scx_bpfland 1.1.2 and scx_lavd, scx_p2dq and scx_flash 1.1.4 in one session, 8 runs on 4 and 8 CPUs.
+
+## What the 8-CPU perf messaging loss is not, 2026-11-18
+
+`pstat.sh`: `perf stat` around perf messaging (processes, 8 CPUs), 6 runs, after a warm-up run. Medians:
+
+| | time (s) | context switches | migrations | task clock (ms) |
+|---|---|---|---|---|
+| EEVDF | 0.528 | 134,810 | 5,060 | 3,798 |
+| Lertick (`v2`) | 0.541 | 18,120 | 8,026 | 3,723 |
+| scx_lavd 1.1.4 | 0.538 | 15,022 | 12,862 | 3,922 |
+
+Lertick switches a seventh as often as EEVDF and uses less CPU time; it migrates 60% more. The loss is not lost CPU time.
+
+Whether a waker keeps running after a wakeup could decide where the wakee goes: on the waker's CPU if the waker sleeps at once, elsewhere otherwise. `MEASURE_WAKE2` (measurement only) scores, at every wakeup, six guesses of "the waker sleeps within 50 us": the `SCX_WAKE_SYNC` hint, the waker's last value, a decaying average, the last value after waking the same wakee (a 4-entry pair table per task), a linear model over [1, hint, last, average, wakeups so far in the burst], and that model with the pair value in place of the last (`mw2-run.sh`). Share right:
+
+| Workload | short | hint | last | average | pair | linear | linear + pair |
+|---|---|---|---|---|---|---|---|
+| perf messaging processes, 8 CPUs | 45% | 46% | 47% | 50% | 47% | 49% | 49% |
+| perf messaging threads, 8 CPUs | 40% | 40% | 48% | 55% | 48% | 52% | 52% |
+| perf messaging processes, 4 CPUs | 61% | 62% | 58% | 59% | 58% | 55% | 55% |
+| hackbench 16 groups | 43% | 44% | 50% | 56% | 50% | 53% | 53% |
+| schbench -m4 -t2 | 66% | 34% | 65% | 67% | 96% | 67% | 69% |
+| perf pipe | 100% | 100% | 100% | 100% | 100% | 100% | 100% |
+
+In perf messaging and hackbench no guess beats a coin, so placing wakees by this prediction cannot fix the messaging loss. In schbench the pair table finds the pattern (a message thread sleeps after waking its second worker, not its first) and the hint is almost never set. Acting on it (`LEARNED_SYNC`: treat the wakeup as sync when the waker slept within 50 us last time, `ls1`; only when the waker's local queue is empty, `ls2`) raised the -m4 -t2 wakeup p99 from 3.1 to 4.0 ms to 4.2 to 5.3 ms in a 6-run screen (`sbab.sh`). Both rejected.
+
+## Deadline ordering, screen, 2026-11-18
+
+`DEADLINE` orders the queue by a virtual deadline, the vtime plus the given slice scaled by `DEADLINE_SCALE` percent and by the weight, as EEVDF does; the offset is removed when the task runs, so the charge and the clock still use the vtime. A task predicted to run briefly gets a short slice and an earlier deadline, with no preemption. Screen: schbench -m4 -t2 on 4 CPUs, 4 runs each (`sbab.sh`), and perf messaging processes on 8 CPUs, 40 runs each (`msg-run.sh`):
+
+| | -m4 -t2 wakeup p99 (us) | request p99 (ms) | messaging, 8 CPUs, vs EEVDF |
+|---|---|---|---|
+| v2 | 3,052 to 4,952 | 45 to 58 | +5.4% |
+| d50 | 3,036 to 3,060 | 45 to 65 | +4.8% |
+| d100 | 2,972 to 2,996 | 44 to 47 | +11.6% |
+| d200 | 2,884 to 2,956 | 45 to 70 | +10.4% |
+
+Every deadline build holds the 4-CPU wakeup p99 at about 3 ms in every run, 20% under EEVDF's 3.75 ms, where `v2` jumps between 3 and 4 to 5 ms. `d100` and `d200` cost perf messaging; `d50` does not. `x4-run.sh` checks `d50` against `v2` and EEVDF on all eleven measures, 8 runs on 4 and 8 CPUs.

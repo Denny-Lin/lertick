@@ -59,6 +59,16 @@ u64 nr_adaptive_slices, nr_training_updates;
  */
 UEI_DEFINE(uei);
 
+/* MEASURE_WAKE2: one wakeup a task issued in its current burst. */
+#define NR_WEV 8
+struct wev {
+	u64   ts;
+	u32   wakee;
+	u8    sync;
+	__s32 f[LERTICK_FEATURES], fp[LERTICK_FEATURES];
+	u64   p_last, p_ewma, p_pair, p_lin, p_linp;
+};
+
 /*
  * Per-task context: the model, the current wake-to-sleep episode and the
  * weights the task is counted with.
@@ -88,6 +98,20 @@ struct task_ctx {
 	u32  wk_next;
 	u64  e_wk, e_avg; /* WAKER_PICK: recent error of each burst guess */
 	bool inherited; /* the model was taken over from the program table */
+	u64  dl_off; /* DEADLINE: offset added to dsq_vtime while queued */
+	u64  wk_last_ts; /* MEASURE_WAKE: when this task last woke another */
+	u64  ral_last, ral_ewma; /* run after the last wake, last and average */
+	u32  wk_count; /* wakes issued in the current burst */
+	bool wk_last_sync, ral_valid;
+	/* MEASURE_WAKE2: run-after-wake predictors */
+	struct wev	     ev[NR_WEV];
+	u32		     nev;
+	struct lertick_model ml, mlp;
+	u64		     rem_last, rem_ewma;
+	u32		     pp_pid[4];
+	u64		     pp_val[4];
+	u32		     pp_next;
+	bool		     rem_valid;
 };
 
 struct {
@@ -194,6 +218,21 @@ static __always_inline bool task_is_long(struct task_struct *p)
 }
 #define LERTICK_LONG(p) (LERTICK_LONG_KEEP && task_is_long(p))
 #define LERTICK_LONG_KEPT() __sync_fetch_and_add(&nr_long_keeps, 1)
+#ifndef DEADLINE
+#define DEADLINE 0
+#endif
+#ifndef DEADLINE_SCALE
+#define DEADLINE_SCALE 100
+#endif
+/*
+ * With DEADLINE, keep_prev() compares the running task's deadline: its vtime
+ * plus the offset of the slice it would get next.
+ */
+#define LERTICK_PREV_OFF(p, tctx)                                          \
+	(DEADLINE && (tctx) ?                                              \
+		 slice_fixed * DEADLINE_SCALE /                            \
+			 ((tctx)->eff_weight ? (tctx)->eff_weight : 100) : \
+		 0)
 #define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq, 0)
 #define LERTICK_TASK_CGROUP(p) scx_bpf_task_cgroup(p)
 #include "policy.h"
@@ -328,6 +367,15 @@ static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 #ifndef LERTICK_SLICE_FINISH
 #define LERTICK_SLICE_FINISH 0
 #endif
+/*
+ * Experimental (DEADLINE): order the queue by a virtual deadline, the vtime
+ * plus the slice the task is given scaled by its weight, as EEVDF does. A
+ * task predicted to run briefly gets a short slice and so an earlier
+ * deadline. The offset is removed when the task starts running, so the
+ * charge and the clock still use the vtime alone. DEADLINE_SCALE (percent)
+ * scales the offset.
+ */
+
 /* A burst predicted past slice_max gets slice_fixed, not slice_max. */
 #ifndef LONG_TO_FIXED
 #define LONG_TO_FIXED 0
@@ -467,6 +515,218 @@ static void prog_learn(struct task_struct *p, struct task_ctx *tctx,
 				   burst;
 }
 
+/*
+ * Measurement only (MEASURE_WAKE): how long a waker keeps running after its
+ * last wakeup before it sleeps, whether the SCX_WAKE_SYNC hint predicts a
+ * sleep within 50 us, and how well the last value and a decaying average do.
+ */
+#ifndef MEASURE_WAKE
+#define MEASURE_WAKE 0
+#endif
+/*
+ * Experimental (LEARNED_SYNC): treat a wakeup as sync, as SCX_WAKE_SYNC
+ * does, also when the waker slept within RAL_SHORT_NS of its last wakeup the
+ * previous time, so the wakee can take the waker's CPU when it sleeps.
+ */
+#ifndef LEARNED_SYNC
+#define LEARNED_SYNC 0
+#endif
+#define RAL_SHORT_NS (50ULL * NSEC_PER_USEC)
+u64 w_bursts, w_wakes, w_hist[5], w_sync_n, w_sync_ok, w_nosync_n, w_nosync_ok;
+u64 w_pred_n, w_last_ok, w_ewma_ok, w_err_last, w_err_ewma;
+
+static __always_inline void note_wake(u64 wake_flags)
+{
+	struct task_struct *cur = bpf_get_current_task_btf();
+	struct task_ctx	   *w	= task_ctx(cur);
+
+	if (!w || !w->running)
+		return;
+	w->wk_last_ts	= bpf_ktime_get_ns();
+	w->wk_last_sync = wake_flags & SCX_WAKE_SYNC;
+	w->wk_count++;
+}
+
+static __always_inline void note_sleep(struct task_ctx *t)
+{
+	u64  ral;
+	bool shrt;
+
+	if (!t->wk_count)
+		return;
+	ral  = bpf_ktime_get_ns() - t->wk_last_ts;
+	shrt = ral < RAL_SHORT_NS;
+	if (!MEASURE_WAKE)
+		goto out;
+	__sync_fetch_and_add(&w_bursts, 1);
+	__sync_fetch_and_add(&w_wakes, t->wk_count);
+	if (ral < 10 * NSEC_PER_USEC)
+		__sync_fetch_and_add(&w_hist[0], 1);
+	else if (shrt)
+		__sync_fetch_and_add(&w_hist[1], 1);
+	else if (ral < 200 * NSEC_PER_USEC)
+		__sync_fetch_and_add(&w_hist[2], 1);
+	else if (ral < NSEC_PER_MSEC)
+		__sync_fetch_and_add(&w_hist[3], 1);
+	else
+		__sync_fetch_and_add(&w_hist[4], 1);
+	if (t->wk_last_sync) {
+		__sync_fetch_and_add(&w_sync_n, 1);
+		if (shrt)
+			__sync_fetch_and_add(&w_sync_ok, 1);
+	} else {
+		__sync_fetch_and_add(&w_nosync_n, 1);
+		if (!shrt)
+			__sync_fetch_and_add(&w_nosync_ok, 1);
+	}
+	if (t->ral_valid) {
+		__sync_fetch_and_add(&w_pred_n, 1);
+		if ((t->ral_last < RAL_SHORT_NS) == shrt)
+			__sync_fetch_and_add(&w_last_ok, 1);
+		if ((t->ral_ewma < RAL_SHORT_NS) == shrt)
+			__sync_fetch_and_add(&w_ewma_ok, 1);
+		__sync_fetch_and_add(&w_err_last, t->ral_last > ral ?
+							  t->ral_last - ral :
+							  ral - t->ral_last);
+		__sync_fetch_and_add(&w_err_ewma, t->ral_ewma > ral ?
+							  t->ral_ewma - ral :
+							  ral - t->ral_ewma);
+	}
+out:
+	t->ral_ewma  = t->ral_valid ? t->ral_ewma * 3 / 4 + ral / 4 : ral;
+	t->ral_last  = ral;
+	t->ral_valid = true;
+	t->wk_count  = 0;
+}
+
+/*
+ * Measurement only (MEASURE_WAKE2): at each wakeup a task issues, predict how
+ * long the waker keeps running before it sleeps, with the SCX_WAKE_SYNC hint,
+ * the last value, a decaying average, the last value after waking the same
+ * wakee (pair table, 4 per task), a linear model over [1, sync, last,
+ * average, wakeups so far in this burst], and the same model with the pair
+ * value in place of the last. At sleep, score each against the run to that
+ * sleep, as "within RAL_SHORT_NS" or not, and train both models.
+ */
+#ifndef MEASURE_WAKE2
+#define MEASURE_WAKE2 0
+#endif
+#define RAL_REF_NS NSEC_PER_MSEC
+u64 v_n, v_short, v_hint_ok, v_last_ok, v_ewma_ok, v_pair_ok, v_lin_ok,
+	v_linp_ok, v_pair_hit, v_err_last, v_err_lin, v_err_linp, v_err_pair;
+
+static __always_inline s32 ral_q(u64 ns)
+{
+	return lertick_scale_ns_q16(ns, RAL_REF_NS);
+}
+
+static __always_inline void wake2_note(struct task_struct *p, u64 wake_flags)
+{
+	struct task_ctx *w = task_ctx(bpf_get_current_task_btf());
+	struct wev	*e;
+	u32		 n, i;
+	int		 slot = -1;
+	__s32		 pred;
+
+	if (!w || !w->running)
+		return;
+	n = w->nev;
+	if (n >= NR_WEV)
+		return;
+	e	  = &w->ev[n & (NR_WEV - 1)];
+	e->ts	  = bpf_ktime_get_ns();
+	e->wakee  = p->pid;
+	e->sync	  = !!(wake_flags & SCX_WAKE_SYNC);
+	e->f[0]	  = LERTICK_Q;
+	e->f[1]	  = e->sync ? LERTICK_Q : 0;
+	e->f[2]	  = ral_q(w->rem_last);
+	e->f[3]	  = ral_q(w->rem_ewma);
+	e->f[4]	  = n * LERTICK_Q / NR_WEV;
+	bpf_for(i, 0, 4)
+	{
+		if (w->pp_pid[i & 3] == p->pid)
+			slot = i & 3;
+	}
+	e->p_pair = slot >= 0 ? w->pp_val[slot & 3] : w->rem_last;
+	if (slot >= 0)
+		__sync_fetch_and_add(&v_pair_hit, 1);
+	bpf_for(i, 0, LERTICK_FEATURES)
+	{
+		if (i >= LERTICK_FEATURES)
+			break;
+		e->fp[i] = e->f[i];
+	}
+	e->fp[2]  = ral_q(e->p_pair);
+	e->p_last = w->rem_last;
+	e->p_ewma = w->rem_ewma;
+	pred	  = lertick_model_predict_q16(&w->ml, e->f);
+	e->p_lin  = (u64)pred * RAL_REF_NS / LERTICK_Q;
+	pred	  = lertick_model_predict_q16(&w->mlp, e->fp);
+	e->p_linp = (u64)pred * RAL_REF_NS / LERTICK_Q;
+	w->nev	  = n + 1;
+}
+
+#define ABSD(a, b) ((a) > (b) ? (a) - (b) : (b) - (a))
+#define SHORT(x) ((x) < RAL_SHORT_NS)
+
+static __always_inline void wake2_sleep(struct task_ctx *t)
+{
+	u64 now = bpf_ktime_get_ns();
+	u32 i, k;
+
+	bpf_for(i, 0, NR_WEV)
+	{
+		struct wev *e;
+		u64	    rem;
+		bool	    shrt;
+		int	    slot = -1;
+
+		if (i >= t->nev)
+			break;
+		e    = &t->ev[i & (NR_WEV - 1)];
+		rem  = now > e->ts ? now - e->ts : 0;
+		shrt = SHORT(rem);
+		__sync_fetch_and_add(&v_n, 1);
+		if (shrt)
+			__sync_fetch_and_add(&v_short, 1);
+		if (!!e->sync == shrt)
+			__sync_fetch_and_add(&v_hint_ok, 1);
+		if (t->rem_valid) {
+			if (SHORT(e->p_last) == shrt)
+				__sync_fetch_and_add(&v_last_ok, 1);
+			if (SHORT(e->p_ewma) == shrt)
+				__sync_fetch_and_add(&v_ewma_ok, 1);
+			if (SHORT(e->p_pair) == shrt)
+				__sync_fetch_and_add(&v_pair_ok, 1);
+			if (SHORT(e->p_lin) == shrt)
+				__sync_fetch_and_add(&v_lin_ok, 1);
+			if (SHORT(e->p_linp) == shrt)
+				__sync_fetch_and_add(&v_linp_ok, 1);
+			__sync_fetch_and_add(&v_err_last, ABSD(MIN(e->p_last, RAL_REF_NS), MIN(rem, RAL_REF_NS)));
+			__sync_fetch_and_add(&v_err_pair, ABSD(MIN(e->p_pair, RAL_REF_NS), MIN(rem, RAL_REF_NS)));
+			__sync_fetch_and_add(&v_err_lin, ABSD(e->p_lin, MIN(rem, RAL_REF_NS)));
+			__sync_fetch_and_add(&v_err_linp, ABSD(e->p_linp, MIN(rem, RAL_REF_NS)));
+		}
+		model_train_v2(&t->ml, e->f, ral_q(rem));
+		model_train_v2(&t->mlp, e->fp, ral_q(rem));
+		bpf_for(k, 0, 4)
+		{
+			if (t->pp_pid[k & 3] == e->wakee)
+				slot = k & 3;
+		}
+		if (slot < 0) {
+			slot = t->pp_next & 3;
+			t->pp_next++;
+			t->pp_pid[slot & 3] = e->wakee;
+		}
+		t->pp_val[slot & 3] = rem;
+		t->rem_ewma = t->rem_valid ? t->rem_ewma * 3 / 4 + rem / 4 : rem;
+		t->rem_last = rem;
+		t->rem_valid = true;
+	}
+	t->nev = 0;
+}
+
 s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		   u64 wake_flags)
 {
@@ -474,6 +734,19 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 	bool		 idle = false;
 	s32 cpu = scx_bpf_select_cpu_dfl(p, prev_cpu, wake_flags, &idle);
 
+	if (MEASURE_WAKE || LEARNED_SYNC)
+		note_wake(wake_flags);
+	if (MEASURE_WAKE2)
+		wake2_note(p, wake_flags);
+	if (LEARNED_SYNC && !(wake_flags & SCX_WAKE_SYNC)) {
+		struct task_ctx *w = task_ctx(bpf_get_current_task_btf());
+
+		if (w && w->running && w->ral_valid &&
+		    w->ral_last < RAL_SHORT_NS &&
+		    (LEARNED_SYNC < 2 ||
+		     !scx_bpf_dsq_nr_queued(SCX_DSQ_LOCAL)))
+			wake_flags |= SCX_WAKE_SYNC;
+	}
 	/* select_cpu() precedes runnable() on a wakeup and can insert directly. */
 	if (tctx && !tctx->episode_active) {
 		prog_sync(p, tctx);
@@ -595,6 +868,12 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	u64		 vtime = p->scx.dsq_vtime;
 	u64 slice = task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
 
+	/* A task dequeued without running still carries its offset. */
+	if (DEADLINE && tctx && tctx->dl_off) {
+		vtime -= tctx->dl_off;
+		tctx->dl_off = 0;
+	}
+
 	/*
 	 * Only a wakeup earns sleeper credit (LAG_NS); a task requeued after its
 	 * slice keeps its vtime within the wider bounds of clamp_ahead(), or
@@ -622,6 +901,14 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 		}
 	}
 
+	if (DEADLINE && tctx) {
+		u32 w = tctx->eff_weight ? tctx->eff_weight :
+			p->scx.weight	 ? p->scx.weight :
+					   1;
+
+		tctx->dl_off = slice * DEADLINE_SCALE / w;
+		vtime += tctx->dl_off;
+	}
 	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice,
 				 vtime, enq_flags);
 	__sync_fetch_and_add(&nr_shared_dispatches, 1);
@@ -700,6 +987,10 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 {
 	struct task_ctx *tctx = task_ctx(p);
 
+	if (DEADLINE && tctx && tctx->dl_off) {
+		p->scx.dsq_vtime -= tctx->dl_off;
+		tctx->dl_off = 0;
+	}
 	clock_raise(p->scx.dsq_vtime);
 
 	if (!tctx)
@@ -768,6 +1059,10 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 	/* Non-sleep quiescence keeps the episode across migration and preemption. */
 	if (!(deq_flags & SCX_DEQ_SLEEP))
 		return;
+	if (MEASURE_WAKE || LEARNED_SYNC)
+		note_sleep(tctx);
+	if (MEASURE_WAKE2)
+		wake2_sleep(tctx);
 
 	/*
 	 * A running task gets stopping(p, false) before this callback, so the
@@ -912,6 +1207,11 @@ s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 		tctx->model.weight_q16[0] = 0;
 		tctx->model.weight_q16[2] = LERTICK_Q - WAKER_INIT_Q;
 		tctx->model.weight_q16[1] = WAKER_INIT_Q;
+	}
+	if (MEASURE_WAKE2) {
+		/* Both run-after-wake models start as their feature 2. */
+		tctx->ml.weight_q16[2]	= LERTICK_Q;
+		tctx->mlp.weight_q16[2] = LERTICK_Q;
 	}
 
 	return 0;
