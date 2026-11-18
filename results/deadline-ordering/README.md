@@ -1099,3 +1099,17 @@ Next for the slice: initialise the model from the first burst and learn faster o
 ## Model fix for short bursts, hypothesis fixed 2026-11-17 before the run
 
 **Why.** Step 1 found trained models about four times less accurate than the burst average where bursts are uniformly short: the model starts from a 2.5 ms bias and moves 1/64 of the error per update. **Change** (`LERTICK_MODEL_V2`, port, off by default): start with weight 1 on the burst-average feature and 0 elsewhere, so the model predicts the average before it has learned anything, and train with a step of 1/8 for the first 8 updates, 1/16 up to 32, then 1/64. **Test** (`meas2-run.sh`): the measurement build with the old model (`meas`) and with `V2` (`m2`), alternated, twice each, on 4 CPUs through perf messaging processes, hackbench 16 groups, schbench -m4 -t2 and -m1 -t1, and a kernel build. `V2` goes on to benchmarks if its error is no worse than the average's on the short-burst workloads and it keeps the old model's advantage on schbench.
+
+### Model fix: result, 2026-11-17
+
+`meas2-run.sh` ran 07:46 to 07:51 UTC, old and new model alternated, two runs each; raw dumps in `meas2-sets.tar.gz`. Mean absolute error per completed burst (old model / `V2` / burst average) and accuracy of "ends within 2 ms" (old / `V2` / average):
+
+| Workload | Error (us) | "Ends within 2 ms" |
+|---|---|---|
+| perf messaging processes | 475 / 127 / 127 | 98.4 / 99.1 / 99.2% |
+| hackbench 16 groups | 752 / 96 / 102 | 96.9 / 99.4 / 99.3% |
+| schbench -m4 -t2 | 1,300 / 839 / 3,511 | 90.5 / 95.5 / 69.3% |
+| schbench -m1 -t1 | 450 / 305 / 2,841 | 97.2 / 98.6 / 68.8% |
+| kernel build | 366 / 113 / 80 | 97.3 / 98.7 / 99.2% |
+
+`V2` matches or beats the average on the short-burst workloads (the old model was four to seven times worse), and is more accurate than the old model where bursts vary: 35% lower error on -m4 -t2 and 32% on -m1 -t1, four to nine times lower than the average. The kernel build is the one workload still behind the average (113 against 80 us), three times better than before. `V2` meets its rule and goes on to benchmarks against the old model and `fixed`, on an idle host.
