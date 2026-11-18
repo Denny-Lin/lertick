@@ -1258,3 +1258,15 @@ Hypothesis: the 4-CPU schbench -m4 -t2 wakeup p99 loss (+7% against EEVDF; scx_l
 | perf messaging processes (s) | 0.596 | 0.647 | 0.653 | 0.638 | 0.605 |
 
 Rejected: none moves the wakeup p99. The woken tasks schbench times are its workers, which are long, so `k1` almost never fires, and a shorter slice for long bursts does not change the wait. The wait is for a CPU at all: a woken worker joins the shared queue behind other queued tasks, and a freed CPU takes the head. The schedulers that win here put the wakee on a CPU directly and preempt. Round 2 (`x2-run.sh`) tries that with the model choosing the victim: `WAKE_PREEMPT` puts a woken task whose vtime is before that of a CPU's running task predicted past `slice_max`, which has run for `KICK_RAN_US`, straight onto that CPU with `SCX_ENQ_PREEMPT` (1: any trusted wakee, 2: wakees predicted under 0.5 ms; `w1r5`: after 0.5 ms), and `SHORT_KICK=2` kicks the longest such runner in the domain.
+
+### Round 2: wakeup preemption chosen by the model, rejected
+
+`x2-run.sh`, 8 runs on 4 CPUs, raw data in `x2-sets.tar.gz`. The four candidates ran with the experimental port's default trust threshold (8 bursts) where `v2` uses 2; the differences below are far larger than that could explain. Medians:
+
+| | EEVDF | v2 | w1 | w2 | w1r5 | k2 |
+|---|---|---|---|---|---|---|
+| -m4 -t2 wakeup p99 (us) | 3,756 | 3,552 | 5,144 | 5,216 | 5,128 | 4,240 |
+| -m4 -t2 request p99 (ms) | 46.0 | 47.2 | 76.8 | 60.5 | 86.3 | 58.7 |
+| perf messaging processes (s) | 0.566 | 0.610 | 0.609 | 0.643 | 0.624 | 0.634 |
+
+Every form of preemption raised both the wakeup and the request p99 by a third or more: the preempted workers go back to the queue, and the extra switches lengthen every wait, as in the three wakeup-preemption variants tried before the model existed. All rejected. `v2` itself read 3,552 us here, 5% below EEVDF, with 4 of 8 runs near 3.05 ms and the rest near 4.0 ms. Its wakeup p99 against EEVDF moves between a 5% win and a 7% loss from session to session with that mix. The schedulers far below it on this measure preempt, and against them `v2` wins the request p99 of the same benchmark by 30 to 70%.
