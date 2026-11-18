@@ -1091,3 +1091,7 @@ None meets the rule (no measure more than 5% worse than `fixed` on both CPU coun
 - **In the kernel build 70% of stops are cuts, but the compiler processes are too short-lived to train,** so the trained tasks measured are make and shells. The program table targets exactly this.
 
 Next for the slice: initialise the model from the first burst and learn faster on short-burst tasks; extend slices only when the waiting tasks are long-running; test the program table.
+
+### Program memory: result, 2026-11-17
+
+`tab-run.sh` ran 07:27 to 07:43 UTC with no fallbacks (gate 3 of 3, nice 19 at 2,035); raw sets in `tab-sets.tar.gz`. Against `finish`, 3 repetitions, 4 CPUs then 8 CPUs: kernel compile -3 / +0, hackbench 16 groups +2 / -8, perf messaging threads -9 / +22, everything else within 4 except the 8-CPU pipe reading (bimodal). No measure moves the same way by more than 5% on both CPU counts, so the table has no measurable effect here. The run did not count table hits, so whether compiler processes found an entry is unknown; the next run of it must dump `nr_prog_hits`. Not accepted, kept as a switch.
