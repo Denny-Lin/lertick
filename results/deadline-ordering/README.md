@@ -1181,3 +1181,38 @@ A trace build (`LERTICK_TRACE`) records, per task, the last burst started by eac
 | kernel build | 1.3% | 110 us | 126 us |
 
 The schbench error is one thread alternating between a long and a short kind of burst, not two kinds of threads. The waker tells them apart: on -m1 -t1 the same-waker burst classifies 100% of bursts right. Where bursts do not alternate it is slightly worse than the model. Next: use it as the burst feature (`LERTICK_WAKER_FEAT`) and let the model weigh it.
+
+## Waker feature, rounds 1 and 2, 2026-11-18
+
+`LERTICK_WAKER_FEAT` replaces the last-burst feature with the last burst the same waker started, when the waker is one of the task's last four. All arms are `F` (V2, program table, inherit at most 2 updates, trust after 2) plus:
+
+- `I`: the waker feature, new models start from the average (`weight[2] = 1`);
+- `J`: the waker feature, new models start from it (`weight[1] = 1`, `WAKER_INIT=1`);
+- `K`: `J` with a decaying average per waker instead of its last burst (`WAKER_EWMA`);
+- `L`, `M`: `J` and `K` with half the initial weight on each feature (`WAKER_INIT=2`).
+
+`acc-run.sh w1` and `w2`, 3 runs each, raw dumps in `acc-w1-sets.tar.gz` and `acc-w2-sets.tar.gz`. Error used (us), round 2 (round 1 for `I`):
+
+| Workload | F | I | J | K | L | M |
+|---|---|---|---|---|---|---|
+| perf messaging processes | 152 | 159 | 169 | 161 | 154 | 148 |
+| hackbench 16 groups | 146 | 162 | 161 | 160 | 164 | 156 |
+| schbench -m4 -t2 | 871 | 1,328 | **291** | 425 | 841 | 868 |
+| schbench -m1 -t1 | 322 | 326 | 89 | **79** | 198 | 196 |
+| kernel build | 78 | 106 | 81 | 118 | 84 | 104 |
+
+`J` cuts the schbench error by a factor of three to four. A model that starts from the average (`I`, `L`, `M`) does not learn to move its weight onto the waker feature: the two features are correlated and the step is small. `J` costs about 10% on perf messaging and hackbench, whose short bursts are random, so one burst is a noisier guess than the average. Next (`N`, `WAKER_PICK`): each task tracks the recent error of both guesses and feeds the model the better one.
+
+## Waker feature, round 3: per-task choice (`N`), 2026-11-18
+
+`N` is `J` with `WAKER_PICK`: each task keeps a decaying average (1/8) of the absolute error of two guesses, the same waker's last burst and the burst average, and the burst feature is the waker's burst only while its error is the lower one. `acc-run.sh w3`, 3 runs each, raw dumps in `acc-w3-sets.tar.gz`. Error used (us), share of bursts classified on the right side of 2 ms in brackets:
+
+| Workload | F | J | N |
+|---|---|---|---|
+| perf messaging processes | 148 (99.1%) | 164 (98.0%) | 151 (99.0%) |
+| hackbench 16 groups | 150 (99.1%) | 168 (98.3%) | 163 (99.1%) |
+| schbench -m4 -t2 | 908 (94.8%) | 352 (98.3%) | **173 (99.5%)** |
+| schbench -m1 -t1 | 319 (98.6%) | 92 (99.9%) | **89 (100%)** |
+| kernel build | 91 (99.3%) | 79 (99.8%) | 85 (99.6%) |
+
+`N` keeps `J`'s gain where bursts alternate and goes back to the average where they do not: the schbench -m4 -t2 error is a fifth of `F`'s, and every workload is classified at least 99% right. Next: whether this shows in latency and throughput.

@@ -86,6 +86,7 @@ struct task_ctx {
 	u32  wk_pid[4]; /* LERTICK_TRACE: recent wakers ... */
 	u64  wk_burst[4]; /* ... and the last burst each of them started */
 	u32  wk_next;
+	u64  e_wk, e_avg; /* WAKER_PICK: recent error of each burst guess */
 };
 
 struct {
@@ -233,6 +234,19 @@ static void model_train_v2(struct lertick_model *model,
 #ifndef WAKER_INIT
 #define WAKER_INIT 0
 #endif
+/* Share of the initial weight on the burst feature: 0, half or all. */
+#define WAKER_INIT_Q (WAKER_INIT == 2 ? LERTICK_Q / 2 : WAKER_INIT ? LERTICK_Q : 0)
+/*
+ * Per task, use the same-waker burst only while it has been the better
+ * guess recently; otherwise the burst average.
+ */
+#ifndef WAKER_PICK
+#define WAKER_PICK 0
+#endif
+/* Keep a decaying average per waker instead of its last burst. */
+#ifndef WAKER_EWMA
+#define WAKER_EWMA 0
+#endif
 u64 nr_waker_hits;
 
 static __always_inline int waker_slot(struct task_ctx *tctx)
@@ -264,10 +278,13 @@ static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 	tctx->features[0]	 = LERTICK_Q;
 	tctx->features[1] =
 		lertick_scale_ns_q16(tctx->last_burst_ns, REFERENCE_NS);
+	if (LERTICK_WAKER_FEAT && WAKER_PICK)
+		tctx->features[1] = lertick_scale_ns_q16(tctx->ewma_burst_ns,
+							 REFERENCE_NS);
 	if (LERTICK_WAKER_FEAT) {
 		int slot = waker_slot(tctx);
 
-		if (slot >= 0) {
+		if (slot >= 0 && (!WAKER_PICK || tctx->e_wk < tctx->e_avg)) {
 			tctx->features[1] = lertick_scale_ns_q16(
 				tctx->wk_burst[slot & 3], REFERENCE_NS);
 			__sync_fetch_and_add(&nr_waker_hits, 1);
@@ -380,8 +397,8 @@ static void prog_learn(struct task_struct *p, struct task_ctx *tctx,
 		lertick_model_init(&init.model);
 		if (LERTICK_MODEL_V2) {
 			init.model.weight_q16[0] = 0;
-			init.model.weight_q16[2] = WAKER_INIT ? 0 : LERTICK_Q;
-			init.model.weight_q16[1] = WAKER_INIT ? LERTICK_Q : 0;
+			init.model.weight_q16[2] = LERTICK_Q - WAKER_INIT_Q;
+			init.model.weight_q16[1] = WAKER_INIT_Q;
 		}
 		bpf_map_update_elem(&prog_stor, &key, &init, BPF_NOEXIST);
 		v = bpf_map_lookup_elem(&prog_stor, &key);
@@ -662,12 +679,27 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 		if (LERTICK_WAKER_FEAT && !LERTICK_TRACE) {
 			int slot = waker_slot(tctx);
 
+			u64 b = MIN(burst, REFERENCE_NS);
+
+			if (WAKER_PICK) {
+				u64 g = slot >= 0 ? tctx->wk_burst[slot & 3] :
+						    MIN(tctx->last_burst_ns,
+							REFERENCE_NS);
+				u64 a = tctx->ewma_burst_ns;
+
+				tctx->e_wk = tctx->e_wk * 7 / 8 +
+					     (g > b ? g - b : b - g) / 8;
+				tctx->e_avg = tctx->e_avg * 7 / 8 +
+					      (a > b ? a - b : b - a) / 8;
+			}
 			if (slot < 0) {
 				slot = tctx->wk_next & 3;
 				tctx->wk_next++;
 				tctx->wk_pid[slot & 3] = tctx->waker;
+			} else if (WAKER_EWMA) {
+				b = tctx->wk_burst[slot & 3] * 3 / 4 + b / 4;
 			}
-			tctx->wk_burst[slot & 3] = MIN(burst, REFERENCE_NS);
+			tctx->wk_burst[slot & 3] = b;
 		}
 		if (mode == LERTICK_MODE_ONLINE) {
 			if (LERTICK_MODEL_V2)
@@ -709,8 +741,8 @@ s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 	lertick_model_init(&tctx->model);
 	if (LERTICK_MODEL_V2) {
 		tctx->model.weight_q16[0] = 0;
-		tctx->model.weight_q16[2] = WAKER_INIT ? 0 : LERTICK_Q;
-		tctx->model.weight_q16[1] = WAKER_INIT ? LERTICK_Q : 0;
+		tctx->model.weight_q16[2] = LERTICK_Q - WAKER_INIT_Q;
+		tctx->model.weight_q16[1] = WAKER_INIT_Q;
 	}
 
 	return 0;
