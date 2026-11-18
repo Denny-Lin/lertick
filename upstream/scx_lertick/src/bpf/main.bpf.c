@@ -322,7 +322,9 @@ static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 #ifndef SHORT_KICK
 #define SHORT_KICK 0
 #endif
+#ifndef SHORT_KICK_US
 #define SHORT_KICK_US 500
+#endif
 #ifndef KICK_RAN_US
 #define KICK_RAN_US 1000
 #endif
@@ -470,6 +472,100 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
  * Queue @p on its LLC's DSQ in vtime order, with its vtime held within the
  * lag bounds.
  */
+/*
+ * Experimental (SHORT_KICK): whether @cpu runs a task predicted past
+ * slice_max that has run for KICK_RAN_US; returns how long it has run, or 0.
+ */
+static __always_inline u64 long_runner(s32 cpu, struct task_struct *p)
+{
+	struct task_struct *cur = __COMPAT_scx_bpf_cpu_curr(cpu);
+	struct task_ctx	   *cc;
+	u64		    ran;
+
+	if (!cur || cur == p)
+		return 0;
+	cc = task_ctx(cur);
+	if (!cc || !cc->running || cc->model.updates < min_train_samples ||
+	    cc->prediction_ns <= slice_max ||
+	    cur->se.sum_exec_runtime < cc->runtime_start_ns)
+		return 0;
+	ran = cur->se.sum_exec_runtime - cc->runtime_start_ns;
+	return ran >= KICK_RAN_US * NSEC_PER_USEC ? ran : 0;
+}
+
+/*
+ * SHORT_KICK 1: preempt the long runner on @p's CPU. SHORT_KICK 2: preempt the
+ * long runner that has run longest among the CPUs @p may use in its domain.
+ */
+static __always_inline void short_kick(struct task_struct *p)
+{
+	s32 cpu = scx_bpf_task_cpu(p), best = -1, c;
+	u64 best_ran = 0, ran;
+	u32 home = domain_of(cpu);
+
+	if (SHORT_KICK == 1) {
+		if (long_runner(cpu, p)) {
+			scx_bpf_kick_cpu(cpu, SCX_KICK_PREEMPT);
+			__sync_fetch_and_add(&nr_short_kicks, 1);
+		}
+		return;
+	}
+	bpf_for(c, 0, LERTICK_MAX_CPUS)
+	{
+		if (c >= scx_bpf_nr_cpu_ids())
+			break;
+		if (domain_of(c) != home || !bpf_cpumask_test_cpu(c, p->cpus_ptr))
+			continue;
+		ran = long_runner(c, p);
+		if (ran > best_ran) {
+			best_ran = ran;
+			best	 = c;
+		}
+	}
+	if (best >= 0) {
+		scx_bpf_kick_cpu(best, SCX_KICK_PREEMPT);
+		__sync_fetch_and_add(&nr_short_kicks, 1);
+	}
+}
+
+/*
+ * Experimental (WAKE_PREEMPT): a woken task (1: any trusted one, 2: one
+ * predicted shorter than SHORT_KICK_US) whose vtime is before that of a CPU's
+ * running task predicted past slice_max, which has run for KICK_RAN_US, goes
+ * straight onto that CPU and preempts it. Of several such CPUs in its domain,
+ * the one whose task has run longest is taken.
+ */
+#ifndef WAKE_PREEMPT
+#define WAKE_PREEMPT 0
+#endif
+u64 nr_wake_preempts;
+
+static __always_inline s32 wake_victim(struct task_struct *p, u64 vtime)
+{
+	s32 cpu = scx_bpf_task_cpu(p), best = -1, c;
+	u64 best_ran = 0, ran;
+	u32 home = domain_of(cpu);
+
+	bpf_for(c, 0, LERTICK_MAX_CPUS)
+	{
+		struct task_struct *cur;
+
+		if (c >= scx_bpf_nr_cpu_ids())
+			break;
+		if (domain_of(c) != home || !bpf_cpumask_test_cpu(c, p->cpus_ptr))
+			continue;
+		ran = long_runner(c, p);
+		if (ran <= best_ran)
+			continue;
+		cur = __COMPAT_scx_bpf_cpu_curr(c);
+		if (!cur || !time_before(vtime, cur->scx.dsq_vtime))
+			continue;
+		best_ran = ran;
+		best	 = c;
+	}
+	return best;
+}
+
 void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 {
 	struct task_ctx *tctx  = task_ctx(p);
@@ -487,6 +583,22 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 		vtime = vtime_now - LAG_NS;
 	vtime = clamp_ahead(p, vtime);
 
+	if (WAKE_PREEMPT && (enq_flags & SCX_ENQ_WAKEUP) && tctx &&
+	    mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
+	    tctx->model.updates >= min_train_samples &&
+	    (WAKE_PREEMPT == 1 ||
+	     tctx->prediction_ns < SHORT_KICK_US * NSEC_PER_USEC)) {
+		s32 victim = wake_victim(p, vtime);
+
+		if (victim >= 0) {
+			p->scx.dsq_vtime = vtime;
+			scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL_ON | victim, slice,
+					   enq_flags | SCX_ENQ_PREEMPT);
+			__sync_fetch_and_add(&nr_wake_preempts, 1);
+			return;
+		}
+	}
+
 	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice,
 				 vtime, enq_flags);
 	__sync_fetch_and_add(&nr_shared_dispatches, 1);
@@ -494,23 +606,8 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	if (SHORT_KICK && (enq_flags & SCX_ENQ_WAKEUP) && tctx &&
 	    mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
 	    tctx->model.updates >= min_train_samples &&
-	    tctx->prediction_ns < SHORT_KICK_US * NSEC_PER_USEC) {
-		s32		    cpu = scx_bpf_task_cpu(p);
-		struct task_struct *cur = __COMPAT_scx_bpf_cpu_curr(cpu);
-		struct task_ctx	   *cc;
-
-		if (!cur || cur == p)
-			return;
-		cc = task_ctx(cur);
-		if (cc && cc->running &&
-		    cc->model.updates >= min_train_samples &&
-		    cc->prediction_ns > slice_max &&
-		    cur->se.sum_exec_runtime >=
-			    cc->runtime_start_ns + KICK_RAN_US * NSEC_PER_USEC) {
-			scx_bpf_kick_cpu(cpu, SCX_KICK_PREEMPT);
-			__sync_fetch_and_add(&nr_short_kicks, 1);
-		}
-	}
+	    tctx->prediction_ns < SHORT_KICK_US * NSEC_PER_USEC)
+		short_kick(p);
 }
 
 /*

@@ -1246,3 +1246,15 @@ A likely reason for `n`'s wakeup p99 on 4 CPUs: it predicts a schbench worker's 
 | 8 CPUs: hackbench 16 groups (s) | 1.228 | 1.173 | 1.179 | 1.188 |
 
 With eight runs `n` and `f` tie on 4 CPUs; the 6% wakeup p99 gap of the 5-run session was noise. `LONG_TO_FIXED` raises schbench -m4 -t2 throughput on 4 CPUs by 8% with either model. `fo` also lowers its wakeup p99 in 5 of 8 runs (about 3.06 against 4.0 ms; `no` in 1 of 8), but is 4 to 12% slower on perf messaging on 8 CPUs, where the waker arms are 7% faster than `f`. Only `no` keeps both gains. The kernel build varies by 10% between runs in every arm and does not separate them. `no` becomes the release candidate.
+
+## Losses after the waker model: 4-CPU schbench wakeup p99, round 1, 2026-11-18
+
+Hypothesis: the 4-CPU schbench -m4 -t2 wakeup p99 loss (+7% against EEVDF; scx_lavd, scx_p2dq and scx_flash are far lower) comes from the 2 ms slice of bursts predicted past `slice_max`, so a shorter slice for them (`LONG_SLICE_US` 1,000 as `q10`, 1,500 as `q15`) or preempting such a burst when a wakee predicted under 0.5 ms arrives on its CPU (`SHORT_KICK=1` as `k1`) lowers it. `x1-run.sh`, 8 runs on 4 CPUs (the 8-CPU half was stopped), raw data in `x1-sets.tar.gz`. Medians:
+
+| | EEVDF | v2 | q10 | q15 | k1 |
+|---|---|---|---|---|---|
+| -m4 -t2 wakeup p99 (us) | 3,748 | 4,020 | 4,024 | 4,024 | 4,028 |
+| -m4 -t2 rps | 190 | 233 | 242 | 246 | 232 |
+| perf messaging processes (s) | 0.596 | 0.647 | 0.653 | 0.638 | 0.605 |
+
+Rejected: none moves the wakeup p99. The woken tasks schbench times are its workers, which are long, so `k1` almost never fires, and a shorter slice for long bursts does not change the wait. The wait is for a CPU at all: a woken worker joins the shared queue behind other queued tasks, and a freed CPU takes the head. The schedulers that win here put the wakee on a CPU directly and preempt. Round 2 (`x2-run.sh`) tries that with the model choosing the victim: `WAKE_PREEMPT` puts a woken task whose vtime is before that of a CPU's running task predicted past `slice_max`, which has run for `KICK_RAN_US`, straight onto that CPU with `SCX_ENQ_PREEMPT` (1: any trusted wakee, 2: wakees predicted under 0.5 ms; `w1r5`: after 0.5 ms), and `SHORT_KICK=2` kicks the longest such runner in the domain.
