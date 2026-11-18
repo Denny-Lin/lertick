@@ -163,9 +163,10 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	u64 slice = task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
 
 	/*
-	 * Only a wakeup earns sleeper credit: a task requeued after its slice
-	 * keeps its vtime, or tasks with larger weights would be pulled back to
-	 * the clock and lose their share.
+	 * Only a wakeup earns sleeper credit (LAG_NS); a task requeued after its
+	 * slice keeps its vtime within the wider bounds of clamp_ahead(), or
+	 * tasks with larger weights would be pulled back to the clock and lose
+	 * their share.
 	 */
 	if ((enq_flags & SCX_ENQ_WAKEUP) &&
 	    time_before(vtime, vtime_now - LAG_NS))
@@ -415,9 +416,9 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
  */
 void BPF_STRUCT_OPS(lertick_dump, struct scx_dump_ctx *dctx)
 {
-	scx_bpf_dump("lertick clock=%llu runnable_weight=%llu queued=%llu domains=%u",
-		     vtime_now, runnable_weight, nr_queued_all(),
-		     domain_count());
+	scx_bpf_dump(
+		"lertick clock=%llu runnable_weight=%llu queued=%llu domains=%u",
+		vtime_now, runnable_weight, nr_queued_all(), domain_count());
 }
 
 void BPF_STRUCT_OPS(lertick_dump_task, struct scx_dump_ctx *dctx,
@@ -427,11 +428,11 @@ void BPF_STRUCT_OPS(lertick_dump_task, struct scx_dump_ctx *dctx,
 
 	if (!tctx)
 		return;
-	scx_bpf_dump("lertick vs_clock=%lld eff_weight=%u predicted=%llu ran=%llu ewma=%llu updates=%llu valid=%d",
-		     (s64)(p->scx.dsq_vtime - vtime_now), tctx->eff_weight,
-		     tctx->prediction_ns, tctx->episode_runtime_ns,
-		     tctx->ewma_burst_ns, tctx->model.updates,
-		     tctx->episode_valid);
+	scx_bpf_dump(
+		"lertick vs_clock=%lld eff_weight=%u predicted=%llu ran=%llu ewma=%llu updates=%llu valid=%d",
+		(s64)(p->scx.dsq_vtime - vtime_now), tctx->eff_weight,
+		tctx->prediction_ns, tctx->episode_runtime_ns,
+		tctx->ewma_burst_ns, tctx->model.updates, tctx->episode_valid);
 }
 
 void BPF_STRUCT_OPS(lertick_exit, struct scx_exit_info *ei)
@@ -453,5 +454,5 @@ SCX_OPS_DEFINE(lertick_ops, .select_cpu = (void *)lertick_select_cpu,
 	       .enable		  = (void *)lertick_enable,
 	       .disable = (void *)lertick_disable, .init = (void *)lertick_init,
 	       .exit = (void *)lertick_exit, .dump = (void *)lertick_dump,
-	       .dump_task = (void *)lertick_dump_task, .timeout_ms = STARVATION_MS,
-	       .name = "lertick");
+	       .dump_task  = (void *)lertick_dump_task,
+	       .timeout_ms = STARVATION_MS, .name = "lertick");

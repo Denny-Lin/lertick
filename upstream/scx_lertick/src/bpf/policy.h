@@ -53,20 +53,43 @@ static u64 runnable_weight;
 #define LAG_NS (2ULL * NSEC_PER_MSEC)
 /*
  * A queued task may sit at most AHEAD_NS (scaled by its own weight) ahead of
- * the clock. Charges use the cgroup-effective weight, which drops while
- * sibling cgroups have runnable tasks; a task charged in such a moment can
- * land far ahead of the clock, and the clock catches up at service over the
- * runnable weight, which with hundreds of runnable tasks takes seconds. EEVDF
- * bounds lag the same way in both directions.
+ * the clock, as EEVDF bounds lag in both directions, and never further than
+ * the clock covers in WAIT_MAX_NS. The clock advances by service over the
+ * runnable weight, about nr_cpus x 100 / runnable_weight per nanosecond, so
+ * with dozens of runnable tasks a nice-19 task (weight 1, up to 2 s ahead by
+ * the first bound) would wait over 10 s and trip the watchdog. The second
+ * bound keeps that wait near WAIT_MAX_NS; under such load a light task gets a
+ * little more than its weight's share instead of none.
+ *
+ * Every queued task also sits at most BEHIND_NS behind the clock, whatever
+ * brought it to the queue. Only wakeups were bounded before: tasks pinned to
+ * one crowded CPU each run a small fraction of it while the other CPUs move
+ * the one clock ahead, so they fell seconds behind it; one of them then held
+ * that CPU for a second and every task woken there (placed at the clock)
+ * waited past the watchdog. In a balanced system queued tasks stay within a
+ * few slices of the clock and the bound never applies.
  */
 #define AHEAD_NS (20ULL * NSEC_PER_MSEC)
+#define BEHIND_NS (20ULL * NSEC_PER_MSEC)
+#define WAIT_MAX_NS (500ULL * NSEC_PER_MSEC)
 
 static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
 {
-	u32 w	= p->scx.weight ? p->scx.weight : 1;
-	u64 cap = vtime_now + AHEAD_NS * 100 / w;
+	u32 w	   = p->scx.weight ? p->scx.weight : 1;
+	u64 rw	   = runnable_weight;
+	u64 ahead  = AHEAD_NS * 100 / w;
+	u64 by_now = WAIT_MAX_NS / NSEC_PER_MSEC * scx_bpf_nr_cpu_ids() * 100 /
+		     (rw < 100 ? 100 : rw) * NSEC_PER_MSEC;
+	u64 cap;
 
-	return time_before(cap, vtime) ? cap : vtime;
+	if (by_now < ahead)
+		ahead = by_now;
+	cap = vtime_now + ahead;
+	if (time_before(cap, vtime))
+		return cap;
+	if (time_before(vtime, vtime_now - BEHIND_NS))
+		return vtime_now - BEHIND_NS;
+	return vtime;
 }
 /*
  * When taking the next task, prefer one that last ran on this CPU among the
@@ -329,28 +352,46 @@ static void cgrp_task_runnable(struct task_struct *p, struct task_ctx *tctx,
 	bpf_cgroup_release(cgrp);
 }
 
-/* Weight to charge service against: the task's share of its cgroup's share. */
+/*
+ * Weight to charge service against: the task's share of its cgroup's share.
+ *
+ * Only the root cgroup holds both tasks and child cgroups (cgroup v2 allows
+ * no internal tasks elsewhere). Its tasks, mostly kernel threads, compete by
+ * their own weights, as in CFS; the child cgroups split the rest of the
+ * runnable weight by their hierarchical shares. Without that split a
+ * runnable root task was counted twice: a nice -20 kworker (weight 8668)
+ * made every task in a child cgroup be charged about a tenth of its run,
+ * and tasks ahead of the clock waited ten times longer, past the watchdog.
+ */
 static u32 cgrp_effective_weight(struct task_struct *p, struct task_ctx *tctx,
 				 u32 weight)
 {
-	struct cgrp_ctx *cgc;
+	struct cgrp_ctx *cgc, *root;
 	struct cgroup	*cgrp;
-	u64		 eff, tws, rw = runnable_weight;
+	u64		 eff, tws, rw = runnable_weight, root_tws = 0;
 
 	if (!tctx || !tctx->cg_counted)
 		return weight;
 	cgrp = LERTICK_TASK_CGROUP(p);
 	if (!cgrp)
 		return weight;
+	if (!cgrp->level) {
+		bpf_cgroup_release(cgrp);
+		return weight;
+	}
 	cgc = cgrp_ctx(cgrp);
 	if (!cgc) {
 		bpf_cgroup_release(cgrp);
 		return weight;
 	}
+	root = cgrp_ancestor_ctx(cgrp, 0);
+	if (root)
+		root_tws = root->task_weight_sum;
 	cgrp_refresh_hweight(cgrp, cgc);
 	tws = cgc->task_weight_sum;
 	eff = (u64)weight * cgc->hweight / HWEIGHT_ONE;
 	bpf_cgroup_release(cgrp);
+	rw = rw > root_tws ? rw - root_tws : 0;
 	if (!tws || !rw)
 		return weight;
 	eff = eff * rw / tws;
