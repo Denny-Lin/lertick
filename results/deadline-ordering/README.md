@@ -1041,3 +1041,15 @@ The 2026-11-16 sessions found online and fixed modes alike (geometric mean again
 ## Step 1 of making the slice prediction useful: measurement, plan fixed 2026-11-17 before the run
 
 Before changing how the prediction is used, measure what it can do. `LERTICK_MEASURE` (port, off by default) counts, for every completed burst of a trained task, the absolute error of the learned prediction, of the burst average and of the previous burst; how often each underestimates; how many bursts outlast the fixed slice (2 ms) and the cap (3 ms); how often each predictor classifies "ends within the fixed slice" correctly; and how many stops leave the task runnable (a slice or preemption ended the run). `meas-run.sh` runs the measurement build on 4 CPUs through perf messaging (processes, threads), hackbench (threads, 16 groups), schbench (-m4 -t2, -m1 -t1), a kernel build and a stress-ng mix, and dumps the counters per workload. The learned model is worth more work only if it beats the average and the last burst on the workloads where bursts outlast the slice.
+
+## Roadmap: one prediction at a time, agreed 2026-11-17
+
+The owner's direction: make the learned part real by adding predictions one at a time, each with its own per-task state and per-program table, until every policy decision that a prediction can improve uses one. Each prediction follows the same pattern and is accepted on its own:
+
+1. **What it predicts and which decision uses it**, written down before the run.
+2. **Per-task state plus a per-program table** (keyed by comm), so new and short-lived processes start from what their program learned.
+3. **A confidence** (the task's recent error); the decision uses the prediction only when it is confident and falls back to the plain rule otherwise.
+4. **A switch, off by default, and measurement counters**: accuracy against the plain baseline (burst average, last value, or the fixed rule), and how often the decision changes.
+5. **Acceptance**: better than the plain baseline on a workload set where the decision matters, then no regression on the held-out set, the stress battery, the gate and the scx CI test.
+
+Order: (1) burst length with confidence, asked as "ends within the slice?" for the slice decision; (2) waker-wakee pairs, to avoid ping-pong; (3) cost of preempting a task (how much longer it runs after being preempted); (4) whether preempting a task makes others wait (a lock-holder proxy); then wakeup preemption built on (1) to (4).
