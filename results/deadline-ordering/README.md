@@ -985,6 +985,8 @@ The double count is real in the formula (effective weights add up to twice the r
 ## Follow-ups (open)
 
 - **Cgroups with tasks and child cgroups beyond the root.** The root-cgroup fix covers the one case cgroup v2 allows by default. Threaded cgroups (cgroup v2 thread mode, with the cpu controller enabled) may also hold threads and child cgroups at once, and their threads are then counted twice in the same way: under-charged against the clock, so other tasks wait longer. General fix: treat a cgroup's own runnable tasks as one more sibling of its active children, so `hweight` of a child is `hweight(parent) × weight / (child_weight_sum + task_weight_sum)` and the parent's own tasks share `hweight(parent) × task_weight_sum / (child_weight_sum + task_weight_sum)`; the root becomes the general case. It changes the core weight computation and needs the gate, `cgp.sh`, a test with a threaded subtree and the 2-hour run. No threaded cgroup exists on a default Ubuntu 26.04 system; documented as a limitation in the port README until then.
+- **Large machines.** One DSQ per LLC means one DSQ for all CPUs of an Intel server LLC (60 to 128 CPUs), and every CPU updates the single clock at each stop. Options: split large LLCs into domains of 8 to 16 CPUs (a loader change), per-domain clocks with conversion on steal (as EEVDF keeps an average per runqueue), or batched clock updates. Untested; needs a large machine.
+- **No idle kick across LLCs.** `ops.enqueue()` inserts into the task's LLC DSQ without waking any CPU, and only `scx_bpf_select_cpu_dfl()` wakes an idle CPU it picks for a waking task. An idle CPU of another LLC steals only when it runs `ops.dispatch()` on its way to idle, so on a multi-LLC machine tasks can queue in one LLC while another LLC stays idle. Fix: when the target LLC has no idle CPU and another LLC does, kick one there. Untestable in the single-LLC VM; needs a multi-LLC machine or a VM with an artificial LLC split.
 - Wakeup-latency gap on 4 CPUs (6-7% behind EEVDF on schbench -m4 -t2): per-CPU queues with weight-scaled lag (`pc`, branch `percpu`) are written and untested; postponed by the owner on 2026-11-17.
 
 ## Two more stalls, two more bounds, and the scx CI test, 2026-11-17
@@ -1009,3 +1011,265 @@ The three stability bounds (root cgroup, wait-bounded lead, lag behind the clock
 `lag` against `b8`, session 1 then session 2: no measure is more than 10% worse in both sessions. The largest single readings are 4-CPU perf messaging threads +3 / -55, 8-CPU perf messaging processes +10 / -108 and 8-CPU -m4 -t2 request p99 -21 / +5, each contradicted by the other session. Kernel compile, `lag` against `b8`: 4 CPUs 31.85 against 33.07 s and 41.16 against 49.83 s; 8 CPUs 23.66 against 22.24 s and 37.15 against 38.05 s.
 
 These sessions neither show nor rule out a regression, so the README charts stay on the `b8` sessions (`r8`, `r8c`) and note that. The comparison is to be rerun on an idle host before the charts move to the release build.
+
+## Learned against fixed slices on the release build, plan fixed 2026-11-17 before the run
+
+The 2026-11-16 sessions found online and fixed modes alike (geometric mean against EEVDF 0.887 and 0.888), because most tasks sleep before a slice ends. The policy has changed a lot since (affine pick, slice cap, lag bounds), so `ab-run.sh` measures the current build both ways in one session: held-out on 4 and 8 CPUs with 5 repetitions, then `kbuild-long.sh` with 3, arms EEVDF, `online` and `fixed` (`--fixed`). If no measure differs by more than 5% between `online` and `fixed` on both CPU counts, learning has no measurable effect on this policy, and the next step is a change that gives the prediction a decision where it matters.
+
+## Learned wakeup preemption (`lp`), hypothesis fixed 2026-11-17 before the run
+
+**Why.** If the prediction only sets the slice it changes little, because most tasks sleep before a slice ends. Where a slice does matter is a woken task waiting for a running one: the remaining 4-CPU losses against EEVDF are schbench -m4 -t2 wakeup and request p99, and woken tasks never preempt. Earlier preemption without predictions (`kickA`, `kickB`, `B`) interrupted the wrong tasks and made the 8-CPU tail worse.
+
+**Change** (`LERTICK_LEARNED_PREEMPT`, port only, off by default): a woken task whose prediction is at most 0.5 ms preempts its previous CPU when the task there has run at least 1 ms and is predicted to run at least 2 ms more, or has run 2 ms with no prediction or past its prediction, and the wakee's vtime is not after the running task's. The decision uses both tasks' predictions, which fixed mode does not have.
+
+**Test** (`lp-run.sh`, after `ab-run.sh`): `gate.sh` 4 runs and the scx CI stress test twice, then held-out on 4 and 8 CPUs, 3 repetitions, arms EEVDF, `lp0` (switch off) and `lp`. `lp` goes on if 4-CPU -m4 -t2 wakeup or request p99 improves by more than 10% against `lp0` and no measure is more than 7% worse on both CPU counts.
+
+### Learned against fixed, 4 CPUs, and the slice floor, hypothesis fixed 2026-11-17 before the run
+
+`ab-run.sh` on 4 CPUs (5 repetitions, host load about 5), `online` against `fixed`: perf messaging processes +14, threads +2, hackbench threads +4, 16 groups 0, schbench -m4 -t2 within 1, RPS -6, -m1 request p99 -9, -m1 wakeup p99 -31, short kernel compile -12. The slice does change results, in both directions, and on balance learning does not help. As in the 2026-11-16 sessions, the likely cause is predictions below the fixed slice: a burst predicted short gets a short slice, and when it runs longer it is cut into pieces that each wait again.
+
+**Change** (`floor`, no code change): `--slice-min-us 2000`, so a learned slice is never shorter than the fixed one and can only extend it, up to 3 ms. **Test** (`floor-run.sh`, after `ab-run.sh`): `gate.sh` 3 runs, then held-out on 4 and 8 CPUs, 5 repetitions, arms EEVDF, `fixed`, `online` and `floor`. `floor` becomes the default slice floor if, against `online`, it removes the -m1 wakeup and kernel compile losses (no measure more than 5% worse than `fixed`) on both CPU counts. The learned wakeup preemption (`lp`) is postponed.
+
+### Slice that lets a burst finish (`finish`), added to the floor run before it started, 2026-11-17
+
+**Why.** The prediction used as the slice cuts a burst predicted short into pieces when it runs longer, and gives long-running tasks the 3 ms cap where the fixed slice would rotate them sooner. Asked instead whether a burst will end soon, the prediction can save a preemption and a requeue without lengthening the wait behind long tasks.
+
+**Change** (`LERTICK_SLICE_FINISH`, port, off by default): a burst predicted to end after the fixed slice but within the cap gets the rest of its prediction plus an eighth; every other task gets the fixed slice, so no slice is shorter than the fixed one and long-running tasks are not given more. `floor-run.sh` now builds it (`fin`), gates it with `floor`, and runs it as a fifth arm (`finish`) under the same criteria.
+
+### Program memory (`tab`), hypothesis fixed 2026-11-17 before the run
+
+**Why.** A task uses predictions only after 8 completed bursts, so short-lived processes (a compiler's, a shell's) never use them, and every new process of a long-running program learns from scratch. **Change** (`LERTICK_PROG_TABLE`, port, off by default): an LRU hash keyed by comm (4,096 entries) keeps the model weights, update count and burst average a program's tasks learned; a task with no updates starts from its program's entry when it has one, and a trained task saves its model there every 8 updates. **Test** (`tab-run.sh`, after the floor run): build with `finish` on, `gate.sh` 3 runs, held-out on 4 and 8 CPUs, 3 repetitions, against `finish` and EEVDF. `tab` goes on if the short kernel compile or perf messaging improves by more than 5% against `finish` with no measure more than 5% worse on both CPU counts.
+
+## Step 1 of making the slice prediction useful: measurement, plan fixed 2026-11-17 before the run
+
+Before changing how the prediction is used, measure what it can do. `LERTICK_MEASURE` (port, off by default) counts, for every completed burst of a trained task, the absolute error of the learned prediction, of the burst average and of the previous burst; how often each underestimates; how many bursts outlast the fixed slice (2 ms) and the cap (3 ms); how often each predictor classifies "ends within the fixed slice" correctly; and how many stops leave the task runnable (a slice or preemption ended the run). `meas-run.sh` runs the measurement build on 4 CPUs through perf messaging (processes, threads), hackbench (threads, 16 groups), schbench (-m4 -t2, -m1 -t1), a kernel build and a stress-ng mix, and dumps the counters per workload. The learned model is worth more work only if it beats the average and the last burst on the workloads where bursts outlast the slice.
+
+## Roadmap: one prediction at a time, agreed 2026-11-17
+
+The owner's direction: make the learned part real by adding predictions one at a time, each with its own per-task state and per-program table, until every policy decision that a prediction can improve uses one. Each prediction follows the same pattern and is accepted on its own:
+
+1. **What it predicts and which decision uses it**, written down before the run.
+2. **Per-task state plus a per-program table** (keyed by comm), so new and short-lived processes start from what their program learned.
+3. **A confidence** (the task's recent error); the decision uses the prediction only when it is confident and falls back to the plain rule otherwise.
+4. **A switch, off by default, and measurement counters**: accuracy against the plain baseline (burst average, last value, or the fixed rule), and how often the decision changes.
+5. **Acceptance**: better than the plain baseline on a workload set where the decision matters, then no regression on the held-out set, the stress battery, the gate and the scx CI test.
+
+Order: (1) burst length with confidence, asked as "ends within the slice?" for the slice decision; (2) waker-wakee pairs, to avoid ping-pong; (3) cost of preempting a task (how much longer it runs after being preempted); (4) whether preempting a task makes others wait (a lock-holder proxy); then wakeup preemption built on (1) to (4).
+
+### Slice floor and finish: result, 2026-11-17
+
+`floor-run.sh` ran 06:44 to 07:24 UTC with no fallbacks; raw sets in `floor-sets.tar.gz` (and `ab-sets.tar.gz` for the run before). Host load about 5.5 throughout. Against `fixed`, 5 repetitions, 4 CPUs then 8 CPUs:
+
+| Measure | `online` | `floor` | `finish` |
+|---|---|---|---|
+| perf messaging processes | +5 / +1 | +10 / +9 | +2 / -10 |
+| perf messaging threads | -5 / -2 | -14 / -3 | -12 / -5 |
+| hackbench 16 groups | +9 / -16 | +13 / -3 | +14 / +2 |
+| -m1 wakeup p99 | -2 / -6 | -25 / -10 | +2 / +2 |
+| -m4 -t2 request p99 | -7 / -5 | -5 / -1 | -19 / -9 |
+| -m4 -t2 wakeup p99 | -23 / +8 | -6 / +19 | -26 / +0 |
+| short kernel compile | +15 / -7 | +9 / +0 | +16 / -0 |
+
+None meets the rule (no measure more than 5% worse than `fixed` on both CPU counts). `finish` gains on 4-CPU throughput (16 groups, compile) and loses -m4 -t2 latency on both counts: letting a burst finish delays the tasks waiting behind it, and the workers of -m4 -t2 are exactly such tasks. The same comparison of `online` and `fixed` moved by up to 30 points between this run and `ab-run.sh` (4-CPU -m1 wakeup -31 then -2), so differences under about 15% are not separable from noise on this host tonight. Next for the slice: make the extension depend on who is waiting (extend only when the waiting tasks are themselves long-running), after the step 1 measurement.
+
+### Step 1 result: where the slice matters, the model beats the average, 2026-11-17
+
+`meas-run.sh` ran 07:24 to 07:26 UTC on 4 CPUs; raw counter dumps in `meas-sets.tar.gz`. Mean absolute error per completed burst of trained tasks (learned / burst average / previous burst), share of bursts over 2 ms and 3 ms, share of stops that left the task runnable, and accuracy of "ends within 2 ms" (learned / average / previous):
+
+| Workload | Error (us) | >2 ms | >3 ms | Cut | "Ends within 2 ms" |
+|---|---|---|---|---|---|
+| perf messaging processes | 477 / 123 / 132 | 0.7% | 0.4% | 3% | 98.1 / 99.3 / 98.7% |
+| perf messaging threads | 445 / 127 / 134 | 0.6% | 0.3% | 3% | 98.7 / 99.4 / 98.9% |
+| hackbench threads | 578 / 119 / 121 | 1.4% | 0.8% | 2% | 94.6 / 98.5 / 97.9% |
+| hackbench 16 groups | 776 / 107 / 117 | 0.8% | 0.3% | 2% | 97.2 / 99.2 / 98.7% |
+| schbench -m4 -t2 | 1,307 / 3,649 / 6,380 | 32% | 32% | 63% | 90.5 / 68.0 / 36.1% |
+| schbench -m1 -t1 | 472 / 2,823 / 4,935 | 31% | 31% | 1% | 96.4 / 68.9 / 37.8% |
+| kernel build | 430 / 107 / 124 | 0.8% | 0.4% | 70% | 94.5 / 98.8 / 98.7% |
+
+- **Where bursts alternate between short and long (schbench), the model is three to six times more accurate than the average and classifies "ends within the slice" right 90 to 96% of the time against 68%.** These are the workloads where the slice matters (63% of stops cut in -m4 -t2). This is the first direct evidence that the learned predictor carries information a burst average does not.
+- **Where bursts are uniformly short, the model is about four times worse than the average.** It starts from a 2.5 ms bias and moves 1/64 of the error per update, so it overestimates for a long time. Harmless there (2 to 3% of stops cut) but a defect.
+- **In the kernel build 70% of stops are cuts, but the compiler processes are too short-lived to train,** so the trained tasks measured are make and shells. The program table targets exactly this.
+
+Next for the slice: initialise the model from the first burst and learn faster on short-burst tasks; extend slices only when the waiting tasks are long-running; test the program table.
+
+### Program memory: result, 2026-11-17
+
+`tab-run.sh` ran 07:27 to 07:43 UTC with no fallbacks (gate 3 of 3, nice 19 at 2,035); raw sets in `tab-sets.tar.gz`. Against `finish`, 3 repetitions, 4 CPUs then 8 CPUs: kernel compile -3 / +0, hackbench 16 groups +2 / -8, perf messaging threads -9 / +22, everything else within 4 except the 8-CPU pipe reading (bimodal). No measure moves the same way by more than 5% on both CPU counts, so the table has no measurable effect here. The run did not count table hits, so whether compiler processes found an entry is unknown; the next run of it must dump `nr_prog_hits`. Not accepted, kept as a switch.
+
+## Model fix for short bursts, hypothesis fixed 2026-11-17 before the run
+
+**Why.** Step 1 found trained models about four times less accurate than the burst average where bursts are uniformly short: the model starts from a 2.5 ms bias and moves 1/64 of the error per update. **Change** (`LERTICK_MODEL_V2`, port, off by default): start with weight 1 on the burst-average feature and 0 elsewhere, so the model predicts the average before it has learned anything, and train with a step of 1/8 for the first 8 updates, 1/16 up to 32, then 1/64. **Test** (`meas2-run.sh`): the measurement build with the old model (`meas`) and with `V2` (`m2`), alternated, twice each, on 4 CPUs through perf messaging processes, hackbench 16 groups, schbench -m4 -t2 and -m1 -t1, and a kernel build. `V2` goes on to benchmarks if its error is no worse than the average's on the short-burst workloads and it keeps the old model's advantage on schbench.
+
+### Model fix: result, 2026-11-17
+
+`meas2-run.sh` ran 07:46 to 07:51 UTC, old and new model alternated, two runs each; raw dumps in `meas2-sets.tar.gz`. Mean absolute error per completed burst (old model / `V2` / burst average) and accuracy of "ends within 2 ms" (old / `V2` / average):
+
+| Workload | Error (us) | "Ends within 2 ms" |
+|---|---|---|
+| perf messaging processes | 475 / 127 / 127 | 98.4 / 99.1 / 99.2% |
+| hackbench 16 groups | 752 / 96 / 102 | 96.9 / 99.4 / 99.3% |
+| schbench -m4 -t2 | 1,300 / 839 / 3,511 | 90.5 / 95.5 / 69.3% |
+| schbench -m1 -t1 | 450 / 305 / 2,841 | 97.2 / 98.6 / 68.8% |
+| kernel build | 366 / 113 / 80 | 97.3 / 98.7 / 99.2% |
+
+`V2` matches or beats the average on the short-burst workloads (the old model was four to seven times worse), and is more accurate than the old model where bursts vary: 35% lower error on -m4 -t2 and 32% on -m1 -t1, four to nine times lower than the average. The kernel build is the one workload still behind the average (113 against 80 us), three times better than before. `V2` meets its rule and goes on to benchmarks against the old model and `fixed`, on an idle host.
+
+## Accuracy designs, round 1: a shared program model, 2026-11-18
+
+The program table is redesigned: every task of a program trains one model per comm with each completed burst, and a task takes that model over when it starts running a program (first wakeup, and after exec). The first table only stored models of tasks with 8 updates, which short-lived processes never reach: it was hit 28 times in a kernel build. The measurement build now also counts coverage (share of completed bursts whose task has a trusted model) and the error of the value actually used (the prediction when trusted, else the fixed slice). `acc-run.sh r1`, 4 CPUs, 2 runs each, raw dumps in `acc-r1-sets.tar.gz`. Error used (us) and coverage:
+
+| Workload | A: V2 | B: V2 + table | C: B, trust after 2 | D: A, trust after 2 |
+|---|---|---|---|---|
+| kernel build | 488 (77%) | 167 (96%) | **77 (99%)** | 311 (88%) |
+| perf messaging processes | 214 (95%) | 221 (95%) | 159 (99%) | 149 (99%) |
+| hackbench 16 groups | 286 (90%) | 299 (89%) | 154 (98%) | 161 (97%) |
+| schbench -m4 -t2 | 918 (96%) | 1,061 (98%) | 1,010 (99%) | 873 (99%) |
+| schbench -m1 -t1 | 373 (96%) | 384 (95%) | 342 (99%) | 320 (99%) |
+
+The shared model makes the kernel build six times more accurate (table hit about 5,000 times). It costs about 15% on schbench, where message and worker threads share one comm, and a thread that inherits a model with thousands of updates learns its own behaviour at the slowest step. Round 2 (`E`): inherit the program's weights but cap the update count at 8, so the task keeps the large learning step.
+
+## Accuracy designs, round 2: capped inheritance, 2026-11-18
+
+`E` is `C` with the inherited update count capped at 8 (`PROG_INHERIT_UPDATES`), so a task that takes over the program model still learns with the large step. `acc-run.sh r2`, 4 CPUs, 2 runs each, raw dumps in `acc-r2-sets.tar.gz`. Error used (us), coverage in brackets:
+
+| Workload | C: table, trust after 2 | D: no table, trust after 2 | E: C, inherit at most 8 updates |
+|---|---|---|---|
+| kernel build | 81 (99%) | 278 (88%) | **67 (99%)** |
+| perf messaging processes | 164 (99%) | 151 (99%) | 153 (99%) |
+| hackbench 16 groups | 163 (97%) | 151 (98%) | 158 (97%) |
+| schbench -m4 -t2 | 952 (99%) | **873 (99%)** | 980 (99%) |
+| schbench -m1 -t1 | 311 (99%) | 330 (98%) | 318 (98%) |
+
+`E` is the most accurate on the kernel build and close to `D` elsewhere. On schbench -m4 -t2 the table is hit fewer than 110 times per run, so it touches few threads; the 10% gap to `D` may be partly run-to-run noise (`C` and `D` also differ by 8% on hackbench, where the table is hit 20 times). Round 3 checks this with three runs per arm and adds `F`: `E` with the inherited count capped at 2.
+
+## Accuracy designs, round 3: inheritance cap of 2, 2026-11-18
+
+`F` is `E` with the inherited update count capped at 2. `acc-run.sh r3`, 4 CPUs, 3 runs each, raw dumps in `acc-r3-sets.tar.gz`. Error used (us), coverage in brackets:
+
+| Workload | D: no table | E: inherit at most 8 | F: inherit at most 2 |
+|---|---|---|---|
+| kernel build | 307 (88%) | **133 (99%)** | 144 (99%) |
+| perf messaging processes | 152 (99%) | 155 (99%) | 151 (99%) |
+| hackbench 16 groups | 162 (97%) | 166 (97%) | 160 (97%) |
+| schbench -m4 -t2 | **869 (99%)** | 977 (99%) | 907 (99%) |
+| schbench -m1 -t1 | 338 (98%) | 322 (98%) | 326 (99%) |
+
+The schbench -m4 -t2 gap between `D` and `E` came back (12%), so it is not noise: a thread that starts from the mixed program model of message and worker threads stays off for a while. `F` keeps the large learning step longer and closes two thirds of the gap, at a 8% cost on the kernel build. The kernel build is noisier than the other workloads: the average's own error went from 49 to about 120 us between rounds 2 and 3. `F` is the best compromise so far. On perf messaging, hackbench and the kernel build the model is still only as accurate as the decaying average, not better.
+
+## Long bursts kept while only long tasks wait (`G`), 2026-11-18: rejected
+
+On schbench -m4 -t2, 31% of bursts run past 3 ms, the longest slice, so they are cut whatever the prediction. `G` (`LERTICK_LONG_KEEP`) lets a task predicted long keep its CPU while every task within the first `HEAD_SCAN` that could replace it is predicted long too and at most 3 ms of vtime ahead. A short or untrusted task in the head makes it yield as before. `lk-run.sh r1`, 4 CPUs, 4 runs each, alternated, raw data in `lk-r1-sets.tar.gz`:
+
+| schbench -m4 -t2 | F | G |
+|---|---|---|
+| wakeup p99 (us) | 3,912 | 6,032 |
+| request p99 (us) | 55,424 | 57,088 |
+| stops by slice expiry | 63.7% | 54.4% |
+
+Fewer cuts, but wakeup p99 rose by half. The long tasks skipped while another was kept keep their earlier vtime, so when the CPU is given up they are ahead of the short task that woke in the meantime, which then waits one more slice. Rejected; the switch stays off.
+
+## Where the schbench error comes from, 2026-11-18
+
+A trace build (`LERTICK_TRACE`) records, per task, the last burst started by each of its last four wakers (by pid), and counts how often a burst is on the other side of 2 ms from the task's previous one. `acc-run.sh t1`, 2 runs, raw dumps in `acc-t1-sets.tar.gz`:
+
+| Workload | alternates | model error | error of "same waker's last burst" |
+|---|---|---|---|
+| schbench -m4 -t2 | 59.5% | 882 us | 326 us |
+| schbench -m1 -t1 | 59.5% | 299 us | 71 us |
+| perf messaging processes | 1.4% | 127 us | 136 us |
+| hackbench 16 groups | 1.1% | 111 us | 119 us |
+| kernel build | 1.3% | 110 us | 126 us |
+
+The schbench error is one thread alternating between a long and a short kind of burst, not two kinds of threads. The waker tells them apart: on -m1 -t1 the same-waker burst classifies 100% of bursts right. Where bursts do not alternate it is slightly worse than the model. Next: use it as the burst feature (`LERTICK_WAKER_FEAT`) and let the model weigh it.
+
+## Waker feature, rounds 1 and 2, 2026-11-18
+
+`LERTICK_WAKER_FEAT` replaces the last-burst feature with the last burst the same waker started, when the waker is one of the task's last four. All arms are `F` (V2, program table, inherit at most 2 updates, trust after 2) plus:
+
+- `I`: the waker feature, new models start from the average (`weight[2] = 1`);
+- `J`: the waker feature, new models start from it (`weight[1] = 1`, `WAKER_INIT=1`);
+- `K`: `J` with a decaying average per waker instead of its last burst (`WAKER_EWMA`);
+- `L`, `M`: `J` and `K` with half the initial weight on each feature (`WAKER_INIT=2`).
+
+`acc-run.sh w1` and `w2`, 3 runs each, raw dumps in `acc-w1-sets.tar.gz` and `acc-w2-sets.tar.gz`. Error used (us), round 2 (round 1 for `I`):
+
+| Workload | F | I | J | K | L | M |
+|---|---|---|---|---|---|---|
+| perf messaging processes | 152 | 159 | 169 | 161 | 154 | 148 |
+| hackbench 16 groups | 146 | 162 | 161 | 160 | 164 | 156 |
+| schbench -m4 -t2 | 871 | 1,328 | **291** | 425 | 841 | 868 |
+| schbench -m1 -t1 | 322 | 326 | 89 | **79** | 198 | 196 |
+| kernel build | 78 | 106 | 81 | 118 | 84 | 104 |
+
+`J` cuts the schbench error by a factor of three to four. A model that starts from the average (`I`, `L`, `M`) does not learn to move its weight onto the waker feature: the two features are correlated and the step is small. `J` costs about 10% on perf messaging and hackbench, whose short bursts are random, so one burst is a noisier guess than the average. Next (`N`, `WAKER_PICK`): each task tracks the recent error of both guesses and feeds the model the better one.
+
+## Waker feature, round 3: per-task choice (`N`), 2026-11-18
+
+`N` is `J` with `WAKER_PICK`: each task keeps a decaying average (1/8) of the absolute error of two guesses, the same waker's last burst and the burst average, and the burst feature is the waker's burst only while its error is the lower one. `acc-run.sh w3`, 3 runs each, raw dumps in `acc-w3-sets.tar.gz`. Error used (us), share of bursts classified on the right side of 2 ms in brackets:
+
+| Workload | F | J | N |
+|---|---|---|---|
+| perf messaging processes | 148 (99.1%) | 164 (98.0%) | 151 (99.0%) |
+| hackbench 16 groups | 150 (99.1%) | 168 (98.3%) | 163 (99.1%) |
+| schbench -m4 -t2 | 908 (94.8%) | 352 (98.3%) | **173 (99.5%)** |
+| schbench -m1 -t1 | 319 (98.6%) | 92 (99.9%) | **89 (100%)** |
+| kernel build | 91 (99.3%) | 79 (99.8%) | 85 (99.6%) |
+
+`N` keeps `J`'s gain where bursts alternate and goes back to the average where they do not: the schbench -m4 -t2 error is a fifth of `F`'s, and every workload is classified at least 99% right. Next: whether this shows in latency and throughput.
+
+## Waker model on the benchmarks, 2026-11-18
+
+Hypothesis: the more accurate predictions of `N` change latency or throughput against `F` and the PR build (`pr`, origin/main). Builds without measurement counters, `--min-train-samples 2` for `f` and `n`. `wn-run.sh`: `heldout.sh`, 5 runs, shuffled arms, raw data in `wn-sets.tar.gz`. Change against EEVDF in the same session, verdict at 5%:
+
+| | 4 CPUs (win/tie/loss) | 8 CPUs |
+|---|---|---|
+| pr | 5 / 3 / 3 | 4 / 6 / 1 |
+| f | 5 / 5 / 1 | 4 / 6 / 1 |
+| n | 5 / 4 / 2 | 5 / 6 / 0 |
+
+On 4 CPUs `f` brings schbench -m4 -t2 request p99 from +12% to -1% against EEVDF; `n` reaches +0%, but its wakeup p99 is +6% where `f` is -0%. On 8 CPUs `n` has no loss. `pipe` is bimodal in every arm (about 1.2 or 2.5 to 5.8 us per op, by whether the two tasks share a CPU); `n` drew the slow mode 3 times of 5 on 8 CPUs, `pr` twice. Five runs do not separate `f` from `n`.
+
+A likely reason for `n`'s wakeup p99 on 4 CPUs: it predicts a schbench worker's long bursts as long, so they get the 3 ms maximum slice, which they overrun anyway; `f` blurred them toward 2 ms. `LONG_TO_FIXED` gives a burst predicted past `slice_max` the fixed slice instead. `wo-run.sh` compares `f`, `n` and both with that switch (`fo`, `no`), 8 runs on 4 and 8 CPUs.
+
+### Result: `no` (waker feature and `LONG_TO_FIXED`), 2026-11-18
+
+`wo-run.sh`, 8 runs, shuffled arms, raw data in `wo-sets.tar.gz`. Medians:
+
+| Test | f | n | fo | no |
+|---|---|---|---|---|
+| 4 CPUs: schbench -m4 -t2 rps | 216 | 215 | 233 | **236** |
+| 4 CPUs: schbench -m4 -t2 wakeup p99 (us) | 3,984 | 3,984 | **3,088** | 3,996 |
+| 4 CPUs: schbench -m4 -t2 request p99 (ms) | 50.2 | 47.6 | 47.5 | 50.5 |
+| 8 CPUs: perf messaging processes (s) | 0.519 | **0.480** | 0.542 | 0.482 |
+| 8 CPUs: perf messaging threads (s) | 0.364 | **0.338** | 0.378 | 0.345 |
+| 8 CPUs: schbench -m4 -t2 wakeup p99 (us) | 82 | 67 | 66 | 66 |
+| 8 CPUs: hackbench 16 groups (s) | 1.228 | 1.173 | 1.179 | 1.188 |
+
+With eight runs `n` and `f` tie on 4 CPUs; the 6% wakeup p99 gap of the 5-run session was noise. `LONG_TO_FIXED` raises schbench -m4 -t2 throughput on 4 CPUs by 8% with either model. `fo` also lowers its wakeup p99 in 5 of 8 runs (about 3.06 against 4.0 ms; `no` in 1 of 8), but is 4 to 12% slower on perf messaging on 8 CPUs, where the waker arms are 7% faster than `f`. Only `no` keeps both gains. The kernel build varies by 10% between runs in every arm and does not separate them. `no` becomes the release candidate.
+
+## Release candidate: waker model, 2026-11-18
+
+The scx port on this branch drops every experimental switch and keeps what the sessions above support: the V2 model start and step, the per-program model with an inherited update count of 2, trust after 2 bursts, the waker burst guess with the per-task choice (`N`), and the fixed slice for a burst predicted past `slice_max` (`LONG_TO_FIXED`). The switches themselves remain on branch `learn-ab`. The checks ran on the sched-ext/scx fork commit itself, rebased onto upstream b5cde39 and with the scheduler listed in `services/catalog.json` as a reviewer asked. `final-run.sh`, raw data in `final-sets.tar.gz` and logs in `final-checks.tar.gz`:
+
+- `cargo test -p scx_catalog`: all tests pass, including the check that every scheduler under `scheds/experimental` is listed.
+- veristat: 18 programs accepted; the largest, `lertick_quiescent`, takes 3,629 instructions.
+- Fairness gate: nice mix 3 of 3, nice shares as in earlier builds.
+- The CI scheduler test 3 of 3 with exit code 0; 20 attach/detach cycles; cgroup churn, SCHED_IDLE and SCHED_BATCH, a SCHED_FIFO hog, fork/exec storms and thread/timer churn without a stall.
+- Stress battery of 13 stressors without an exit. (`stress-ng --sched 8` exits 1 on its own option parsing, as with every earlier build.)
+
+Benchmarks, 8 runs, shuffled arms, against EEVDF and the PR build (`pr`, origin/main before this change). Medians:
+
+| Test | 4 CPUs: EEVDF | pr | new | 8 CPUs: EEVDF | pr | new |
+|---|---|---|---|---|---|---|
+| perf messaging processes (s) | 0.563 | 0.615 | 0.589 | 0.481 | 0.528 | 0.529 |
+| perf messaging threads (s) | 0.442 | 0.442 | 0.434 | 0.365 | 0.342 | 0.363 |
+| perf pipe (us/op) | 19.7 | 1.17 | 1.23 | 19.4 | 1.86 | 1.79 |
+| schbench -m4 -t2 wakeup p99 (us) | 3,740 | 3,808 | 4,000 | 108 | 65 | 67 |
+| schbench -m4 -t2 request p99 (ms) | 46.5 | 48.8 | 48.8 | 24.5 | 24.8 | 24.5 |
+| schbench -m4 -t2 rps | 190 | 214 | **234** | 472 | 472 | 472 |
+| schbench -m1 -t1 wakeup p99 (us) | 64 | 52 | 53 | 62 | 52 | 50 |
+| hackbench threads (s) | 0.972 | 0.671 | 0.644 | 0.854 | 0.747 | 0.736 |
+| hackbench 16 groups (s) | 1.687 | 1.534 | 1.515 | 1.306 | 1.244 | 1.210 |
+| kernel/sched build (s) | 2.34 | 2.31 | 2.32 | 2.32 | 2.35 | 2.33 |
+
+Against EEVDF, verdict at 5%: `pr` 5 / 5 / 1 and the new build 5 / 5 / 1 on both CPU counts. The new build's loss is schbench -m4 -t2 wakeup p99 on 4 CPUs (+7%; `pr` +2%), `pr`'s is perf messaging with processes on 4 CPUs (+9%; new +5%). On 8 CPUs both are 10% behind on perf messaging with processes. Against `pr`, the new build raises schbench -m4 -t2 throughput on 4 CPUs by 9% and is otherwise within run-to-run noise; the 7% perf messaging gain of the `wo` session did not repeat. The lower prediction error is not by itself a scheduling gain.
