@@ -1155,3 +1155,29 @@ The shared model makes the kernel build six times more accurate (table hit about
 | schbench -m1 -t1 | 338 (98%) | 322 (98%) | 326 (99%) |
 
 The schbench -m4 -t2 gap between `D` and `E` came back (12%), so it is not noise: a thread that starts from the mixed program model of message and worker threads stays off for a while. `F` keeps the large learning step longer and closes two thirds of the gap, at a 8% cost on the kernel build. The kernel build is noisier than the other workloads: the average's own error went from 49 to about 120 us between rounds 2 and 3. `F` is the best compromise so far. On perf messaging, hackbench and the kernel build the model is still only as accurate as the decaying average, not better.
+
+## Long bursts kept while only long tasks wait (`G`), 2026-11-18: rejected
+
+On schbench -m4 -t2, 31% of bursts run past 3 ms, the longest slice, so they are cut whatever the prediction. `G` (`LERTICK_LONG_KEEP`) lets a task predicted long keep its CPU while every task within the first `HEAD_SCAN` that could replace it is predicted long too and at most 3 ms of vtime ahead. A short or untrusted task in the head makes it yield as before. `lk-run.sh r1`, 4 CPUs, 4 runs each, alternated, raw data in `lk-r1-sets.tar.gz`:
+
+| schbench -m4 -t2 | F | G |
+|---|---|---|
+| wakeup p99 (us) | 3,912 | 6,032 |
+| request p99 (us) | 55,424 | 57,088 |
+| stops by slice expiry | 63.7% | 54.4% |
+
+Fewer cuts, but wakeup p99 rose by half. The long tasks skipped while another was kept keep their earlier vtime, so when the CPU is given up they are ahead of the short task that woke in the meantime, which then waits one more slice. Rejected; the switch stays off.
+
+## Where the schbench error comes from, 2026-11-18
+
+A trace build (`LERTICK_TRACE`) records, per task, the last burst started by each of its last four wakers (by pid), and counts how often a burst is on the other side of 2 ms from the task's previous one. `acc-run.sh t1`, 2 runs, raw dumps in `acc-t1-sets.tar.gz`:
+
+| Workload | alternates | model error | error of "same waker's last burst" |
+|---|---|---|---|
+| schbench -m4 -t2 | 59.5% | 882 us | 326 us |
+| schbench -m1 -t1 | 59.5% | 299 us | 71 us |
+| perf messaging processes | 1.4% | 127 us | 136 us |
+| hackbench 16 groups | 1.1% | 111 us | 119 us |
+| kernel build | 1.3% | 110 us | 126 us |
+
+The schbench error is one thread alternating between a long and a short kind of burst, not two kinds of threads. The waker tells them apart: on -m1 -t1 the same-waker burst classifies 100% of bursts right. Where bursts do not alternate it is slightly worse than the model. Next: use it as the burst feature (`LERTICK_WAKER_FEAT`) and let the model weigh it.

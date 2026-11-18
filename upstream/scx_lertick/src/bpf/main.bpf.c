@@ -82,6 +82,10 @@ struct task_ctx {
 	bool cg_counted; /* rq_weight is also counted in its cgroup's sums */
 	u32 eff_weight; /* weight of the last charge; dispatch() cannot look up cgroups */
 	char comm[16]; /* program the model was last synced to */
+	u32  waker; /* LERTICK_TRACE: pid that woke the current episode */
+	u32  wk_pid[4]; /* LERTICK_TRACE: recent wakers ... */
+	u64  wk_burst[4]; /* ... and the last burst each of them started */
+	u32  wk_next;
 };
 
 struct {
@@ -151,6 +155,22 @@ struct {
 
 u64 nr_prog_hits;
 
+#ifndef LERTICK_LONG_KEEP
+#define LERTICK_LONG_KEEP 0
+#endif
+u64 nr_long_keeps;
+
+/* A trusted model predicts this task's current burst to pass the fixed slice. */
+static __always_inline bool task_is_long(struct task_struct *p)
+{
+	struct task_ctx *tctx = task_ctx(p);
+
+	return tctx && mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
+	       tctx->model.updates >= min_train_samples &&
+	       tctx->prediction_ns >= slice_fixed;
+}
+#define LERTICK_LONG(p) (LERTICK_LONG_KEEP && task_is_long(p))
+#define LERTICK_LONG_KEPT() __sync_fetch_and_add(&nr_long_keeps, 1)
 #define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq, 0)
 #define LERTICK_TASK_CGROUP(p) scx_bpf_task_cgroup(p)
 #include "policy.h"
@@ -197,8 +217,40 @@ static void model_train_v2(struct lertick_model *model,
  * wakeup and ends in sleep is a training example: a task that keeps running
  * across slices is not mistaken for one that completed a burst.
  */
+#ifndef LERTICK_TRACE
+#define LERTICK_TRACE 0
+#endif
+/*
+ * Experimental: the burst feature is the last burst started by the same
+ * waker, when one of the last four wakers woke this task before. A thread
+ * that alternates between two kinds of work, each started by a different
+ * waker, then gets the right length for each.
+ */
+#ifndef LERTICK_WAKER_FEAT
+#define LERTICK_WAKER_FEAT 0
+#endif
+/* Start new models from the burst feature instead of the average. */
+#ifndef WAKER_INIT
+#define WAKER_INIT 0
+#endif
+u64 nr_waker_hits;
+
+static __always_inline int waker_slot(struct task_ctx *tctx)
+{
+	int i, slot = -1;
+
+	bpf_for(i, 0, 4) {
+		if (tctx->wk_pid[i & 3] == tctx->waker)
+			slot = i & 3;
+	}
+	return slot;
+}
+u64 t_n, t_switch, t_wk_found, t_cls_wk, t_err_wk;
+
 static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 {
+	if (LERTICK_TRACE || LERTICK_WAKER_FEAT)
+		tctx->waker = (u32)bpf_get_current_pid_tgid();
 	u64   now      = bpf_ktime_get_ns();
 	u64   sleep_ns = tctx->last_sleep_ns ? now - tctx->last_sleep_ns : 0;
 	u64   queued   = nr_queued_all();
@@ -212,6 +264,15 @@ static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 	tctx->features[0]	 = LERTICK_Q;
 	tctx->features[1] =
 		lertick_scale_ns_q16(tctx->last_burst_ns, REFERENCE_NS);
+	if (LERTICK_WAKER_FEAT) {
+		int slot = waker_slot(tctx);
+
+		if (slot >= 0) {
+			tctx->features[1] = lertick_scale_ns_q16(
+				tctx->wk_burst[slot & 3], REFERENCE_NS);
+			__sync_fetch_and_add(&nr_waker_hits, 1);
+		}
+	}
 	tctx->features[2] =
 		lertick_scale_ns_q16(tctx->ewma_burst_ns, REFERENCE_NS);
 	tctx->features[3] = lertick_scale_ns_q16(sleep_ns, REFERENCE_NS);
@@ -319,7 +380,8 @@ static void prog_learn(struct task_struct *p, struct task_ctx *tctx,
 		lertick_model_init(&init.model);
 		if (LERTICK_MODEL_V2) {
 			init.model.weight_q16[0] = 0;
-			init.model.weight_q16[2] = LERTICK_Q;
+			init.model.weight_q16[2] = WAKER_INIT ? 0 : LERTICK_Q;
+			init.model.weight_q16[1] = WAKER_INIT ? LERTICK_Q : 0;
 		}
 		bpf_map_update_elem(&prog_stor, &key, &init, BPF_NOEXIST);
 		v = bpf_map_lookup_elem(&prog_stor, &key);
@@ -568,7 +630,45 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 			if ((last <= slice_fixed) == fin)
 				__sync_fetch_and_add(&m_cls_last, 1);
 		}
+		if (LERTICK_TRACE && tctx->model.updates >= min_train_samples) {
+			u64  b	  = MIN(burst, REFERENCE_NS);
+			u64  last = MIN(tctx->last_burst_ns, REFERENCE_NS);
+			u64  wk	  = last;
+			bool fin  = b <= slice_fixed;
+			int  i, slot = -1;
 
+			bpf_for(i, 0, 4) {
+				if (tctx->wk_pid[i & 3] == tctx->waker) {
+					slot = i & 3;
+					wk   = tctx->wk_burst[i & 3];
+				}
+			}
+			__sync_fetch_and_add(&t_n, 1);
+			if ((last <= slice_fixed) != fin)
+				__sync_fetch_and_add(&t_switch, 1);
+			if (slot >= 0)
+				__sync_fetch_and_add(&t_wk_found, 1);
+			if ((wk <= slice_fixed) == fin)
+				__sync_fetch_and_add(&t_cls_wk, 1);
+			__sync_fetch_and_add(&t_err_wk, wk > b ? wk - b : b - wk);
+			if (slot < 0) {
+				slot = tctx->wk_next & 3;
+				tctx->wk_next++;
+				tctx->wk_pid[slot & 3] = tctx->waker;
+			}
+			tctx->wk_burst[slot & 3] = b;
+		}
+
+		if (LERTICK_WAKER_FEAT && !LERTICK_TRACE) {
+			int slot = waker_slot(tctx);
+
+			if (slot < 0) {
+				slot = tctx->wk_next & 3;
+				tctx->wk_next++;
+				tctx->wk_pid[slot & 3] = tctx->waker;
+			}
+			tctx->wk_burst[slot & 3] = MIN(burst, REFERENCE_NS);
+		}
 		if (mode == LERTICK_MODE_ONLINE) {
 			if (LERTICK_MODEL_V2)
 				model_train_v2(&tctx->model, tctx->features,
@@ -609,7 +709,8 @@ s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 	lertick_model_init(&tctx->model);
 	if (LERTICK_MODEL_V2) {
 		tctx->model.weight_q16[0] = 0;
-		tctx->model.weight_q16[2] = LERTICK_Q;
+		tctx->model.weight_q16[2] = WAKER_INIT ? 0 : LERTICK_Q;
+		tctx->model.weight_q16[1] = WAKER_INIT ? LERTICK_Q : 0;
 	}
 
 	return 0;

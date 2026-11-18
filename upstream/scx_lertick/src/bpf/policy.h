@@ -107,6 +107,13 @@ static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
 /* Queued tasks examined, and the longest unbroken run, when prev may keep its CPU. */
 #define HEAD_SCAN 16
 #define KEEP_MAX_NS (20ULL * NSEC_PER_MSEC)
+#define LONG_LEAD_NS (3ULL * NSEC_PER_MSEC)
+#ifndef LERTICK_LONG
+#define LERTICK_LONG(p) false
+#endif
+#ifndef LERTICK_LONG_KEPT
+#define LERTICK_LONG_KEPT()
+#endif
 
 /*
  * One vtime-ordered queue per last-level cache domain; DSQ id d serves domain
@@ -457,7 +464,7 @@ static __always_inline bool keep_prev(struct task_struct *prev,
 		     prev->scx.weight	      ? prev->scx.weight :
 						1;
 	u32 home   = domain_of(cpu);
-	int n	   = 0;
+	int n	   = 0, longs = 0;
 
 	if (tctx && tctx->running &&
 	    prev->se.sum_exec_runtime > tctx->runtime_start_ns)
@@ -468,10 +475,27 @@ static __always_inline bool keep_prev(struct task_struct *prev,
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (n++ >= HEAD_SCAN)
 			return false;
-		if (bpf_cpumask_test_cpu(cpu, q->cpus_ptr))
-			return !time_before(q->scx.dsq_vtime, vtime);
+		if (!bpf_cpumask_test_cpu(cpu, q->cpus_ptr))
+			continue;
+		if (!longs && !time_before(q->scx.dsq_vtime, vtime))
+			return true;
+		/*
+		 * Experimental: a long burst may also stay while every
+		 * task that would replace it is long too and at most
+		 * LONG_LEAD_NS ahead of it. A short or unknown task in
+		 * the scanned head makes it yield as before, so short
+		 * tasks never wait longer than without this.
+		 */
+		if (!LERTICK_LONG(prev) || !LERTICK_LONG(q) ||
+		    time_before(q->scx.dsq_vtime + LONG_LEAD_NS, vtime))
+			return false;
+		longs++;
 	}
-	return !other_head_before(home, cpu, vtime);
+	if (other_head_before(home, cpu, vtime))
+		return false;
+	if (longs)
+		LERTICK_LONG_KEPT();
+	return true;
 }
 
 /* Take a task from the next domain that has one for this CPU. */
