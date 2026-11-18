@@ -1127,3 +1127,17 @@ The program table is redesigned: every task of a program trains one model per co
 | schbench -m1 -t1 | 373 (96%) | 384 (95%) | 342 (99%) | 320 (99%) |
 
 The shared model makes the kernel build six times more accurate (table hit about 5,000 times). It costs about 15% on schbench, where message and worker threads share one comm, and a thread that inherits a model with thousands of updates learns its own behaviour at the slowest step. Round 2 (`E`): inherit the program's weights but cap the update count at 8, so the task keeps the large learning step.
+
+## Accuracy designs, round 2: capped inheritance, 2026-11-18
+
+`E` is `C` with the inherited update count capped at 8 (`PROG_INHERIT_UPDATES`), so a task that takes over the program model still learns with the large step. `acc-run.sh r2`, 4 CPUs, 2 runs each, raw dumps in `acc-r2-sets.tar.gz`. Error used (us), coverage in brackets:
+
+| Workload | C: table, trust after 2 | D: no table, trust after 2 | E: C, inherit at most 8 updates |
+|---|---|---|---|
+| kernel build | 81 (99%) | 278 (88%) | **67 (99%)** |
+| perf messaging processes | 164 (99%) | 151 (99%) | 153 (99%) |
+| hackbench 16 groups | 163 (97%) | 151 (98%) | 158 (97%) |
+| schbench -m4 -t2 | 952 (99%) | **873 (99%)** | 980 (99%) |
+| schbench -m1 -t1 | 311 (99%) | 330 (98%) | 318 (98%) |
+
+`E` is the most accurate on the kernel build and close to `D` elsewhere. On schbench -m4 -t2 the table is hit fewer than 110 times per run, so it touches few threads; the 10% gap to `D` may be partly run-to-run noise (`C` and `D` also differ by 8% on hackbench, where the table is hit 20 times). Round 3 checks this with three runs per arm and adds `F`: `E` with the inherited count capped at 2.
