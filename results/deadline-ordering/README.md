@@ -1280,3 +1280,25 @@ Against EEVDF, verdict at 5%: `pr` 5 / 5 / 1 and the new build 5 / 5 / 1 on both
 ### README numbers for the waker model, 2026-11-18
 
 `pool_ratio.py` with `LERTICK_SESSION=final LERTICK_ARM=v2`, after `kbuild-long.sh` on 4 and 8 CPUs (EEVDF and the release candidate, 5 runs each; raw data in `final-kbuild-sets.tar.gz`). The kernel compile here rebuilds all of `kernel/`, so the 4-CPU count against EEVDF reads 6 / 4 / 1 where the partial build of the release checks above reads 5 / 5 / 1 (full build 5.2% faster, partial build level). Better/same/worse, 4 CPUs then 8 CPUs: EEVDF 6/4/1 and 5/5/1, scx_bpfland 8/2/1 and 6/5/0, scx_lavd 7/3/1 and 4/5/2, scx_p2dq 8/1/2 and 6/4/1, scx_flash 7/3/1 and 7/4/0. The other schedulers' sessions are the earlier ones, so those rows compare this build's ratio to EEVDF with ratios taken on other days.
+
+## Same-session comparison, 2026-11-18
+
+`brawl-run.sh` runs EEVDF, the release candidate (`lertick`, the `v2` build), scx_bpfland 1.1.2 and scx_lavd, scx_p2dq and scx_flash 1.1.4 in one `heldout.sh` session, arms shuffled per repetition, 8 runs; raw data in `brawl-cpu4-sets.tar.gz`. 4 CPUs, medians:
+
+| Test | EEVDF | Lertick | bpfland | lavd | p2dq | flash |
+|---|---|---|---|---|---|---|
+| perf messaging processes (s) | 0.579 | 0.627 | 0.722 | 0.683 | 0.711 | 0.711 |
+| perf messaging threads (s) | 0.430 | 0.418 | 0.593 | 0.501 | 0.487 | 0.618 |
+| perf pipe (us/op) | 19.75 | 1.24 | 3.99 | 19.79 | 10.88 | 20.16 |
+| schbench -m4 -t2 wakeup p99 (us) | 3,748 | 3,532 | 5,712 | 18 | 2,924 | 1,646 |
+| schbench -m4 -t2 request p99 (ms) | 47.3 | 47.5 | 329.2 | 170.5 | 156.7 | 168.7 |
+| schbench -m4 -t2 rps | 193 | 234 | 177 | 206 | 177 | 181 |
+| schbench -m1 -t1 wakeup p99 (us) | 66 | 53 | 60 | 81 | 39 | 63 |
+| schbench -m1 -t1 request p99 (us) | 9,312 | 9,424 | 9,248 | 9,248 | 9,120 | 9,360 |
+| hackbench threads (s) | 0.927 | 0.708 | 0.885 | 0.891 | 0.897 | 1.102 |
+| hackbench 16 groups (s) | 1.640 | 1.548 | 1.965 | 1.972 | 2.033 | 2.368 |
+| kernel/sched build (s) | 2.34 | 2.35 | 2.27 | 2.30 | 2.37 | 2.28 |
+
+Directly against each scheduler, better/same/worse at 5%: scx_bpfland 9/2/0, scx_lavd 8/2/1, scx_p2dq 7/2/2, scx_flash 8/2/1. Compared through EEVDF with their earlier sessions, the counts were 8/2/1, 7/3/1, 8/1/2 and 7/3/1. The schedulers that preempt on wakeup (lavd, p2dq, flash) have the lowest schbench -m4 -t2 wakeup p99 and a request p99 3.3 to 3.6 times Lertick's.
+
+Against EEVDF the README uses the median over the five sessions with both EEVDF and the release candidate on 4 CPUs (`final`, `x1`, `x2`, `x3`, `brawl`; `brawl_ratio.py`): 5/5/1. The -m4 -t2 wakeup p99 is level there (4.9% better; +7, +7, -5, -5 and -6% per session), and perf messaging with processes is the loss (7.8%; +5 to +9% per session).
