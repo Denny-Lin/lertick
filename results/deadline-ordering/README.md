@@ -1230,3 +1230,19 @@ Hypothesis: the more accurate predictions of `N` change latency or throughput ag
 On 4 CPUs `f` brings schbench -m4 -t2 request p99 from +12% to -1% against EEVDF; `n` reaches +0%, but its wakeup p99 is +6% where `f` is -0%. On 8 CPUs `n` has no loss. `pipe` is bimodal in every arm (about 1.2 or 2.5 to 5.8 us per op, by whether the two tasks share a CPU); `n` drew the slow mode 3 times of 5 on 8 CPUs, `pr` twice. Five runs do not separate `f` from `n`.
 
 A likely reason for `n`'s wakeup p99 on 4 CPUs: it predicts a schbench worker's long bursts as long, so they get the 3 ms maximum slice, which they overrun anyway; `f` blurred them toward 2 ms. `LONG_TO_FIXED` gives a burst predicted past `slice_max` the fixed slice instead. `wo-run.sh` compares `f`, `n` and both with that switch (`fo`, `no`), 8 runs on 4 and 8 CPUs.
+
+### Result: `no` (waker feature and `LONG_TO_FIXED`), 2026-11-18
+
+`wo-run.sh`, 8 runs, shuffled arms, raw data in `wo-sets.tar.gz`. Medians:
+
+| Test | f | n | fo | no |
+|---|---|---|---|---|
+| 4 CPUs: schbench -m4 -t2 rps | 216 | 215 | 233 | **236** |
+| 4 CPUs: schbench -m4 -t2 wakeup p99 (us) | 3,984 | 3,984 | **3,088** | 3,996 |
+| 4 CPUs: schbench -m4 -t2 request p99 (ms) | 50.2 | 47.6 | 47.5 | 50.5 |
+| 8 CPUs: perf messaging processes (s) | 0.519 | **0.480** | 0.542 | 0.482 |
+| 8 CPUs: perf messaging threads (s) | 0.364 | **0.338** | 0.378 | 0.345 |
+| 8 CPUs: schbench -m4 -t2 wakeup p99 (us) | 82 | 67 | 66 | 66 |
+| 8 CPUs: hackbench 16 groups (s) | 1.228 | 1.173 | 1.179 | 1.188 |
+
+With eight runs `n` and `f` tie on 4 CPUs; the 6% wakeup p99 gap of the 5-run session was noise. `LONG_TO_FIXED` raises schbench -m4 -t2 throughput on 4 CPUs by 8% with either model. `fo` also lowers its wakeup p99 in 5 of 8 runs (about 3.06 against 4.0 ms; `no` in 1 of 8), but is 4 to 12% slower on perf messaging on 8 CPUs, where the waker arms are 7% faster than `f`. Only `no` keeps both gains. The kernel build varies by 10% between runs in every arm and does not separate them. `no` becomes the release candidate.
