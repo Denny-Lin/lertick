@@ -4,8 +4,9 @@
  *
  * scx_lertick: weighted virtual-time scheduling with learned time slices.
  *
- * Tasks wait in one DSQ per LLC, ordered by weighted virtual time; an idle
- * CPU steals from another LLC's DSQ. The virtual clock advances with the CPU
+ * Tasks wait in one DSQ per LLC, ordered by a virtual deadline: the weighted
+ * virtual time plus half the slice the task is given. An idle CPU steals
+ * from another LLC's DSQ. The virtual clock advances with the CPU
  * time actually delivered over the total runnable weight, so tasks that keep
  * waking cannot hold back tasks that have already run. A woken task is placed
  * at most LAG_NS behind the clock.
@@ -41,6 +42,15 @@ char _license[] SEC("license") = "GPL";
 
 /* Wakers remembered per task. */
 #define NR_WAKERS 4
+
+/*
+ * Share of a task's slice, in percent, added to its vtime to order the DSQ.
+ * A task predicted to run briefly gets a short slice and so an earlier
+ * deadline, and runs before longer ones that are about as far behind in
+ * vtime, without preempting anyone. A larger share delayed perf messaging
+ * with processes; a smaller one leaves short wakees behind long ones.
+ */
+#define DEADLINE_PCT 50
 
 /*
  * Update count a task keeps when it takes over its program's model, so that
@@ -100,6 +110,7 @@ struct task_ctx {
 	u64  waker_burst[NR_WAKERS]; /* ... and the last burst each one started */
 	u32  waker_next;
 	u64  waker_err, avg_err; /* recent error of the two burst guesses */
+	u64  dl_off; /* deadline offset in dsq_vtime while queued */
 };
 
 struct {
@@ -141,6 +152,10 @@ struct {
 	__type(value, struct prog_val);
 } prog_stor SEC(".maps");
 
+/* keep_prev() compares the running task with the deadline of a fixed slice. */
+#define LERTICK_PREV_DEADLINE(p, tctx)                     \
+	(slice_fixed * DEADLINE_PCT /                      \
+	 ((tctx) && (tctx)->eff_weight ? (tctx)->eff_weight : 100))
 #define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq, 0)
 #define LERTICK_TASK_CGROUP(p) scx_bpf_task_cgroup(p)
 #include "policy.h"
@@ -385,14 +400,21 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 }
 
 /*
- * Queue @p on its LLC's DSQ in vtime order, with its vtime held within the
- * lag bounds.
+ * Queue @p on its LLC's DSQ in deadline order, with its vtime held within the
+ * lag bounds. The deadline offset is kept in dsq_vtime only while @p is
+ * queued: running() takes it out, so the charge and the clock use the vtime.
  */
 void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 {
 	struct task_ctx *tctx  = task_ctx(p);
 	u64		 vtime = p->scx.dsq_vtime;
 	u64 slice = task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
+
+	/* A task dequeued without running still carries its offset. */
+	if (tctx && tctx->dl_off) {
+		vtime -= tctx->dl_off;
+		tctx->dl_off = 0;
+	}
 
 	/*
 	 * Only a wakeup earns sleeper credit (LAG_NS); a task requeued after its
@@ -405,6 +427,14 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 		vtime = vtime_now - LAG_NS;
 	vtime = clamp_ahead(p, vtime);
 
+	if (tctx) {
+		u32 w = tctx->eff_weight ? tctx->eff_weight :
+			p->scx.weight	 ? p->scx.weight :
+					   1;
+
+		tctx->dl_off = slice * DEADLINE_PCT / w;
+		vtime += tctx->dl_off;
+	}
 	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice,
 				 vtime, enq_flags);
 	__sync_fetch_and_add(&nr_shared_dispatches, 1);
@@ -470,13 +500,17 @@ void BPF_STRUCT_OPS(lertick_runnable, struct task_struct *p, u64 enq_flags)
 }
 
 /*
- * @p starts running: raise the clock to its vtime if the clock is behind,
- * and note where this run starts.
+ * @p starts running: take its deadline offset out of its vtime, raise the
+ * clock to that vtime if the clock is behind, and note where this run starts.
  */
 void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 {
 	struct task_ctx *tctx = task_ctx(p);
 
+	if (tctx && tctx->dl_off) {
+		p->scx.dsq_vtime -= tctx->dl_off;
+		tctx->dl_off = 0;
+	}
 	clock_raise(p->scx.dsq_vtime);
 
 	if (!tctx)

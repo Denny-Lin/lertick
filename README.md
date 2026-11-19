@@ -8,30 +8,30 @@
 
 ## Performance
 
-**Against Linux's default scheduler (EEVDF), Lertick is clearly faster on 4 to 5 of 11 standard kernel scheduler benchmarks, level on 5 to 6 and slower on 1.** The wins include `perf bench pipe`, hackbench and schbench wakeup latency and throughput. The loss is `perf bench messaging` with processes (8% on 4 CPUs, 10% on 8 CPUs). Run side by side with the community sched_ext schedulers, it wins far more than it loses: scx_bpfland 9 to 0 and 8 to 0, scx_lavd 8 to 1 and 4 to 1, scx_p2dq 7 to 2 and 5 to 0, scx_flash 8 to 1 and 8 to 0 (4 and 8 CPUs).
+**Against Linux's default scheduler (EEVDF), Lertick is clearly faster on 8 of 11 standard kernel scheduler benchmarks on 4 CPUs and 4 on 8 CPUs, level on 2 and 6, and slower on 1.** The wins include `perf bench pipe`, hackbench and schbench wakeup latency, which it holds about 20% below EEVDF's. The loss is `perf bench messaging` with processes (6 to 8%). Run side by side with the community sched_ext schedulers, the previous build won far more than it lost: scx_bpfland 9 to 0 and 8 to 0, scx_lavd 8 to 1 and 4 to 1, scx_p2dq 7 to 2 and 5 to 0, scx_flash 8 to 1 and 8 to 0 (4 and 8 CPUs).
 
 <p align="center">
-  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 5, the same on 5 and worse on 1; against scx_bpfland, better on 9, the same on 2 and worse on 0; against scx_lavd, better on 8, the same on 2 and worse on 1; against scx_p2dq, better on 7, the same on 2 and worse on 2; against scx_flash, better on 8, the same on 2 and worse on 1." width="1120" />
+  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 8, the same on 2 and worse on 1; against scx_bpfland (previous Lertick build), better on 9, the same on 2 and worse on 0; against scx_lavd, better on 8, the same on 2 and worse on 1; against scx_p2dq, better on 7, the same on 2 and worse on 2; against scx_flash, better on 8, the same on 2 and worse on 1." width="1120" />
 </p>
 
 <p align="center">
-  <img src="docs/assets/lertick-scoreboard-cpu8.svg" alt="8 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 4, the same on 6 and worse on 1; against scx_bpfland, better on 8, the same on 3 and worse on 0; against scx_lavd, better on 4, the same on 6 and worse on 1; against scx_p2dq, better on 5, the same on 6 and worse on 0; against scx_flash, better on 8, the same on 3 and worse on 0." width="1120" />
+  <img src="docs/assets/lertick-scoreboard-cpu8.svg" alt="8 CPUs, 11 benchmarks: against Linux EEVDF, Lertick is better on 4, the same on 6 and worse on 1; against scx_bpfland (previous Lertick build), better on 8, the same on 3 and worse on 0; against scx_lavd, better on 4, the same on 6 and worse on 1; against scx_p2dq, better on 5, the same on 6 and worse on 0; against scx_flash, better on 8, the same on 3 and worse on 0." width="1120" />
 </p>
 
 <details>
 <summary><strong>Each benchmark against Linux EEVDF</strong></summary>
 
 <p align="center">
-  <img src="docs/assets/lertick-vs-eevdf-cpu4.svg" alt="4 CPUs, median of 5 sessions: Lertick is better than Linux EEVDF on perf pipe, hackbench threads and 16 groups, schbench 1-thread wakeup latency and schbench 4 message threads throughput; the same on perf messaging threads, schbench 1-thread request latency, schbench 4 message threads request and wakeup latency and kernel compile; worse on perf messaging processes." width="1120" />
+  <img src="docs/assets/lertick-vs-eevdf-cpu4.svg" alt="4 CPUs, median of 2 sessions: Lertick is better than Linux EEVDF on perf messaging threads, perf pipe, hackbench threads and 16 groups, schbench 1-thread wakeup latency and schbench 4 message threads request latency, wakeup latency and throughput; the same on schbench 1-thread request latency and kernel compile; worse on perf messaging processes." width="1120" />
 </p>
 
 <p align="center">
-  <img src="docs/assets/lertick-vs-eevdf-cpu8.svg" alt="8 CPUs, median of 3 sessions: Lertick is better than Linux EEVDF on perf pipe, hackbench threads, and schbench wakeup latency with 1 and with 4 message threads; the same on perf messaging threads, hackbench 16 groups, schbench request latency, schbench throughput and kernel compile; worse on perf messaging processes." width="1120" />
+  <img src="docs/assets/lertick-vs-eevdf-cpu8.svg" alt="8 CPUs, median of 2 sessions: Lertick is better than Linux EEVDF on perf pipe, hackbench threads, and schbench wakeup latency with 1 and with 4 message threads; the same on perf messaging threads, hackbench 16 groups, schbench request latency, schbench throughput and kernel compile; worse on perf messaging processes." width="1120" />
 </p>
 
 </details>
 
-<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Against EEVDF: the current version (waker model, 2026-11-18), median of 5 sessions on 4 CPUs and 3 on 8, 8 runs each. Against the other schedulers: all six run in one session, shuffled, 8 runs. The kernel compile rebuilds kernel/sched. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#same-session-comparison-2026-11-18)</sub>
+<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Against EEVDF: the current version (deadline order, 2026-11-18), median of 2 sessions of 8 runs each. Against the other schedulers: the previous build (without the deadline order), all six run in one session, shuffled, 8 runs; the deadline order mainly lowers Lertick's 4-CPU wakeup latency, so these counts are conservative. The kernel compile rebuilds kernel/sched. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#deadline-order-2026-11-18)</sub>
 
 ## Get started
 
