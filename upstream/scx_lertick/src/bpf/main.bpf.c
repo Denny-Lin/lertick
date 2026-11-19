@@ -398,25 +398,119 @@ static __always_inline u32 cap_of(s32 cpu)
 	return cpus_asym && c ? c : 1024;
 }
 
-/* Claim an idle CPU of the largest capacity for @p, @prev first, or -1. */
-static __always_inline s32 pick_big_idle(struct task_struct *p, s32 prev)
-{
-	u32 n = scx_bpf_nr_cpu_ids(), i;
+/*
+ * SMT siblings, from the loader: cpu_sibling[cpu] is the other hardware
+ * thread of the CPU's core plus one, 0 for none. smt_on is set when some
+ * core has two threads. A task that keeps running on a core whose other
+ * thread is busy too moves to a whole idle core (smt_balance), as the
+ * kernel's load balancing spreads busy threads over cores.
+ */
+const volatile u16  cpu_sibling[LERTICK_MAX_CPUS];
+const volatile bool smt_on;
+const volatile bool smt_balance = true;
 
-	if (prev >= 0 && cap_of(prev) >= BIG_CAP &&
+static __always_inline s32 sibling_of(s32 cpu)
+{
+	return smt_on ? (s32)cpu_sibling[cpu & (LERTICK_MAX_CPUS - 1)] - 1 : -1;
+}
+
+/* Is the other thread of @cpu's core busy? */
+static __always_inline bool sibling_busy(s32 cpu)
+{
+	const struct cpumask *idle;
+	s32		      sib = sibling_of(cpu);
+	bool		      busy;
+
+	if (sib < 0)
+		return false;
+	idle = scx_bpf_get_idle_cpumask();
+	busy = !bpf_cpumask_test_cpu(sib, idle);
+	scx_bpf_put_idle_cpumask(idle);
+	return busy;
+}
+
+/* Is @cpu idle in @idle, and its sibling, if any, too? */
+static __always_inline bool core_idle_in(s32 cpu, const struct cpumask *idle)
+{
+	s32 sib = sibling_of(cpu);
+
+	return bpf_cpumask_test_cpu(cpu, idle) &&
+	       (sib < 0 || bpf_cpumask_test_cpu(sib, idle));
+}
+
+/*
+ * Claim an idle CPU for @p: of the largest capacity if @big, of a whole idle
+ * core if @whole, @prev first. Returns -1 if there is none.
+ */
+static __always_inline s32 pick_idle(struct task_struct *p, s32 prev, bool big,
+				     bool whole)
+{
+	const struct cpumask *idle = scx_bpf_get_idle_cpumask();
+	u32 n = scx_bpf_nr_cpu_ids(), i;
+	s32 cpu = -1;
+
+	if (prev >= 0 && (!big || cap_of(prev) >= BIG_CAP) &&
 	    bpf_cpumask_test_cpu(prev, p->cpus_ptr) &&
-	    scx_bpf_test_and_clear_cpu_idle(prev))
-		return prev;
+	    (!whole || core_idle_in(prev, idle)) &&
+	    scx_bpf_test_and_clear_cpu_idle(prev)) {
+		cpu = prev;
+		goto out;
+	}
 	bpf_for(i, 0, n)
 	{
 		if (i >= LERTICK_MAX_CPUS)
 			break;
-		if (cap_of(i) < BIG_CAP || !bpf_cpumask_test_cpu(i, p->cpus_ptr))
+		if ((big && cap_of(i) < BIG_CAP) ||
+		    !bpf_cpumask_test_cpu(i, p->cpus_ptr) ||
+		    (whole && !core_idle_in(i, idle)))
 			continue;
-		if (scx_bpf_test_and_clear_cpu_idle(i))
-			return i;
+		if (scx_bpf_test_and_clear_cpu_idle(i)) {
+			cpu = i;
+			break;
+		}
 	}
-	return -1;
+out:
+	scx_bpf_put_idle_cpumask(idle);
+	return cpu;
+}
+
+/* An idle CPU of the largest capacity, of a whole idle core if possible. */
+static __always_inline s32 pick_big_idle(struct task_struct *p, s32 prev)
+{
+	s32 cpu = smt_on ? pick_idle(p, prev, true, true) : -1;
+
+	return cpu >= 0 ? cpu : pick_idle(p, prev, true, false);
+}
+
+/*
+ * Is a task that has run @run of its current burst worth moving to a better
+ * CPU? With a trusted prediction, the burst is expected to last the larger of
+ * the prediction and the average burst (as time on the CPU it runs on): it
+ * is worth moving while at least slice_min of that is left, the time below
+ * which the kernel also treats a task's cache as still hot, or once it has
+ * run twice as long, so that the prediction has plainly missed. A task about
+ * to finish its burst then stays rather than finishing on a cold cache.
+ * Without a trusted prediction, it is worth moving once it has run past the
+ * fixed slice.
+ */
+const volatile bool pred_move = true;
+
+static __always_inline bool worth_moving(struct task_ctx *tctx, u64 run)
+{
+	u32 cap = tctx->run_cap ? tctx->run_cap : 1024;
+	u64 expect;
+
+	if (!pred_move || mode != LERTICK_MODE_ONLINE || !tctx->episode_valid ||
+	    tctx->model.updates < min_train_samples)
+		return run >= slice_fixed;
+	expect = MAX(tctx->prediction_ns, tctx->ewma_burst_ns) * 1024 / cap;
+	return run >= 2 * expect || run + slice_min <= expect;
+}
+
+/* Do tasks handed over in dispatch() wait in ROT_DSQ()? */
+static __always_inline bool handover_on(void)
+{
+	return (cpus_asym && asym_rotate) || (smt_on && smt_balance);
 }
 
 /*
@@ -558,7 +652,10 @@ void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 	struct task_ctx *tctx;
 	u64		 consumed;
 
-	if (cpus_asym && asym_rotate) {
+	if (handover_on()) {
+		u64 run = 0;
+		s32 dst = -1;
+
 		/* A task handed to this CPU first. */
 		if (LERTICK_MOVE_TO_LOCAL(ROT_DSQ(cpu)))
 			return;
@@ -570,22 +667,35 @@ void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 		 * and enqueue() hands it over.
 		 */
 		tctx = continuing ? task_ctx(prev) : NULL;
-		if (tctx && cap_of(cpu) < BIG_CAP) {
-			u64 run = tctx->episode_runtime_ns;
-
+		if (tctx) {
+			run = tctx->episode_runtime_ns;
 			if (tctx->running &&
 			    prev->se.sum_exec_runtime > tctx->runtime_start_ns)
 				run += prev->se.sum_exec_runtime -
 				       tctx->runtime_start_ns;
-			if (run >= slice_fixed) {
-				s32 big = pick_big_idle(prev, -1);
-
-				if (big >= 0) {
-					tctx->rotate_to = big + 1;
-					take_next(cpu);
-					return;
-				}
+		}
+		if (tctx && worth_moving(tctx, run) && cpus_asym && asym_rotate &&
+		    cap_of(cpu) < BIG_CAP)
+			dst = pick_big_idle(prev, -1);
+		/*
+		 * Likewise, a task that keeps running while the other thread of
+		 * its core is busy goes to a whole idle core of the same or a
+		 * larger capacity.
+		 */
+		if (dst < 0 && tctx && worth_moving(tctx, run) && smt_on &&
+		    smt_balance && sibling_busy(cpu)) {
+			dst = pick_idle(prev, -1, cap_of(cpu) >= BIG_CAP, true);
+			if (dst >= 0 && cap_of(dst) < cap_of(cpu)) {
+				/* Never to a slower CPU: give the claim back. */
+				scx_bpf_kick_cpu(dst, 0);
+				dst = -1;
 			}
+		}
+		if (dst >= 0 && tctx) {
+			stat_inc(LERTICK_STAT_HANDOVERS);
+			tctx->rotate_to = dst + 1;
+			take_next(cpu);
+			return;
 		}
 	}
 
@@ -859,7 +969,7 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 	}
 
 	ret = create_cpu_dsqs();
-	if (ret || !cpus_asym || !asym_rotate)
+	if (ret || !handover_on())
 		return ret;
 	bpf_for(d, 0, scx_bpf_nr_cpu_ids())
 	{

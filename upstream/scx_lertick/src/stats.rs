@@ -32,17 +32,20 @@ pub struct Metrics {
     pub nr_adaptive_slices: u64,
     #[stat(desc = "Number of model updates from completed CPU bursts")]
     pub nr_training_updates: u64,
+    #[stat(desc = "Number of running tasks handed to a better idle CPU")]
+    pub nr_handovers: u64,
 }
 
 impl Metrics {
     fn format<W: Write>(&self, w: &mut W) -> Result<()> {
         writeln!(
             w,
-            "[{}] dispatch -> l: {:<6} s: {:<6} c: {:<6} | model -> slices: {:<6} updates: {:<6}",
+            "[{}] dispatch -> l: {:<6} s: {:<6} c: {:<6} h: {:<6} | model -> slices: {:<6} updates: {:<6}",
             crate::SCHEDULER_NAME,
             self.nr_local_dispatches,
             self.nr_shared_dispatches,
             self.nr_continuations,
+            self.nr_handovers,
             self.nr_adaptive_slices,
             self.nr_training_updates
         )?;
@@ -56,6 +59,7 @@ impl Metrics {
             nr_continuations: self.nr_continuations - rhs.nr_continuations,
             nr_adaptive_slices: self.nr_adaptive_slices - rhs.nr_adaptive_slices,
             nr_training_updates: self.nr_training_updates - rhs.nr_training_updates,
+            nr_handovers: self.nr_handovers - rhs.nr_handovers,
         }
     }
 }
