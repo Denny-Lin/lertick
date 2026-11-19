@@ -1513,3 +1513,32 @@ outcome, it is recorded here and the design is not changed to fit it.
 | stress-ng futex, mq, matrix and fork, 8 workers each, 15 s, 8 CPUs | bogo ops per second |
 | zstd -T8 -10 of `drivers/net` from the kernel tree, 8 CPUs | time |
 | A rebuild of `mm/` in the kernel tree, -j8, 8 CPUs | time |
+
+### Held-out exam result: fails on stress-ng futex, 2026-11-19
+
+`exam.sh` ran 5 repetitions with no fallback (raw data in
+`exam-sets.tar.gz`). Medians, positive is better for Lertick:
+
+| Workload | EEVDF | Lertick | Difference |
+|---|---|---|---|
+| gamesim frames missed | 97.75% | 0.92% | better |
+| gamesim frame p99 | 21.4 ms | 16.1 ms | +25% |
+| gamesim audio periods missed | 0.10% | 0.53% | worse |
+| gamesim main thread wakeup p99 | 1.0 ms | 2.8 ms | worse |
+| stress-ng futex ops/s | 1,883,417 | 3,606 | -99.8% |
+| stress-ng mq ops/s | 2,746,713 | 2,850,368 | +4% |
+| stress-ng matrix ops/s | 35,592 | 35,457 | -0.4% |
+| stress-ng fork ops/s | 16,745 | 25,844 | +54% |
+| zstd -T8 time | 0.79 s | 0.72 s | +8% |
+| mm/ rebuild time | 8.39 s | 8.09 s | +4% |
+
+The release fails the exam: stress-ng futex runs about 500 times slower
+than under EEVDF, in every repetition (3,281 to 3,987 ops/s against 1.79 to
+1.95 million). It is not from the CPU queues: in single 8-second runs the
+previous release (`v5`) did 3,547 ops/s, the earlier `v2` 3,705 and the
+release with `--fixed` 4,343, while scx_bpfland did 173,316, scx_lavd
+214,149 and scx_flash 130,152. Most of the CPU time went to the kernel
+(116 of 120 s in the first repetition). Every other main metric passes;
+in gamesim, EEVDF gave the game threads half of the CPUs beside the hogs
+and missed nearly every frame, while Lertick missed 1% but delayed the
+audio and main thread wakeups more.
