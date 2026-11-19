@@ -124,6 +124,11 @@ struct task_ctx {
 	u32   pp_last_wakee, pp_flips;
 	u64   pp_flip_ts;
 	u64   pp_wait_last;
+	/* STEAL_COST: bursts that started on the CPU of the last run, or not */
+	s32   sc_last_cpu;
+	bool  sc_mig;
+	u64   sc_stay, sc_migr;
+	u32   sc_n_stay, sc_n_mig;
 };
 
 struct {
@@ -203,6 +208,8 @@ struct prog_key {
 struct prog_val {
 	struct lertick_model model;
 	u64		     ewma_burst_ns;
+	u64		     burst_stay, burst_mig; /* STEAL_COST */
+	u32		     n_stay, n_mig;
 };
 
 struct {
@@ -271,6 +278,125 @@ u64 c_clamp[3], c_lag, c_enq;
 u64 nr_enq_kicks;
 
 /*
+ * STEAL_PCPU (experiment): a sync wakee goes to a per-CPU DSQ of the waker's
+ * CPU instead of its local DSQ. The CPU takes from that DSQ first, as it
+ * would from its local DSQ, but other CPUs can steal from it when they have
+ * nothing else to run, as an idle CPU pulls from a busy one in the kernel's
+ * load balancing. 2 also kicks an idle CPU when the per-CPU DSQ already holds
+ * a task.
+ */
+#define STEAL_PCPU 0
+#define PCPU_DSQ(c) (0x10000ULL + (u64)(c))
+u64 nr_pcpu_inserts, nr_pcpu_own, nr_pcpu_steals, nr_pcpu_kicks;
+
+/*
+ * STEAL_COST (experiment): a task's migration cost is how much longer its
+ * bursts run when they start on a CPU other than the one it last ran on,
+ * learned per task, or per program name until the task has enough bursts
+ * of each kind. A stealing CPU takes, among the first STEAL_SCAN tasks of
+ * the per-CPU DSQ it steals from, the one with the lowest known cost.
+ */
+#define STEAL_COST 0
+#define STEAL_SCAN 4
+#define SC_MIN_N 4
+u64 nr_sc_task_cost, nr_sc_prog_cost, nr_sc_unknown, nr_sc_skip_head;
+
+static __always_inline u64 steal_cost(struct task_struct *p)
+{
+	struct task_ctx *t = task_ctx(p);
+	struct prog_key	 key = {};
+	struct prog_val *v;
+
+	if (!t)
+		return 0;
+	if (t->sc_n_stay >= SC_MIN_N && t->sc_n_mig >= SC_MIN_N) {
+		__sync_fetch_and_add(&nr_sc_task_cost, 1);
+		return t->sc_migr > t->sc_stay ? t->sc_migr - t->sc_stay : 0;
+	}
+	__builtin_memcpy(key.comm, p->comm, sizeof(key.comm));
+	v = bpf_map_lookup_elem(&prog_stor, &key);
+	if (v && v->n_stay >= SC_MIN_N && v->n_mig >= SC_MIN_N) {
+		__sync_fetch_and_add(&nr_sc_prog_cost, 1);
+		return v->burst_mig > v->burst_stay ? v->burst_mig - v->burst_stay : 0;
+	}
+	__sync_fetch_and_add(&nr_sc_unknown, 1);
+	return 0;
+}
+
+/* Move the cheapest-to-migrate of the first STEAL_SCAN tasks of @dsq here. */
+static __always_inline bool steal_cheapest(u64 dsq)
+{
+	struct task_struct *q;
+	u64 best = ~0ULL;
+	int i = 0, pick = 0;
+
+	bpf_for_each(scx_dsq, q, dsq, 0) {
+		u64 c;
+
+		if (i >= STEAL_SCAN)
+			break;
+		c = steal_cost(q);
+		if (c < best) {
+			best = c;
+			pick = i;
+		}
+		i++;
+	}
+	i = 0;
+	bpf_for_each(scx_dsq, q, dsq, 0) {
+		if (i >= STEAL_SCAN)
+			break;
+		if (i == pick &&
+		    scx_bpf_dsq_move(BPF_FOR_EACH_ITER, q, SCX_DSQ_LOCAL, 0)) {
+			if (pick)
+				__sync_fetch_and_add(&nr_sc_skip_head, 1);
+			return true;
+		}
+		i++;
+	}
+	return LERTICK_MOVE_TO_LOCAL(dsq);
+}
+
+/*
+ * Steal from the per-CPU DSQ holding the most tasks, preferring CPUs of the
+ * same LLC domain: another domain's queue is taken only when no CPU of this
+ * one has a task waiting, as the shared DSQs are.
+ */
+static __always_inline bool pcpu_steal(s32 cpu)
+{
+	u32 n = scx_bpf_nr_cpu_ids(), i, home = domain_of(cpu);
+	s32 best = -1, far = -1;
+	u64 most = 0, most_far = 0;
+
+	bpf_for(i, 0, n) {
+		u64 q;
+
+		if (i >= LERTICK_MAX_CPUS)
+			break;
+		if ((s32)i == cpu)
+			continue;
+		q = scx_bpf_dsq_nr_queued(PCPU_DSQ(i));
+		if (domain_of(i) == home) {
+			if (q > most) {
+				most = q;
+				best = i;
+			}
+		} else if (q > most_far) {
+			most_far = q;
+			far	 = i;
+		}
+	}
+	if (best < 0)
+		best = far;
+	if (best >= 0 && (STEAL_COST ? steal_cheapest(PCPU_DSQ(best)) :
+				       LERTICK_MOVE_TO_LOCAL(PCPU_DSQ(best)))) {
+		__sync_fetch_and_add(&nr_pcpu_steals, 1);
+		return true;
+	}
+	return false;
+}
+
+/*
  * PRED_PLACE (experiment): placement of sync wakees by predicted wait.
  * Each CPU's local DSQ and each shared DSQ keeps the sum of the slices its
  * queued tasks were given. Local wait: what the waker has left plus the local
@@ -304,6 +430,12 @@ u64 nr_enq_kicks;
  * a placement that runs slower (a cold cache) also counts against it.
  */
 #define PP_COMPLETE 0
+/*
+ * PP_EXPLORE: take the other place for one sync wakeup in PP_EXPLORE, so a
+ * model whose place is never chosen still gets measured waits to learn from.
+ */
+#define PP_EXPLORE 0
+u64 nr_pp_explore;
 #define PP_MARGIN 0
 #define PP_FEAT_ALL 0
 u64 pp_abserr_local, pp_abserr_shared;
@@ -1006,13 +1138,36 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		__sync_fetch_and_add(&nr_pp_sync, 1);
 		if (PP_MARGIN)
 			benefit += (s64)((pp_abserr_local + pp_abserr_shared) / 2);
-		if ((s64)pred_local > (s64)pred_shared + benefit) {
+		bool want_shared = (s64)pred_local > (s64)pred_shared + benefit;
+
+		if (PP_EXPLORE && !(bpf_get_prandom_u32() % (PP_EXPLORE ? PP_EXPLORE : 1))) {
+			want_shared = !want_shared;
+			__sync_fetch_and_add(&nr_pp_explore, 1);
+		}
+		if (want_shared) {
 			__sync_fetch_and_add(&nr_pp_pick_shared, 1);
 			if (PRED_PLACE >= 2)
 				sync_ok = false; /* enqueue() queues it on the shared DSQ */
 		} else {
 			__sync_fetch_and_add(&nr_pp_pick_local, 1);
 		}
+	}
+	if (STEAL_PCPU && !idle && sync_ok) {
+		u64 slice =
+			task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
+
+		scx_bpf_dsq_insert_vtime(p, PCPU_DSQ(cpu), slice,
+					 p->scx.dsq_vtime, 0);
+		__sync_fetch_and_add(&nr_pcpu_inserts, 1);
+		if (STEAL_PCPU >= 2 && scx_bpf_dsq_nr_queued(PCPU_DSQ(cpu)) > 1) {
+			s32 c = scx_bpf_pick_idle_cpu(p->cpus_ptr, 0);
+
+			if (c >= 0) {
+				scx_bpf_kick_cpu(c, SCX_KICK_IDLE);
+				__sync_fetch_and_add(&nr_pcpu_kicks, 1);
+			}
+		}
+		return cpu;
 	}
 	if (idle || sync_ok) {
 		u64 slice =
@@ -1214,6 +1369,18 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 		short_kick(p);
 }
 
+/* Own per-CPU DSQ first (STEAL_PCPU), then the shared DSQs, then steal. */
+static __always_inline bool take_next_pcpu(s32 cpu)
+{
+	if (STEAL_PCPU && LERTICK_MOVE_TO_LOCAL(PCPU_DSQ(cpu))) {
+		__sync_fetch_and_add(&nr_pcpu_own, 1);
+		return true;
+	}
+	if (take_next(cpu))
+		return true;
+	return STEAL_PCPU && pcpu_steal(cpu);
+}
+
 /*
  * @cpu needs a task. @prev continues if keep_prev() allows it; otherwise the
  * next queued task runs, and @prev continues only when nothing is queued.
@@ -1225,7 +1392,7 @@ void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 	u64		 consumed;
 
 	if (!((continuing && keep_prev(prev, task_ctx(prev), cpu)) ||
-	      (!take_next(cpu) && continuing)))
+	      (!take_next_pcpu(cpu) && continuing)))
 		return;
 
 	/*
@@ -1291,6 +1458,8 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 		return;
 	tctx->runtime_start_ns = p->se.sum_exec_runtime;
 	tctx->running	       = true;
+	if (STEAL_COST && !tctx->episode_runtime_ns)
+		tctx->sc_mig = scx_bpf_task_cpu(p) != tctx->sc_last_cpu;
 	if (PRED_PLACE && tctx->pp_where) {
 		u8  wh	 = tctx->pp_where & 3;
 		u64 wait = bpf_ktime_get_ns() - tctx->pp_ts;
@@ -1349,6 +1518,8 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	if (!tctx || !tctx->running)
 		return;
 	tctx->running = false;
+	if (STEAL_COST)
+		tctx->sc_last_cpu = scx_bpf_task_cpu(p);
 	if (p->se.sum_exec_runtime < tctx->runtime_start_ns) {
 		tctx->episode_valid = false;
 		return;
@@ -1545,6 +1716,30 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 		}
 		tctx->pp_feat_ok   = false;
 		tctx->pp_ran_where = 0;
+		if (STEAL_COST && tctx->has_slept) {
+			u64 b = MIN(burst, REFERENCE_NS);
+			struct prog_key k = {};
+			struct prog_val *v;
+
+			if (tctx->sc_mig) {
+				tctx->sc_migr = tctx->sc_n_mig ? tctx->sc_migr * 7 / 8 + b / 8 : b;
+				tctx->sc_n_mig++;
+			} else {
+				tctx->sc_stay = tctx->sc_n_stay ? tctx->sc_stay * 7 / 8 + b / 8 : b;
+				tctx->sc_n_stay++;
+			}
+			__builtin_memcpy(k.comm, p->comm, sizeof(k.comm));
+			v = bpf_map_lookup_elem(&prog_stor, &k);
+			if (v) {
+				if (tctx->sc_mig) {
+					v->burst_mig = v->n_mig ? v->burst_mig * 15 / 16 + b / 16 : b;
+					v->n_mig++;
+				} else {
+					v->burst_stay = v->n_stay ? v->burst_stay * 15 / 16 + b / 16 : b;
+					v->n_stay++;
+				}
+			}
+		}
 		tctx->completed_bursts++;
 		tctx->last_burst_ns = burst;
 		burst		    = MIN(burst, REFERENCE_NS);
@@ -1679,6 +1874,15 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 		ret = scx_bpf_create_dsq(d, -1);
 		if (ret)
 			return ret;
+	}
+	if (STEAL_PCPU) {
+		u32 c;
+
+		bpf_for(c, 0, scx_bpf_nr_cpu_ids()) {
+			ret = scx_bpf_create_dsq(PCPU_DSQ(c), -1);
+			if (ret)
+				return ret;
+		}
 	}
 
 	return 0;
