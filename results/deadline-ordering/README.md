@@ -1542,3 +1542,46 @@ release with `--fixed` 4,343, while scx_bpfland did 173,316, scx_lavd
 in gamesim, EEVDF gave the game threads half of the CPUs beside the hogs
 and missed nearly every frame, while Lertick missed 1% but delayed the
 audio and main thread wakeups more.
+
+### Why futex is slow, and two waker-preemption builds, 2026-11-19
+
+stress-ng futex runs a waker that keeps calling futex_wake and a waiter
+that waits with a 5 us timeout. One instance on one CPU did 566,457 ops/s
+under EEVDF and 334 under the release; on two CPUs both did about 55,000.
+With the waker and the waiter on one CPU, EEVDF lets the woken waiter
+preempt the waker at once, while Lertick leaves it queued until the
+waker's slice ends, about 2 ms. Shorter fixed slices (0.5 and 0.1 ms) only
+doubled the 8-instance rate, and the earlier wakeup preemption switches
+(`WAKE_PREEMPT`, `SHORT_KICK`) raised it to about 4,900.
+
+`WAKER_PREEMPT` 1 (`wk`): a task woken onto the CPU its waker is running
+on preempts the waker if its deadline is earlier. One instance on one CPU
+went to 550,146 ops/s; 8 instances on 8 CPUs only to 8,171, since most
+wakees land on other CPUs. `WAKER_PREEMPT` 2 (`wk2`) also brings a wakee
+to the waker's CPU when no CPU is idle: 8 instances did 288,565.
+
+8-CPU held-out set, 6 runs (`wkfull-run.sh`, raw in
+`wkfull-sets.tar.gz`; the 4-CPU half was stopped), against EEVDF, positive
+is better:
+
+| Measure | release (`sp3`) | `wk` | `wk2` |
+|---|---|---|---|
+| perf messaging processes | +13.6% | +11.4% | +10.9% |
+| perf messaging threads | +17.5% | +20.1% | +13.0% |
+| perf pipe | +84.3% | +93.7% | +93.6% |
+| hackbench threads | +30.3% | +30.2% | +28.5% |
+| hackbench 16 groups | +8.6% | +13.9% | -0.6% |
+| schbench -m1 -t1 request p99 | -10.3% | -11.8% | -2.0% |
+| schbench -m1 -t1 wakeup p99 | +15.6% | +19.5% | +26.6% |
+| schbench -m4 -t2 request p99 | +5.1% | -7.5% | -9.6% |
+| schbench -m4 -t2 wakeup p99 | +29.4% | +34.4% | +24.8% |
+| schbench -m4 -t2 RPS | +2.7% | +2.1% | +2.2% |
+| kernel compile | -0.6% | -3.5% | -5.2% |
+
+`wk2` is worse than the release on 7 of the 11 measures; `wk` is mixed.
+Neither is taken until a change fixes the futex case without these
+costs. The cost of the current behaviour is a wait of up to a slice for a
+task woken while all CPUs are busy and its waker keeps running on the
+same CPU, as in thread pools and lock handoffs under full load; the
+exam's gamesim audio misses and main thread wakeup p99 show the same
+effect at a smaller scale.

@@ -286,6 +286,8 @@ u64 nr_enq_kicks;
  * a task.
  */
 #define STEAL_PCPU 0
+#define WAKER_PREEMPT 0
+u64 nr_waker_preempts;
 /* PREEMPT_PCPU and CPUQ_FAIR: see take_next_pcpu(). */
 #define PREEMPT_PCPU 0
 #define PREEMPT_MIN_NS (1ULL * NSEC_PER_MSEC)
@@ -1097,6 +1099,19 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		tctx->started_in_select = true;
 	}
 	bool sync_ok = !idle && (wake_flags & SCX_WAKE_SYNC) && sync_local(p, &cpu);
+
+	/*
+	 * WAKER_PREEMPT 2: with no idle CPU, bring a non-sync wakee to the
+	 * waker's CPU, where enqueue() lets it preempt the waker if its
+	 * deadline is earlier (the kernel's wake_affine, then wakeup preemption).
+	 */
+	if (WAKER_PREEMPT >= 2 && !idle && !sync_ok && tctx) {
+		s32		 this = bpf_get_smp_processor_id();
+		struct task_ctx *wt   = task_ctx(bpf_get_current_task_btf());
+
+		if (wt && wt->running && bpf_cpumask_test_cpu(this, p->cpus_ptr))
+			cpu = this;
+	}
 	u64  pred_local = 0;
 
 	if (PRED_PLACE && tctx)
@@ -1343,6 +1358,31 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 
 		tctx->dl_off = slice * DEADLINE_SCALE / w;
 		vtime += tctx->dl_off;
+	}
+	/*
+	 * WAKER_PREEMPT (experiment): a task woken onto the CPU its waker is
+	 * running on, with an earlier deadline than the waker's, preempts it.
+	 * Otherwise a waker that keeps running, as in a futex handoff, holds the
+	 * wakee for its whole slice.
+	 */
+	if (WAKER_PREEMPT && tctx && (enq_flags & SCX_ENQ_WAKEUP) &&
+	    scx_bpf_task_cpu(p) == bpf_get_smp_processor_id()) {
+		struct task_struct *cur = bpf_get_current_task_btf();
+		struct task_ctx	   *ct	= cur != p ? task_ctx(cur) : NULL;
+
+		if (ct && ct->running) {
+			u32 cw = ct->eff_weight ? ct->eff_weight : 100;
+			u64 cdl = cur->scx.dsq_vtime +
+				  slice_fixed * DEADLINE_SCALE / cw;
+
+			if (time_before(vtime, cdl)) {
+				p->scx.dsq_vtime = vtime;
+				scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL, slice,
+						   enq_flags | SCX_ENQ_PREEMPT);
+				__sync_fetch_and_add(&nr_waker_preempts, 1);
+				return;
+			}
+		}
 	}
 	if (PREEMPT_PCPU && STEAL_PCPU && tctx && !(enq_flags & SCX_ENQ_WAKEUP) &&
 	    tctx->episode_runtime_ns >= PREEMPT_MIN_NS) {
