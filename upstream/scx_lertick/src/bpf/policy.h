@@ -167,6 +167,18 @@ static __always_inline u64 nr_queued_all(void)
 }
 
 /*
+ * SYNC_EMPTY (experiment): refuse a sync wakeup when the waker's local DSQ
+ * already holds SYNC_EMPTY tasks (0: never), so wakees are not stacked behind a waker that keeps running.
+ * The counters record how often the local DSQ was busy, and busy while
+ * another CPU was idle.
+ */
+#define SYNC_EMPTY 0
+u64 nr_sync_ok, nr_sync_stacked, nr_sync_stacked_idle;
+/* Local DSQ depth at sync wakeups: 0, 1, 2-3, 4-7, 8-15, 16-31, 32+. */
+u64 nr_sync_d0, nr_sync_d1, nr_sync_d2, nr_sync_d4, nr_sync_d8, nr_sync_d16,
+    nr_sync_d32;
+
+/*
  * A sync waker is about to sleep, so its CPU is the next free one and its
  * cache holds what the wakee will read. Queue the wakee there, unless its
  * vtime is more than SYNC_WINDOW_NS after the queue head's: it would then run
@@ -193,6 +205,33 @@ static __always_inline bool sync_local(struct task_struct *p, s32 *cpu)
 	bpf_iter_scx_dsq_destroy(&it);
 	if (!ok)
 		return false;
+	u64 nq = scx_bpf_dsq_nr_queued(SCX_DSQ_LOCAL_ON | this);
+
+	if (nq == 0)
+		__sync_fetch_and_add(&nr_sync_d0, 1);
+	else if (nq < 2)
+		__sync_fetch_and_add(&nr_sync_d1, 1);
+	else if (nq < 4)
+		__sync_fetch_and_add(&nr_sync_d2, 1);
+	else if (nq < 8)
+		__sync_fetch_and_add(&nr_sync_d4, 1);
+	else if (nq < 16)
+		__sync_fetch_and_add(&nr_sync_d8, 1);
+	else if (nq < 32)
+		__sync_fetch_and_add(&nr_sync_d16, 1);
+	else
+		__sync_fetch_and_add(&nr_sync_d32, 1);
+	if (nq) {
+		const struct cpumask *idle = scx_bpf_get_idle_cpumask();
+
+		__sync_fetch_and_add(&nr_sync_stacked, 1);
+		if (!bpf_cpumask_empty(idle))
+			__sync_fetch_and_add(&nr_sync_stacked_idle, 1);
+		scx_bpf_put_idle_cpumask(idle);
+		if (SYNC_EMPTY && nq >= SYNC_EMPTY)
+			return false;
+	}
+	__sync_fetch_and_add(&nr_sync_ok, 1);
 	p->scx.dsq_vtime = vtime;
 	*cpu		 = this;
 	return true;

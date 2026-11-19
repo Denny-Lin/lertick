@@ -112,6 +112,18 @@ struct task_ctx {
 	u64		     pp_val[4];
 	u32		     pp_next;
 	bool		     rem_valid;
+	/* PRED_PLACE: where this task is queued and how much work it added */
+	s64  pp_amt;
+	u64  pp_ts, pp_pred;
+	u32  pp_idx;
+	u8   pp_where, pp_ran_where; /* 1: a CPU's local DSQ, 2: shared */
+	char pp_waker[16]; /* program of the sync waker of this episode */
+	__s32 pp_feat[LERTICK_FEATURES]; /* state when it was queued */
+	bool  pp_feat_ok;
+	u8    pp_bucket;
+	u32   pp_last_wakee, pp_flips;
+	u64   pp_flip_ts;
+	u64   pp_wait_last;
 };
 
 struct {
@@ -254,6 +266,181 @@ u64 c_clamp[3], c_lag, c_enq;
 #define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq, 0)
 #define LERTICK_TASK_CGROUP(p) scx_bpf_task_cgroup(p)
 #include "policy.h"
+
+#define ENQ_KICK 0
+u64 nr_enq_kicks;
+
+/*
+ * PRED_PLACE (experiment): placement of sync wakees by predicted wait.
+ * Each CPU's local DSQ and each shared DSQ keeps the sum of the slices its
+ * queued tasks were given. Local wait: what the waker has left plus the local
+ * sum. Shared wait: the shared sum over the CPUs the wakee may use.
+ * 1 measures only; 2 places a wakee on the shared DSQ when that wait is
+ * shorter; 3 also credits the local CPU with the cache benefit learned per
+ * (waker, wakee) program pair: how much shorter the wakee's burst was after
+ * local placement.
+ */
+#define PRED_PLACE 0
+/*
+ * PP_MARGIN: move a wakee to the shared DSQ only when the local wait exceeds
+ * the shared one by more than the models' recent mean error.
+ * PP_FEAT_ALL: replace the local DSQ length feature with the expected work on
+ * all local DSQs per CPU the wakee may use (CPUs drain them first).
+ */
+/*
+ * PP_PIECE: one local-wait model per range of the local DSQ length
+ * (0, 1, 2-3, 4-7, 8-15, 16-31, 32+), so the wait can grow faster past a
+ * length than below it.
+ */
+#define PP_PIECE 0
+/*
+ * PP_FLIPS: replace the local DSQ length feature with how many different
+ * tasks the waker has woken lately (halved every second), as the kernel's
+ * wakee_flips does for wake_wide().
+ */
+#define PP_FLIPS 0
+/*
+ * PP_COMPLETE: train the models on the wait plus the burst that followed, so
+ * a placement that runs slower (a cold cache) also counts against it.
+ */
+#define PP_COMPLETE 0
+#define PP_MARGIN 0
+#define PP_FEAT_ALL 0
+u64 pp_abserr_local, pp_abserr_shared;
+s64 pp_all_local;
+s64 pp_local_work[LERTICK_MAX_CPUS];
+s64 pp_shared_work[LERTICK_MAX_DOMAINS];
+u64 nr_pp_sync, nr_pp_pick_local, nr_pp_pick_shared;
+u64 pp_n[4], pp_wait_ns[4], pp_err_ns[4], pp_pred_ns[4]; /* [1] local, [2] shared */
+
+struct pp_key {
+	char waker[16];
+	char wakee[16];
+};
+struct pp_val {
+	u64 burst[4];
+	u64 n[4];
+};
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(max_entries, 4096);
+	__type(key, struct pp_key);
+	__type(value, struct pp_val);
+} pp_stor SEC(".maps");
+
+static __always_inline s64 pp_read(s64 *v)
+{
+	s64 x = *v;
+
+	return x > 0 ? x : 0;
+}
+
+static __always_inline void pp_add(struct task_ctx *tctx, u8 where, u32 idx,
+				   s64 amt, u64 pred)
+{
+	if (where == 1) {
+		__sync_fetch_and_add(&pp_local_work[idx & (LERTICK_MAX_CPUS - 1)],
+				     amt);
+		__sync_fetch_and_add(&pp_all_local, amt);
+	}
+	else
+		__sync_fetch_and_add(
+			&pp_shared_work[idx & (LERTICK_MAX_DOMAINS - 1)], amt);
+	tctx->pp_amt   = amt;
+	tctx->pp_idx   = idx;
+	tctx->pp_where = where;
+	tctx->pp_ts    = bpf_ktime_get_ns();
+	tctx->pp_pred  = pred;
+}
+
+/* Expected CPU time of @tctx's current run: its average burst less what ran. */
+static __always_inline u64 pp_expect(struct task_ctx *tctx, u64 ran)
+{
+	u64 e = tctx->ewma_burst_ns ? tctx->ewma_burst_ns : slice_fixed;
+
+	return e > ran ? e - ran : 0;
+}
+
+/*
+ * Wait predicted by a linear model per place (0: the CPU's local DSQ, 1: the
+ * shared DSQ), trained on every measured wait. Features, as fractions:
+ * 1, the local DSQ's expected work, its length, the shared DSQ's length per
+ * CPU the task may use, and what the waker has left to run.
+ */
+#define PP_WAIT_REF (32ULL * NSEC_PER_MSEC)
+struct lertick_model pp_model_local, pp_model_shared;
+struct lertick_model pp_ml0, pp_ml1, pp_ml2, pp_ml3, pp_ml4, pp_ml5, pp_ml6;
+
+static __always_inline u8 pp_bucket(u64 n)
+{
+	return n == 0 ? 0 : n < 2 ? 1 : n < 4 ? 2 : n < 8 ? 3 : n < 16 ? 4 :
+	       n < 32 ? 5 : 6;
+}
+
+static __always_inline struct lertick_model *pp_local_model(u8 b)
+{
+	if (!PP_PIECE)
+		return &pp_model_local;
+	if (b == 0)
+		return &pp_ml0;
+	if (b == 1)
+		return &pp_ml1;
+	if (b == 2)
+		return &pp_ml2;
+	if (b == 3)
+		return &pp_ml3;
+	if (b == 4)
+		return &pp_ml4;
+	if (b == 5)
+		return &pp_ml5;
+	return &pp_ml6;
+}
+
+static __always_inline __s32 pp_q(u64 v, u64 ref)
+{
+	return v >= ref ? LERTICK_Q : (__s32)(v * LERTICK_Q / ref);
+}
+
+static __always_inline void pp_features(__s32 *f, s32 cpu, u32 d, u64 ncpu,
+					u64 rest, u64 flips)
+{
+	u64 nl = scx_bpf_dsq_nr_queued(SCX_DSQ_LOCAL_ON | cpu);
+	u64 ns = scx_bpf_dsq_nr_queued(d);
+
+	f[0] = LERTICK_Q;
+	f[1] = pp_q(pp_read(&pp_local_work[cpu & (LERTICK_MAX_CPUS - 1)]),
+		    PP_WAIT_REF);
+	if (PP_FLIPS)
+		f[2] = pp_q(flips, 64);
+	else if (PP_FEAT_ALL)
+		f[2] = pp_q(pp_read(&pp_all_local) / (ncpu ? ncpu : 1), PP_WAIT_REF);
+	else
+		f[2] = pp_q(nl, 64);
+	f[3] = pp_q(ns * 4 / (ncpu ? ncpu : 1), 64);
+	f[4] = pp_q(rest, 10ULL * NSEC_PER_MSEC);
+}
+
+static __always_inline u64 pp_predict(bool shared, const __s32 *f, u8 b)
+{
+	struct lertick_model *m = shared ? &pp_model_shared : pp_local_model(b);
+
+	return (u64)lertick_model_predict_q16(m, f) * PP_WAIT_REF / LERTICK_Q;
+}
+
+static __always_inline void pp_remove(struct task_ctx *tctx)
+{
+	if (tctx->pp_where == 1) {
+		__sync_fetch_and_sub(
+			&pp_local_work[tctx->pp_idx & (LERTICK_MAX_CPUS - 1)],
+			tctx->pp_amt);
+		__sync_fetch_and_sub(&pp_all_local, tctx->pp_amt);
+	}
+	else if (tctx->pp_where == 2)
+		__sync_fetch_and_sub(
+			&pp_shared_work[tctx->pp_idx & (LERTICK_MAX_DOMAINS - 1)],
+			tctx->pp_amt);
+	tctx->pp_where = 0;
+}
 
 /*
  * LERTICK_MODEL_V2: the model starts as the burst average (weight 1 on that
@@ -771,12 +958,76 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		begin_episode(tctx, SCX_ENQ_WAKEUP);
 		tctx->started_in_select = true;
 	}
-	if (idle || ((wake_flags & SCX_WAKE_SYNC) && sync_local(p, &cpu))) {
+	bool sync_ok = !idle && (wake_flags & SCX_WAKE_SYNC) && sync_local(p, &cpu);
+	u64  pred_local = 0;
+
+	if (PRED_PLACE && tctx)
+		tctx->pp_waker[0] = 0;
+	if (PRED_PLACE && sync_ok && tctx) {
+		struct task_struct *w  = bpf_get_current_task_btf();
+		struct task_ctx	   *wt = task_ctx(w);
+		u64 rest = 0, pred_shared, ncpu = p->nr_cpus_allowed;
+		s64 benefit = 0;
+
+		if (wt && wt->running && w->se.sum_exec_runtime >= wt->runtime_start_ns)
+			rest = pp_expect(wt, wt->episode_runtime_ns +
+				w->se.sum_exec_runtime - wt->runtime_start_ns);
+		u64 flips = 0;
+
+		if (wt) {
+			u64 now = bpf_ktime_get_ns();
+
+			if (now - wt->pp_flip_ts > NSEC_PER_SEC) {
+				wt->pp_flips >>= 1;
+				wt->pp_flip_ts = now;
+			}
+			if (wt->pp_last_wakee != p->pid) {
+				wt->pp_last_wakee = p->pid;
+				wt->pp_flips++;
+			}
+			flips = wt->pp_flips;
+		}
+		pp_features(tctx->pp_feat, cpu, domain_of(cpu), ncpu, rest, flips);
+		tctx->pp_feat_ok = true;
+		tctx->pp_bucket	 = pp_bucket(scx_bpf_dsq_nr_queued(SCX_DSQ_LOCAL_ON | cpu));
+		pred_local  = pp_predict(false, tctx->pp_feat, tctx->pp_bucket);
+		pred_shared = pp_predict(true, tctx->pp_feat, 0);
+		__builtin_memcpy(tctx->pp_waker, w->comm, sizeof(tctx->pp_waker));
+		if (PRED_PLACE >= 3) {
+			struct pp_key k = {};
+			struct pp_val *v;
+
+			__builtin_memcpy(k.waker, w->comm, sizeof(k.waker));
+			__builtin_memcpy(k.wakee, p->comm, sizeof(k.wakee));
+			v = bpf_map_lookup_elem(&pp_stor, &k);
+			if (v && v->n[1] >= 4 && v->n[2] >= 4)
+				benefit = (s64)v->burst[2] - (s64)v->burst[1];
+		}
+		__sync_fetch_and_add(&nr_pp_sync, 1);
+		if (PP_MARGIN)
+			benefit += (s64)((pp_abserr_local + pp_abserr_shared) / 2);
+		if ((s64)pred_local > (s64)pred_shared + benefit) {
+			__sync_fetch_and_add(&nr_pp_pick_shared, 1);
+			if (PRED_PLACE >= 2)
+				sync_ok = false; /* enqueue() queues it on the shared DSQ */
+		} else {
+			__sync_fetch_and_add(&nr_pp_pick_local, 1);
+		}
+	}
+	if (idle || sync_ok) {
 		u64 slice =
 			task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
 
 		scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL, slice, 0);
 		__sync_fetch_and_add(&nr_local_dispatches, 1);
+		if (PRED_PLACE && tctx) {
+			if (idle)
+				tctx->pp_feat_ok = false;
+			if (tctx->pp_where)
+				pp_remove(tctx);
+			pp_add(tctx, 1, cpu, pp_expect(tctx, tctx->episode_runtime_ns),
+			       idle ? 0 : pred_local);
+		}
 	}
 
 	return cpu;
@@ -935,6 +1186,26 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice,
 				 vtime, enq_flags);
 	__sync_fetch_and_add(&nr_shared_dispatches, 1);
+	if (PRED_PLACE && tctx) {
+		u32 d = domain_of(scx_bpf_task_cpu(p));
+		u64 n = p->nr_cpus_allowed;
+
+		if (tctx->pp_where)
+			pp_remove(tctx);
+		pp_features(tctx->pp_feat, scx_bpf_task_cpu(p), d, n, 0, 0);
+		tctx->pp_feat_ok = true;
+		pp_add(tctx, 2, d, pp_expect(tctx, tctx->episode_runtime_ns),
+		       pp_predict(true, tctx->pp_feat, 0));
+	}
+	/* ENQ_KICK (experiment): wake an idle CPU to take the queued task. */
+	if (ENQ_KICK) {
+		s32 idle_cpu = scx_bpf_pick_idle_cpu(p->cpus_ptr, 0);
+
+		if (idle_cpu >= 0) {
+			scx_bpf_kick_cpu(idle_cpu, SCX_KICK_IDLE);
+			__sync_fetch_and_add(&nr_enq_kicks, 1);
+		}
+	}
 
 	if (SHORT_KICK && (enq_flags & SCX_ENQ_WAKEUP) && tctx &&
 	    mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
@@ -1020,6 +1291,43 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 		return;
 	tctx->runtime_start_ns = p->se.sum_exec_runtime;
 	tctx->running	       = true;
+	if (PRED_PLACE && tctx->pp_where) {
+		u8  wh	 = tctx->pp_where & 3;
+		u64 wait = bpf_ktime_get_ns() - tctx->pp_ts;
+
+		if (!tctx->episode_runtime_ns)
+			tctx->pp_ran_where = wh;
+		u64 err = wait > tctx->pp_pred ? wait - tctx->pp_pred :
+						 tctx->pp_pred - wait;
+
+		if (!tctx->episode_runtime_ns)
+			tctx->pp_wait_last = wait;
+		if (!PP_COMPLETE && tctx->pp_feat_ok && (wh == 1 || wh == 2)) {
+			__s32 target = pp_q(wait, PP_WAIT_REF);
+
+			if (wh == 1)
+				model_train_v2(pp_local_model(tctx->pp_bucket), tctx->pp_feat, target);
+			else
+				model_train_v2(&pp_model_shared, tctx->pp_feat, target);
+			tctx->pp_feat_ok = false;
+		}
+		if (wh == 1 && tctx->pp_pred)
+			pp_abserr_local = pp_abserr_local * 15 / 16 + err / 16;
+		else if (wh == 2)
+			pp_abserr_shared = pp_abserr_shared * 15 / 16 + err / 16;
+		if (wh == 1) {
+			__sync_fetch_and_add(&pp_n[1], 1);
+			__sync_fetch_and_add(&pp_wait_ns[1], wait);
+			__sync_fetch_and_add(&pp_pred_ns[1], tctx->pp_pred);
+			__sync_fetch_and_add(&pp_err_ns[1], err);
+		} else if (wh == 2) {
+			__sync_fetch_and_add(&pp_n[2], 1);
+			__sync_fetch_and_add(&pp_wait_ns[2], wait);
+			__sync_fetch_and_add(&pp_pred_ns[2], tctx->pp_pred);
+			__sync_fetch_and_add(&pp_err_ns[2], err);
+		}
+		pp_remove(tctx);
+	}
 }
 
 /*
@@ -1198,6 +1506,45 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 			__sync_fetch_and_add(&nr_training_updates, 1);
 			prog_learn(p, tctx, target, MIN(burst, REFERENCE_NS));
 		}
+		if (PRED_PLACE && tctx->pp_waker[0] &&
+		    (tctx->pp_ran_where == 1 || tctx->pp_ran_where == 2)) {
+			struct pp_key k = {};
+			struct pp_val *v;
+			u8 wh = tctx->pp_ran_where;
+
+			__builtin_memcpy(k.waker, tctx->pp_waker, sizeof(k.waker));
+			__builtin_memcpy(k.wakee, p->comm, sizeof(k.wakee));
+			v = bpf_map_lookup_elem(&pp_stor, &k);
+			if (!v) {
+				struct pp_val init = {};
+
+				bpf_map_update_elem(&pp_stor, &k, &init, BPF_NOEXIST);
+				v = bpf_map_lookup_elem(&pp_stor, &k);
+			}
+			if (v) {
+				u64 b = MIN(burst, REFERENCE_NS);
+
+				if (wh == 1) {
+					v->burst[1] = v->n[1] ? v->burst[1] * 7 / 8 + b / 8 : b;
+					v->n[1]++;
+				} else {
+					v->burst[2] = v->n[2] ? v->burst[2] * 7 / 8 + b / 8 : b;
+					v->n[2]++;
+				}
+			}
+		}
+		if (PP_COMPLETE && tctx->pp_feat_ok &&
+		    (tctx->pp_ran_where == 1 || tctx->pp_ran_where == 2)) {
+			__s32 target = pp_q(tctx->pp_wait_last + burst, PP_WAIT_REF);
+
+			if (tctx->pp_ran_where == 1)
+				model_train_v2(pp_local_model(tctx->pp_bucket),
+					       tctx->pp_feat, target);
+			else
+				model_train_v2(&pp_model_shared, tctx->pp_feat, target);
+		}
+		tctx->pp_feat_ok   = false;
+		tctx->pp_ran_where = 0;
 		tctx->completed_bursts++;
 		tctx->last_burst_ns = burst;
 		burst		    = MIN(burst, REFERENCE_NS);
@@ -1260,6 +1607,8 @@ void BPF_STRUCT_OPS(lertick_disable, struct task_struct *p)
 	tctx->episode_active = false;
 	tctx->episode_valid  = false;
 	tctx->has_slept	     = false;
+	if (PRED_PLACE && tctx->pp_where)
+		pp_remove(tctx);
 }
 
 /*
