@@ -80,6 +80,9 @@ static u64 runnable_weight;
 #define BEHIND_NS (20ULL * NSEC_PER_MSEC)
 #define WAIT_MAX_NS (500ULL * NSEC_PER_MSEC)
 
+#ifndef LERTICK_CLAMP_NOTE
+#define LERTICK_CLAMP_NOTE(kind)
+#endif
 static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
 {
 	u32 w	   = p->scx.weight ? p->scx.weight : 1;
@@ -92,10 +95,14 @@ static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
 	if (by_now < ahead)
 		ahead = by_now;
 	cap = vtime_now + ahead;
-	if (time_before(cap, vtime))
+	if (time_before(cap, vtime)) {
+		LERTICK_CLAMP_NOTE(by_now < AHEAD_NS * 100 / w ? 2 : 0);
 		return cap;
-	if (time_before(vtime, vtime_now - BEHIND_NS))
+	}
+	if (time_before(vtime, vtime_now - BEHIND_NS)) {
+		LERTICK_CLAMP_NOTE(1);
 		return vtime_now - BEHIND_NS;
+	}
 	return vtime;
 }
 /*
@@ -114,6 +121,16 @@ static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
 /* Queued tasks examined, and the longest unbroken run, when prev may keep its CPU. */
 #define HEAD_SCAN 16
 #define KEEP_MAX_NS (20ULL * NSEC_PER_MSEC)
+#define LONG_LEAD_NS (3ULL * NSEC_PER_MSEC)
+#ifndef LERTICK_LONG
+#define LERTICK_LONG(p) false
+#endif
+#ifndef LERTICK_PREV_OFF
+#define LERTICK_PREV_OFF(p, tctx) 0
+#endif
+#ifndef LERTICK_LONG_KEPT
+#define LERTICK_LONG_KEPT()
+#endif
 
 /*
  * One vtime-ordered queue per last-level cache domain; DSQ id d serves domain
@@ -157,6 +174,18 @@ static __always_inline u64 nr_queued_all(void)
 }
 
 /*
+ * SYNC_EMPTY (experiment): refuse a sync wakeup when the waker's local DSQ
+ * already holds SYNC_EMPTY tasks (0: never), so wakees are not stacked behind a waker that keeps running.
+ * The counters record how often the local DSQ was busy, and busy while
+ * another CPU was idle.
+ */
+#define SYNC_EMPTY 0
+u64 nr_sync_ok, nr_sync_stacked, nr_sync_stacked_idle;
+/* Local DSQ depth at sync wakeups: 0, 1, 2-3, 4-7, 8-15, 16-31, 32+. */
+u64 nr_sync_d0, nr_sync_d1, nr_sync_d2, nr_sync_d4, nr_sync_d8, nr_sync_d16,
+    nr_sync_d32;
+
+/*
  * A sync waker is about to sleep, so its CPU is the next free one and its
  * cache holds what the wakee will read. Queue the wakee there, unless its
  * vtime is more than SYNC_WINDOW_NS after the queue head's: it would then run
@@ -183,6 +212,33 @@ static __always_inline bool sync_local(struct task_struct *p, s32 *cpu)
 	bpf_iter_scx_dsq_destroy(&it);
 	if (!ok)
 		return false;
+	u64 nq = scx_bpf_dsq_nr_queued(SCX_DSQ_LOCAL_ON | this);
+
+	if (nq == 0)
+		__sync_fetch_and_add(&nr_sync_d0, 1);
+	else if (nq < 2)
+		__sync_fetch_and_add(&nr_sync_d1, 1);
+	else if (nq < 4)
+		__sync_fetch_and_add(&nr_sync_d2, 1);
+	else if (nq < 8)
+		__sync_fetch_and_add(&nr_sync_d4, 1);
+	else if (nq < 16)
+		__sync_fetch_and_add(&nr_sync_d8, 1);
+	else if (nq < 32)
+		__sync_fetch_and_add(&nr_sync_d16, 1);
+	else
+		__sync_fetch_and_add(&nr_sync_d32, 1);
+	if (nq) {
+		const struct cpumask *idle = scx_bpf_get_idle_cpumask();
+
+		__sync_fetch_and_add(&nr_sync_stacked, 1);
+		if (!bpf_cpumask_empty(idle))
+			__sync_fetch_and_add(&nr_sync_stacked_idle, 1);
+		scx_bpf_put_idle_cpumask(idle);
+		if (SYNC_EMPTY && nq >= SYNC_EMPTY)
+			return false;
+	}
+	__sync_fetch_and_add(&nr_sync_ok, 1);
 	p->scx.dsq_vtime = vtime;
 	*cpu		 = this;
 	return true;
@@ -464,7 +520,7 @@ static __always_inline bool keep_prev(struct task_struct *prev,
 		     prev->scx.weight	      ? prev->scx.weight :
 						1;
 	u32 home   = domain_of(cpu);
-	int n	   = 0;
+	int n	   = 0, longs = 0;
 
 	if (tctx && tctx->running &&
 	    prev->se.sum_exec_runtime > tctx->runtime_start_ns)
@@ -472,13 +528,31 @@ static __always_inline bool keep_prev(struct task_struct *prev,
 	if (ran >= KEEP_MAX_NS)
 		return false;
 	vtime += ran * 100 / weight;
+	vtime += LERTICK_PREV_OFF(prev, tctx);
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (n++ >= HEAD_SCAN)
 			return false;
-		if (bpf_cpumask_test_cpu(cpu, q->cpus_ptr))
-			return !time_before(q->scx.dsq_vtime, vtime);
+		if (!bpf_cpumask_test_cpu(cpu, q->cpus_ptr))
+			continue;
+		if (!longs && !time_before(q->scx.dsq_vtime, vtime))
+			return true;
+		/*
+		 * Experimental: a long burst may also stay while every
+		 * task that would replace it is long too and at most
+		 * LONG_LEAD_NS ahead of it. A short or unknown task in
+		 * the scanned head makes it yield as before, so short
+		 * tasks never wait longer than without this.
+		 */
+		if (!LERTICK_LONG(prev) || !LERTICK_LONG(q) ||
+		    time_before(q->scx.dsq_vtime + LONG_LEAD_NS, vtime))
+			return false;
+		longs++;
 	}
-	return !other_head_before(home, cpu, vtime);
+	if (other_head_before(home, cpu, vtime))
+		return false;
+	if (longs)
+		LERTICK_LONG_KEPT();
+	return true;
 }
 
 /* Take a task from the next domain that has one for this CPU. */
