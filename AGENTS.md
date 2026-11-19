@@ -59,3 +59,8 @@ single-peer restarts, expiry, reconnection and independent operation. Preserve
 each project's integration setting on update. Report configured and currently
 connected states separately. See the existing deployment rules above before
 attaching a scheduler or changing a service transaction.
+
+## README and results pages
+
+Follow [the writing guide](docs/WRITING.md) when changing the product README,
+a results page or a chart.
