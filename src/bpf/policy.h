@@ -507,8 +507,9 @@ static __always_inline bool steal(u32 home)
 }
 
 /*
- * A sync wakee waits in a queue of the waker's CPU, which runs it next, as
- * it would from its local DSQ. Unlike the local DSQ, other CPUs can take it:
+ * A sync wakee waits in a queue of the waker's CPU, which takes from it
+ * before its domain queue, as it did from its local DSQ. Unlike the local
+ * DSQ, other CPUs can take it:
  * one that has nothing else to run takes from the CPU queue holding the most
  * tasks, as an idle CPU pulls from a busy one in the kernel's load balancing.
  * A waker that keeps running while it wakes many tasks, as a sender does
