@@ -452,15 +452,16 @@ static __always_inline bool other_head_before(u32 home, s32 cpu, u64 vtime)
 }
 
 /*
- * Whether prev should keep its CPU instead of taking the next queued task.
- * A task whose slice ends otherwise always yields, so two tasks sharing a
- * CPU alternate and get equal time whatever their weights. prev stays while
- * its vtime (its current run included, plus any deadline offset the queue
- * uses) is not after that of the first queued task that can run here. It yields after KEEP_MAX_NS without a break, and
- * when no such task is within the first HEAD_SCAN queued: a task that can
- * run only here must not wait behind prev indefinitely. The own domain is
- * scanned; when it holds nothing for this CPU, the head of each other domain
- * is compared too, since this CPU would steal from it.
+ * Whether prev should keep its CPU instead of taking the next queued task. A
+ * task whose slice ends otherwise always yields, so two tasks sharing a CPU
+ * alternate and get equal time whatever their weights. prev stays while its
+ * vtime (its current run included, plus any deadline offset the queue uses)
+ * is not after that of the first queued task that can run here. It yields
+ * after KEEP_MAX_NS without a break, and when no such task is within the
+ * first HEAD_SCAN queued: a task that can run only here must not wait behind
+ * prev indefinitely. The own domain is scanned; when it holds nothing for
+ * this CPU, the head of each other domain is compared too, since this CPU
+ * would steal from it.
  */
 static __always_inline bool keep_prev(struct task_struct *prev,
 				      struct task_ctx *tctx, s32 cpu)

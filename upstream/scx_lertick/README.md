@@ -20,13 +20,12 @@ model file and no inference in user space, and `--fixed` gives every task the
 same slice instead.
 
 Tasks wait in one queue per LLC, ordered by a virtual deadline: the weighted
-virtual time plus half the predicted slice, so a task about to run briefly
-goes ahead of longer ones about as far behind, without preempting anyone. Tasks are charged the
-CPU time they actually used, so `nice` values and cgroup `cpu.weight` set
-each task's share. An idle CPU steals
-from another LLC's queue. All queues share one virtual clock, and how far a task
-may sit ahead of it or behind it is bounded, so no task waits long for the clock
-to catch up.
+virtual time plus half the predicted slice, so a task about to run briefly goes
+ahead of longer ones about as far behind, without preempting anyone. Tasks are
+charged the CPU time they actually used, so `nice` values and cgroup
+`cpu.weight` set each task's share. An idle CPU steals from another LLC's queue.
+All queues share one virtual clock, and how far a task may sit ahead of it or
+behind it is bounded, so no task waits long for the clock to catch up.
 
 A CPU prefers a queued task that last ran on it when that task is near the head
 of the queue, so a preempted task usually resumes where its cache is.
