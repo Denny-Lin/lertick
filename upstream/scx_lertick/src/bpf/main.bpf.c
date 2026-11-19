@@ -296,6 +296,8 @@ const volatile u16  cpu_cap[LERTICK_MAX_CPUS];
 const volatile bool cpus_asym;
 #define ASYM_PLACE 1
 #define ASYM_ROTATE 1
+/* The loader clears it for --no-asym-rotate. */
+const volatile bool asym_rotate = true;
 u64 nr_asym_rotate;
 /*
  * CAP_INVARIANT: learn bursts as work, the run time scaled by the capacity
@@ -1679,7 +1681,8 @@ void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 	 * largest capacity when one is free, as the kernel moves a misfit task.
 	 * A task that sleeps is placed at its wakeup instead (ASYM_PLACE).
 	 */
-	if (ASYM_ROTATE && cpus_asym && continuing && cap_of(cpu) < BIG_CAP) {
+	if (ASYM_ROTATE && asym_rotate && cpus_asym && continuing &&
+	    cap_of(cpu) < BIG_CAP) {
 		struct task_ctx *pt = task_ctx(prev);
 		u64		 run = 0;
 
