@@ -19,6 +19,7 @@
 | Model, scheduling behavior and boundaries | [Implementation overview](OVERVIEW.md) · [Correctness](PHASE2_CORRECTNESS.md) |
 | Source layout and validation tools | [Source](../src/README.md) · [Tests](../tests/README.md) · [Benchmarks](../benchmarks/README.md) · [Examples](../examples/README.md) |
 | Design choices and open work | [Decisions](DECISIONS.md) · [Optimization](PHASE2_OPTIMIZATION.md) · [Starter tasks](GOOD_FIRST_ISSUES.md) |
+| Writing the README, results pages and charts | [Writing guide](WRITING.md) |
 | Project name and earlier names | [Naming](NAMING.md) · [Rebrand validation](REBRAND_VALIDATION.md) |
 
 ## Results and research
