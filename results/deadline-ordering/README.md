@@ -1,3 +1,34 @@
+# Learned slices and queue order: experiment record
+
+## Now (2026-11-19)
+
+| | |
+|---|---|
+| Build | The scx port orders each LLC's queue by vtime plus half the predicted slice ([deadline order](#deadline-order-2026-11-18)). Same code as sched-ext/scx#3994 at commit `45d1fda`. |
+| Against EEVDF | Median of 2 sessions, 8 runs each, better/same/worse: 8/2/1 on 4 CPUs, 4/6/1 on 8 CPUs. |
+| Against sched_ext schedulers | Previous build, one session: scx_bpfland 9/2/0 and 8/3/0, scx_lavd 8/2/1 and 4/6/1, scx_p2dq 7/2/2 and 5/6/0, scx_flash 8/2/1 and 8/3/0 ([table](#same-session-comparison-2026-11-18)). |
+| Open | perf messaging with processes, 6 to 8% behind EEVDF. The lag bounds act on under 0.1% of enqueues there, so they are not the cause ([lag bounds](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#how-often-the-lag-bounds-act-2026-11-18), [what it is not](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#what-the-8-cpu-perf-messaging-loss-is-not-2026-11-18)). |
+| Untested | Bare metal, SMT, hybrid cores, NUMA, more than one LLC, CPU hotplug. All results are from one ARM64 VM. |
+
+## Ledger, newest first
+
+| Date | Change | Verdict | Record |
+|---|---|---|---|
+| 11-18 | Queue ordered by vtime plus half the slice | Kept: 4-CPU schbench -m4 -t2 wakeup p99 19% below EEVDF | [deadline order](#deadline-order-2026-11-18), [screen](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#deadline-ordering-screen-2026-11-18) |
+| 11-18 | Wakeup preemption chosen by the model | Rejected: wakeup and request p99 up to 47% and 83% above the build without it | [round 2](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#round-2-wakeup-preemption-chosen-by-the-model-rejected) |
+| 11-18 | Shorter slices for bursts past the maximum, narrower queue rules | Rejected: the wakeup p99 did not drop | [round 1](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#losses-after-the-waker-model-4-cpu-schbench-wakeup-p99-round-1-2026-11-18), [round 3](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#round-3-4-cpus-narrower-queue-rules-rejected) |
+| 11-18 | Wakee placement from a learned "waker sleeps soon" | Rejected: not predictable in perf messaging, slower in schbench | [placement](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#what-the-8-cpu-perf-messaging-loss-is-not-2026-11-18) |
+| 11-18 | Comparison with four sched_ext schedulers in one session | Measurement | [table](#same-session-comparison-2026-11-18) |
+| 11-18 | Burst guess from the same waker, per-program model, trust after 2 bursts | Kept: schbench prediction error cut to a fifth | [waker model](#release-candidate-waker-model-2026-11-18) |
+| 11-18 | Long bursts kept while only long tasks wait | Rejected: wakeup p99 up by half | [G](#long-bursts-kept-while-only-long-tasks-wait-g-2026-11-18-rejected) |
+| 11-17 | Bounds on lag behind and ahead of the clock, root-cgroup weights | Kept: three stall causes fixed | [stalls](#two-more-stalls-two-more-bounds-and-the-scx-ci-test-2026-11-17), [clamp](#clamp-result-cap-accepted-2026-11-17) |
+| 11-17 | Learned slices capped at 3 ms | Kept | [numbers](#readme-numbers-for-the-3-ms-slice-cap-2026-11-17) |
+| 11-16 | Dispatch ordered by predicted burst | Rejected | [results](#results-2026-11-16) |
+
+The rest of this file is the full record, oldest first, unchanged since each entry was written. The experimental switches are on branch `learn-ab`.
+
+---
+
 # Dispatch order from predicted bursts
 
 Status: **first run done, 2026-11-16. The planned change (A) failed. Variant B passed three of four workloads and needs a confirmation run.**
