@@ -65,6 +65,12 @@ struct Opts {
     #[clap(long)]
     cpu_capacity: Option<String>,
 
+    /// On CPUs of unequal capacity, do not hand tasks that keep running on a
+    /// little CPU to an idle big one. Tasks then stay where they run, which
+    /// may save power on battery but leaves big CPUs idle.
+    #[clap(long, action = clap::ArgAction::SetTrue)]
+    no_asym_rotate: bool,
+
     /// Time slice in microseconds in fixed mode, and before a task has enough
     /// completed bursts in online mode.
     #[clap(short = 's', long, default_value = "2000")]
@@ -216,6 +222,7 @@ impl<'a> Scheduler<'a> {
             rodata.cpu_cap[cpu] = ((cap * 1024) / max_cap).clamp(1, 1024) as u16;
         }
         rodata.cpus_asym = caps.iter().any(|&c| c * 100 < max_cap * 95);
+        rodata.asym_rotate = !opts.no_asym_rotate;
         if rodata.cpus_asym {
             info!(
                 "CPU capacities differ: {:?}",
@@ -227,7 +234,7 @@ impl<'a> Scheduler<'a> {
         // task to an idle big CPU; ENQ_LAST makes the kernel queue it again
         // even when its CPU has nothing else to run, instead of keeping it.
         let cpus_asym = skel.maps.rodata_data.as_ref().unwrap().cpus_asym;
-        if cpus_asym {
+        if cpus_asym && !opts.no_asym_rotate {
             skel.struct_ops.lertick_ops_mut().flags |= *compat::SCX_OPS_ENQ_LAST;
         }
 
