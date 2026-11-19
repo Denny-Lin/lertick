@@ -642,6 +642,8 @@ void BPF_STRUCT_OPS(lertick_disable, struct task_struct *p)
 	tctx->episode_active = false;
 	tctx->episode_valid  = false;
 	tctx->has_slept	     = false;
+	/* enable() restarts the vtime at the clock, without any offset. */
+	tctx->dl_off	     = 0;
 }
 
 /*
