@@ -80,6 +80,7 @@ struct task_ctx {
 	u64		     episode_runtime_ns;
 	u64 episode_work_ns; /* CAP_INVARIANT: runtime scaled by CPU capacity */
 	u32 run_cap; /* capacity of the CPU it last ran on */
+	s32 rotate_to; /* ASYM_ROTATE: big CPU + 1 to hand the task to */
 	u64		     last_sleep_ns;
 	u64		     last_burst_ns;
 	u64		     ewma_burst_ns;
@@ -294,6 +295,8 @@ u64 nr_enq_kicks;
 const volatile u16  cpu_cap[LERTICK_MAX_CPUS];
 const volatile bool cpus_asym;
 #define ASYM_PLACE 1
+#define ASYM_ROTATE 1
+u64 nr_asym_rotate;
 /*
  * CAP_INVARIANT: learn bursts as work, the run time scaled by the capacity
  * of the CPU it ran on (1024 = the largest), so a burst learned on a little
@@ -344,6 +347,8 @@ u64 nr_waker_preempts, nr_srt_spared;
 #define CPUQ_WINDOW_NS (2ULL * NSEC_PER_MSEC)
 u64 nr_preempt_pcpu, nr_cpuq_deferred;
 #define PCPU_DSQ(c) (0x10000ULL + (u64)(c))
+/* ASYM_ROTATE: tasks handed to a big CPU, taken by that CPU only. */
+#define ROT_DSQ(c) (0x20000ULL + (u64)(c))
 u64 nr_pcpu_inserts, nr_pcpu_own, nr_pcpu_steals, nr_pcpu_kicks;
 
 /*
@@ -1389,6 +1394,20 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	u64		 vtime = p->scx.dsq_vtime;
 	u64 slice = task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
 
+	/* ASYM_ROTATE: a task dispatch() handed to a big CPU, see there. */
+	if (ASYM_ROTATE && tctx && tctx->rotate_to) {
+		s32 dst = tctx->rotate_to - 1;
+
+		tctx->rotate_to = 0;
+		if (!(enq_flags & SCX_ENQ_WAKEUP) &&
+		    bpf_cpumask_test_cpu(dst, p->cpus_ptr)) {
+			scx_bpf_dsq_insert_vtime(p, ROT_DSQ(dst), slice_fixed,
+						 p->scx.dsq_vtime, enq_flags);
+			scx_bpf_kick_cpu(dst, 0);
+			return;
+		}
+	}
+
 	/* A task dequeued without running still carries its offset. */
 	if (DEADLINE && tctx && tctx->dl_off) {
 		vtime -= tctx->dl_off;
@@ -1618,6 +1637,8 @@ static __always_inline bool take_global(s32 cpu)
 
 static __always_inline bool take_next_pcpu(s32 cpu)
 {
+	if (ASYM_ROTATE && cpus_asym && LERTICK_MOVE_TO_LOCAL(ROT_DSQ(cpu)))
+		return true;
 	if (STEAL_PCPU && CPUQ_FAIR >= 2)
 		return take_global(cpu);
 	if (STEAL_PCPU) {
@@ -1651,6 +1672,41 @@ void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 	bool continuing = prev && (prev->scx.flags & SCX_TASK_QUEUED);
 	struct task_ctx *tctx;
 	u64		 consumed;
+
+	/*
+	 * ASYM_ROTATE: a task that keeps running on a CPU of lower capacity, past
+	 * the fixed slice in its current burst, moves to an idle CPU of the
+	 * largest capacity when one is free, as the kernel moves a misfit task.
+	 * A task that sleeps is placed at its wakeup instead (ASYM_PLACE).
+	 */
+	if (ASYM_ROTATE && cpus_asym && continuing && cap_of(cpu) < BIG_CAP) {
+		struct task_ctx *pt = task_ctx(prev);
+		u64		 run = 0;
+
+		if (pt) {
+			run = pt->episode_runtime_ns;
+			if (pt->running &&
+			    prev->se.sum_exec_runtime > pt->runtime_start_ns)
+				run += prev->se.sum_exec_runtime -
+				       pt->runtime_start_ns;
+		}
+		if (run >= slice_fixed) {
+			s32 big = pick_big_idle(prev, -1);
+
+			if (big >= 0 && pt) {
+				/*
+				 * Do not keep it here: the kernel queues it again
+				 * (with SCX_OPS_ENQ_LAST, set by the loader on such
+				 * machines, even when nothing else waits), and
+				 * enqueue() hands it to the big CPU.
+				 */
+				pt->rotate_to = big + 1;
+				__sync_fetch_and_add(&nr_asym_rotate, 1);
+				take_next_pcpu(cpu);
+				return;
+			}
+		}
+	}
 
 	if (!((continuing && keep_prev(prev, task_ctx(prev), cpu)) ||
 	      (!take_next_pcpu(cpu) && continuing)))
@@ -2151,6 +2207,11 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 			ret = scx_bpf_create_dsq(PCPU_DSQ(c), -1);
 			if (ret)
 				return ret;
+			if (ASYM_ROTATE) {
+				ret = scx_bpf_create_dsq(ROT_DSQ(c), -1);
+				if (ret)
+					return ret;
+			}
 		}
 	}
 
