@@ -404,11 +404,14 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		begin_episode(tctx, SCX_ENQ_WAKEUP);
 		tctx->started_in_select = true;
 	}
-	if (idle || ((wake_flags & SCX_WAKE_SYNC) && sync_local(p, &cpu))) {
-		u64 slice =
-			task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
-
-		scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL, slice, 0);
+	if (idle) {
+		scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL,
+				   task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0),
+				   0);
+		stat_inc(LERTICK_STAT_LOCAL_DISPATCHES);
+	} else if ((wake_flags & SCX_WAKE_SYNC) && sync_local(p, &cpu)) {
+		queue_on_cpu(p, cpu,
+			     task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0));
 		stat_inc(LERTICK_STAT_LOCAL_DISPATCHES);
 	}
 
@@ -731,7 +734,7 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 			return ret;
 	}
 
-	return 0;
+	return create_cpu_dsqs();
 }
 
 /*

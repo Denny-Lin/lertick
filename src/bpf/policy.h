@@ -507,10 +507,87 @@ static __always_inline bool steal(u32 home)
 }
 
 /*
- * Take the next task for this CPU. Among the first few queued tasks whose
- * vtime is within a small window of the head, prefer one that last ran here
- * and may still have a warm cache; vtime order moves by at most the window.
- * With the own domain empty, steal from the next domain that has work.
+ * A sync wakee waits in a queue of the waker's CPU, which runs it next, as
+ * it would from its local DSQ. Unlike the local DSQ, other CPUs can take it:
+ * one that has nothing else to run takes from the CPU queue holding the most
+ * tasks, as an idle CPU pulls from a busy one in the kernel's load balancing.
+ * A waker that keeps running while it wakes many tasks, as a sender does
+ * when it writes to many receivers, would otherwise leave them stacked
+ * behind it while other CPUs idle.
+ */
+#define CPU_DSQ(cpu) (0x10000ULL + (u64)(cpu))
+
+static __always_inline s32 create_cpu_dsqs(void)
+{
+	u32 c;
+	s32 ret;
+
+	bpf_for(c, 0, scx_bpf_nr_cpu_ids())
+	{
+		ret = scx_bpf_create_dsq(CPU_DSQ(c), -1);
+		if (ret)
+			return ret;
+	}
+	return 0;
+}
+
+/*
+ * Queue sync wakee @p on @cpu, the waker's CPU. If tasks already wait there,
+ * wake an idle CPU to take one.
+ */
+static __always_inline void queue_on_cpu(struct task_struct *p, s32 cpu,
+					 u64 slice)
+{
+	scx_bpf_dsq_insert_vtime(p, CPU_DSQ(cpu), slice, p->scx.dsq_vtime, 0);
+	if (scx_bpf_dsq_nr_queued(CPU_DSQ(cpu)) > 1) {
+		s32 idle = scx_bpf_pick_idle_cpu(p->cpus_ptr, 0);
+
+		if (idle >= 0)
+			scx_bpf_kick_cpu(idle, SCX_KICK_IDLE);
+	}
+}
+
+/*
+ * Take a task from the CPU queue holding the most, preferring CPUs of the
+ * same domain: another domain's queue only when none here holds a task.
+ */
+static __always_inline bool steal_from_cpu(s32 cpu)
+{
+	u32 n = scx_bpf_nr_cpu_ids(), home = domain_of(cpu), i;
+	s32 best = -1, far = -1;
+	u64 most = 0, most_far = 0;
+
+	bpf_for(i, 0, n)
+	{
+		u64 q;
+
+		if (i >= LERTICK_MAX_CPUS)
+			break;
+		if ((s32)i == cpu)
+			continue;
+		q = scx_bpf_dsq_nr_queued(CPU_DSQ(i));
+		if (domain_of(i) == home) {
+			if (q > most) {
+				most = q;
+				best = i;
+			}
+		} else if (q > most_far) {
+			most_far = q;
+			far	 = i;
+		}
+	}
+	if (best < 0)
+		best = far;
+	return best >= 0 && LERTICK_MOVE_TO_LOCAL(CPU_DSQ(best));
+}
+
+/*
+ * Take the next task for this CPU: a sync wakee queued on it first. Then,
+ * among the first few tasks of the domain queue whose vtime is within a
+ * small window of the head, prefer one that last ran here and may still
+ * have a warm cache; vtime order moves by at most the window. With the own
+ * domain empty, steal from the next domain that has work, and then from
+ * another CPU's queue.
  */
 static __always_inline bool take_next(s32 cpu)
 {
@@ -519,6 +596,8 @@ static __always_inline bool take_next(s32 cpu)
 	u64		    head = 0;
 	int		    n	 = 0;
 
+	if (LERTICK_MOVE_TO_LOCAL(CPU_DSQ(cpu)))
+		return true;
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (!n)
 			head = q->scx.dsq_vtime;
@@ -530,7 +609,8 @@ static __always_inline bool take_next(s32 cpu)
 			return true;
 		n++;
 	}
-	return LERTICK_MOVE_TO_LOCAL(home) || steal(home);
+	return LERTICK_MOVE_TO_LOCAL(home) || steal(home) ||
+	       steal_from_cpu(cpu);
 }
 
 #endif /* __LERTICK_POLICY_H */
