@@ -21,7 +21,7 @@ same slice instead.
 
 Tasks wait in one queue per LLC, ordered by a virtual deadline: the weighted
 virtual time plus half the predicted slice, so a task about to run briefly
-goes ahead of longer ones without preempting anyone. Tasks are charged the
+goes ahead of longer ones about as far behind, without preempting anyone. Tasks are charged the
 CPU time they actually used, so `nice` values and cgroup `cpu.weight` set
 each task's share. An idle CPU steals
 from another LLC's queue. All queues share one virtual clock, and how far a task

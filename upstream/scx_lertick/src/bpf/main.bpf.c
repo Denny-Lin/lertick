@@ -47,8 +47,9 @@ char _license[] SEC("license") = "GPL";
  * Share of a task's slice, in percent, added to its vtime to order the DSQ.
  * A task predicted to run briefly gets a short slice and so an earlier
  * deadline, and runs before longer ones that are about as far behind in
- * vtime, without preempting anyone. A larger share delayed perf messaging
- * with processes; a smaller one leaves short wakees behind long ones.
+ * vtime, without preempting anyone. Without the offset, the schbench -m 4
+ * -t 2 wakeup p99 on 4 CPUs moved between 3 and 5 ms; with 100 or 200
+ * percent, perf messaging with processes on 8 CPUs was about 5% slower.
  */
 #define DEADLINE_PCT 50
 
