@@ -73,9 +73,24 @@ const volatile u64 slice_max   = 3ULL * NSEC_PER_MSEC;
  */
 const volatile u32 min_train_samples = 2;
 
-/* Statistics, read by user space. */
-u64 nr_local_dispatches, nr_shared_dispatches, nr_continuations;
-u64 nr_adaptive_slices, nr_training_updates;
+/*
+ * Statistics, read by user space. Each CPU counts in its own slot, so the
+ * counters add no cache line that all CPUs write.
+ */
+struct {
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__type(key, u32);
+	__type(value, u64);
+	__uint(max_entries, LERTICK_NR_STATS);
+} stats SEC(".maps");
+
+static __always_inline void stat_inc(u32 idx)
+{
+	u64 *cnt = bpf_map_lookup_elem(&stats, &idx);
+
+	if (cnt)
+		(*cnt)++;
+}
 
 /*
  * Define struct user_exit_info, shared between BPF and user space to
@@ -365,7 +380,7 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 	    tctx->prediction_ns <= slice_max &&
 	    tctx->prediction_ns > consumed_ns) {
 		slice = tctx->prediction_ns - consumed_ns;
-		__sync_fetch_and_add(&nr_adaptive_slices, 1);
+		stat_inc(LERTICK_STAT_ADAPTIVE_SLICES);
 	}
 
 	return CLAMP(slice, slice_min, slice_max);
@@ -394,7 +409,7 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 			task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
 
 		scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL, slice, 0);
-		__sync_fetch_and_add(&nr_local_dispatches, 1);
+		stat_inc(LERTICK_STAT_LOCAL_DISPATCHES);
 	}
 
 	return cpu;
@@ -438,7 +453,7 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	}
 	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice,
 				 vtime, enq_flags);
-	__sync_fetch_and_add(&nr_shared_dispatches, 1);
+	stat_inc(LERTICK_STAT_SHARED_DISPATCHES);
 }
 
 /*
@@ -468,7 +483,7 @@ void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 		consumed += prev->se.sum_exec_runtime - tctx->runtime_start_ns;
 
 	scx_bpf_dsq_insert(prev, SCX_DSQ_LOCAL, task_slice(tctx, consumed), 0);
-	__sync_fetch_and_add(&nr_continuations, 1);
+	stat_inc(LERTICK_STAT_CONTINUATIONS);
 }
 
 /*
@@ -586,7 +601,7 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 
 		if (mode == LERTICK_MODE_ONLINE) {
 			train_model(&tctx->model, tctx->features, target);
-			__sync_fetch_and_add(&nr_training_updates, 1);
+			stat_inc(LERTICK_STAT_TRAINING_UPDATES);
 			prog_learn(p, tctx, target, MIN(burst, REFERENCE_NS));
 			learn_waker(tctx, MIN(burst, REFERENCE_NS));
 		}

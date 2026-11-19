@@ -22,6 +22,8 @@ use anyhow::Result;
 use anyhow::bail;
 use clap::Parser;
 use crossbeam::channel::RecvTimeoutError;
+use libbpf_rs::MapCore as _;
+use libbpf_rs::MapFlags;
 use libbpf_rs::OpenObject;
 use log::{debug, info, warn};
 use scx_stats::prelude::*;
@@ -196,14 +198,28 @@ impl<'a> Scheduler<'a> {
         })
     }
 
+    /// Sum one statistic over the per-CPU slots of the stats map.
+    fn stat(&self, idx: u32) -> u64 {
+        self.skel
+            .maps
+            .stats
+            .lookup_percpu(&idx.to_ne_bytes(), MapFlags::ANY)
+            .ok()
+            .flatten()
+            .map_or(0, |cpus| {
+                cpus.iter()
+                    .map(|v| u64::from_ne_bytes(v.as_slice().try_into().unwrap_or([0; 8])))
+                    .sum()
+            })
+    }
+
     fn get_metrics(&self) -> Metrics {
-        let bss_data = self.skel.maps.bss_data.as_ref().unwrap();
         Metrics {
-            nr_local_dispatches: bss_data.nr_local_dispatches,
-            nr_shared_dispatches: bss_data.nr_shared_dispatches,
-            nr_continuations: bss_data.nr_continuations,
-            nr_adaptive_slices: bss_data.nr_adaptive_slices,
-            nr_training_updates: bss_data.nr_training_updates,
+            nr_local_dispatches: self.stat(lertick_stat_LERTICK_STAT_LOCAL_DISPATCHES),
+            nr_shared_dispatches: self.stat(lertick_stat_LERTICK_STAT_SHARED_DISPATCHES),
+            nr_continuations: self.stat(lertick_stat_LERTICK_STAT_CONTINUATIONS),
+            nr_adaptive_slices: self.stat(lertick_stat_LERTICK_STAT_ADAPTIVE_SLICES),
+            nr_training_updates: self.stat(lertick_stat_LERTICK_STAT_TRAINING_UPDATES),
         }
     }
 
