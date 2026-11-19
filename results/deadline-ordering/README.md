@@ -1434,3 +1434,37 @@ without an exit, and a 30-minute long run (18 cycles).
 
 Not done: choosing which task to steal by a learned migration cost
 (`STEAL_COST`, written, not yet run), and any test on more than one LLC.
+
+## Preempted tasks on the CPU queues, 2026-11-19
+
+In the release session (`rel3-run.sh`), 4-CPU schbench -m4 -t2 request
+p99 was 10% above EEVDF for both the release and the previous one; other
+sessions put it 1 to 4% above. The 2026-11-17 diagnosis was that a lock
+holder preempted and resumed on another CPU leaves its CPU's waiters
+spinning, and `C1` fixed that by requeuing preempted tasks on their CPU
+before it starved pinned kworkers.
+
+`PREEMPT_PCPU` puts a task preempted after 1 ms of its burst on its CPU's
+per-CPU DSQ. `CPUQ_FAIR` 1 lets a CPU take its own DSQ only while its head
+is within 2 ms of the LLC DSQ's head; `CPUQ_FAIR` 2 keeps the vtime order
+over the LLC DSQ and all per-CPU DSQs, preferring the own head within 2 ms
+of the earliest. `gate.sh`, 3 nice-mix runs each: `PREEMPT_PCPU` alone was
+ejected 3 of 3, as `C1` was. With `CPUQ_FAIR` 1 it survived, but nice 19
+did 76,582 bogo ops where EEVDF does 5,371 to 8,588: tasks rotated within
+each CPU's DSQ, so weights held only per CPU. With `CPUQ_FAIR` 2 (`ppg`)
+nice 19 did 11,259.
+
+`sbab.sh`, 8 runs each, schbench -m4 -t2 on 4 CPUs, medians (raw in
+`sbab-ppg.txt`):
+
+| Arm | request p99 (us) | wakeup p99 (us) | RPS |
+|---|---|---|---|
+| EEVDF | 52,928 | 3,788 | 237 |
+| release (`sp3`) | 46,528 | 3,524 | 250 |
+| `CPUQ_FAIR` 2 only (`spg`) | 42,304 | 3,960 | 249 |
+| `PREEMPT_PCPU` with `CPUQ_FAIR` 2 (`ppg`) | 124,416 | 8,092 | 211 |
+
+Requeuing preempted tasks on their CPU now makes this benchmark 2.4 times
+slower, and in this set the release is 12% below EEVDF on request p99, so
+the 10% of the release session is within the session-to-session swing.
+Rejected; nothing changes in the release.

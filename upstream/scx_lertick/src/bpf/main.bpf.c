@@ -286,6 +286,12 @@ u64 nr_enq_kicks;
  * a task.
  */
 #define STEAL_PCPU 0
+/* PREEMPT_PCPU and CPUQ_FAIR: see take_next_pcpu(). */
+#define PREEMPT_PCPU 0
+#define PREEMPT_MIN_NS (1ULL * NSEC_PER_MSEC)
+#define CPUQ_FAIR 0
+#define CPUQ_WINDOW_NS (2ULL * NSEC_PER_MSEC)
+u64 nr_preempt_pcpu, nr_cpuq_deferred;
 #define PCPU_DSQ(c) (0x10000ULL + (u64)(c))
 u64 nr_pcpu_inserts, nr_pcpu_own, nr_pcpu_steals, nr_pcpu_kicks;
 
@@ -1338,8 +1344,15 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 		tctx->dl_off = slice * DEADLINE_SCALE / w;
 		vtime += tctx->dl_off;
 	}
-	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice,
-				 vtime, enq_flags);
+	if (PREEMPT_PCPU && STEAL_PCPU && tctx && !(enq_flags & SCX_ENQ_WAKEUP) &&
+	    tctx->episode_runtime_ns >= PREEMPT_MIN_NS) {
+		scx_bpf_dsq_insert_vtime(p, PCPU_DSQ(scx_bpf_task_cpu(p)), slice,
+					 vtime, enq_flags);
+		__sync_fetch_and_add(&nr_preempt_pcpu, 1);
+	} else {
+		scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)),
+					 slice, vtime, enq_flags);
+	}
 	__sync_fetch_and_add(&nr_shared_dispatches, 1);
 	if (PRED_PLACE && tctx) {
 		u32 d = domain_of(scx_bpf_task_cpu(p));
@@ -1370,13 +1383,97 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 }
 
 /* Own per-CPU DSQ first (STEAL_PCPU), then the shared DSQs, then steal. */
-static __always_inline bool take_next_pcpu(s32 cpu)
+/*
+ * PREEMPT_PCPU (experiment): a task preempted after running at least
+ * PREEMPT_MIN_NS of its burst waits on its CPU's per-CPU DSQ, not the LLC
+ * DSQ, so it usually resumes where it ran: a preempted lock holder then
+ * releases the lock its CPU's waiters spin on. CPUQ_FAIR: a CPU takes from
+ * its own per-CPU DSQ only while that head is not more than CPUQ_WINDOW_NS
+ * after the LLC DSQ's head, so a task only this CPU can run (a pinned
+ * kworker) is not kept waiting behind the CPU's own queue.
+ */
+
+static __always_inline bool dsq_head_vtime(u64 dsq, u64 *vt)
 {
-	if (STEAL_PCPU && LERTICK_MOVE_TO_LOCAL(PCPU_DSQ(cpu))) {
+	struct task_struct *q;
+
+	bpf_for_each(scx_dsq, q, dsq, 0) {
+		*vt = q->scx.dsq_vtime;
+		return true;
+	}
+	return false;
+}
+
+/*
+ * CPUQ_FAIR 2: keep the global vtime order across the LLC DSQ and every
+ * per-CPU DSQ. Take this CPU's own head while it is within CPUQ_WINDOW_NS of
+ * the earliest head anywhere; otherwise take the earliest, stealing it from
+ * another CPU's DSQ if that is where it waits.
+ */
+u64 nr_cpuq_global_steal;
+
+static __always_inline bool take_global(s32 cpu)
+{
+	u32 n = scx_bpf_nr_cpu_ids(), i, home = domain_of(cpu);
+	u64 own = 0, best = 0, v;
+	bool has_own = dsq_head_vtime(PCPU_DSQ(cpu), &own), has_best = false;
+	s32 from = -2; /* -1: the LLC DSQ, >= 0: that CPU's DSQ */
+
+	if (dsq_head_vtime(home, &v)) {
+		best	 = v;
+		has_best = true;
+		from	 = -1;
+	}
+	bpf_for(i, 0, n) {
+		if (i >= LERTICK_MAX_CPUS)
+			break;
+		if ((s32)i == cpu || domain_of(i) != home)
+			continue;
+		if (dsq_head_vtime(PCPU_DSQ(i), &v) &&
+		    (!has_best || time_before(v, best))) {
+			best	 = v;
+			has_best = true;
+			from	 = i;
+		}
+	}
+	if (has_own && (!has_best || !time_before(best + CPUQ_WINDOW_NS, own)) &&
+	    LERTICK_MOVE_TO_LOCAL(PCPU_DSQ(cpu))) {
 		__sync_fetch_and_add(&nr_pcpu_own, 1);
 		return true;
 	}
+	if (from >= 0 && LERTICK_MOVE_TO_LOCAL(PCPU_DSQ(from))) {
+		__sync_fetch_and_add(&nr_cpuq_global_steal, 1);
+		return true;
+	}
 	if (take_next(cpu))
+		return true;
+	if (has_own && LERTICK_MOVE_TO_LOCAL(PCPU_DSQ(cpu)))
+		return true;
+	return pcpu_steal(cpu);
+}
+
+static __always_inline bool take_next_pcpu(s32 cpu)
+{
+	if (STEAL_PCPU && CPUQ_FAIR >= 2)
+		return take_global(cpu);
+	if (STEAL_PCPU) {
+		u64  ov = 0, dv = 0;
+		bool defer = false;
+
+		if (CPUQ_FAIR && dsq_head_vtime(PCPU_DSQ(cpu), &ov) &&
+		    dsq_head_vtime(domain_of(cpu), &dv) &&
+		    time_before(dv + CPUQ_WINDOW_NS, ov)) {
+			defer = true;
+			__sync_fetch_and_add(&nr_cpuq_deferred, 1);
+		}
+		if (!defer && LERTICK_MOVE_TO_LOCAL(PCPU_DSQ(cpu))) {
+			__sync_fetch_and_add(&nr_pcpu_own, 1);
+			return true;
+		}
+	}
+	if (take_next(cpu))
+		return true;
+	if (STEAL_PCPU && LERTICK_MOVE_TO_LOCAL(PCPU_DSQ(cpu)))
 		return true;
 	return STEAL_PCPU && pcpu_steal(cpu);
 }
