@@ -1,46 +1,41 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="780" viewBox="0 0 1120 780" role="img" aria-labelledby="t d">
-<title id="t">Lertick compared with Linux EEVDF on 8 CPUs</title>
-<desc id="d">Percentage difference of Lertick (learned mode) against Linux EEVDF on 8 CPUs, median of 2 sessions: better on 4, the same on 6, worse on 1 of 11 benchmarks not used for tuning. Green is better than EEVDF, red is worse, grey is within 5%.</desc>
-<rect width="1120" height="780" rx="24" fill="#f5f5f7"/>
-<text x="48" y="64" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="30" font-weight="700" fill="#1d1d1f">8 CPUs: better on 4, worse on 1</text>
-<text x="48" y="100" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#6e6e73">Lertick vs Linux default scheduler (EEVDF). Right is better. Median of 2 sessions.</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="796" viewBox="0 0 1120 796" role="img" aria-labelledby="t d">
+<title id="t">Lertick compared with Linux EEVDF on 8 CPUs, per benchmark</title>
+<desc id="d">Difference between Lertick and Linux EEVDF on 8 CPUs, median of 2 sessions of 8 runs: Lertick is better on 4, within 5% on 6 and worse on 1 of 11 benchmarks. Green is better than EEVDF, red is worse.</desc>
+<rect width="1120" height="796" rx="24" fill="#f5f5f7"/>
+<text x="48.0" y="64.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="30" font-weight="700" fill="#1d1d1f">8 CPUs: each benchmark against Linux EEVDF</text>
+<text x="48.0" y="100.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#6e6e73">Right of the line is better for Lertick. Median of 2 sessions of 8 runs.</text>
 <line x1="700" y1="152" x2="700" y2="710" stroke="#86868b" stroke-width="2"/>
-<text x="700" y="142" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" fill="#6e6e73">same as Linux</text>
-<text x="590" y="142" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" fill="#ff3b30">← worse</text>
-<text x="810" y="142" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" fill="#34c759">better →</text>
-<text x="48" y="189" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">perf messaging, processes</text>
+<text x="700.0" y="142.0" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" font-weight="400" fill="#6e6e73">same as EEVDF</text>
+<text x="590.0" y="142.0" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" font-weight="400" fill="#ff3b30">← worse</text>
+<text x="810.0" y="142.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" font-weight="400" fill="#34c759">better →</text>
+<text x="48.0" y="189.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#1d1d1f">perf messaging, processes</text>
 <rect x="665.2" y="170" width="34.8" height="26" rx="6" fill="#ff3b30"/>
-<text x="655.2" y="189" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#ff3b30">6% slower</text>
-<text x="48" y="239" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">perf messaging, threads</text>
-<rect x="700.0" y="220" width="10.2" height="26" rx="6" fill="#aeaeb2"/>
-<text x="720.2" y="239" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="400" fill="#6e6e73">same</text>
-<text x="48" y="289" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">perf pipe*</text>
+<text x="655.2" y="189.0" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#ff3b30">6% slower</text>
+<text x="48.0" y="239.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#1d1d1f">perf messaging, threads</text>
+<text x="712.0" y="239.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="400" fill="#86868b">within 5%</text>
+<text x="48.0" y="289.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#1d1d1f">perf pipe*</text>
 <rect x="700.0" y="270" width="240.0" height="26" rx="6" fill="#34c759"/>
 <path d="M929.0 274 L942.0 283.0 L929.0 292" fill="none" stroke="#f5f5f7" stroke-width="2.5"/>
-<text x="950.0" y="289" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#34c759">86% faster</text>
-<text x="48" y="339" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">hackbench, threads</text>
+<text x="950.0" y="289.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#34c759">86% faster</text>
+<text x="48.0" y="339.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#1d1d1f">hackbench, threads</text>
 <rect x="700.0" y="320" width="72.6" height="26" rx="6" fill="#34c759"/>
-<text x="782.6" y="339" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#34c759">12% faster</text>
-<text x="48" y="389" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">hackbench, 16 groups</text>
-<rect x="700.0" y="370" width="19.8" height="26" rx="6" fill="#aeaeb2"/>
-<text x="729.8" y="389" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="400" fill="#6e6e73">same</text>
-<text x="48" y="439" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">schbench 1 thread, request latency</text>
-<rect x="700.0" y="420" width="3.0" height="26" rx="6" fill="#aeaeb2"/>
-<text x="713.0" y="439" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="400" fill="#6e6e73">same</text>
-<text x="48" y="489" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">schbench 1 thread, wakeup latency</text>
+<text x="782.6" y="339.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#34c759">12% faster</text>
+<text x="48.0" y="389.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#1d1d1f">hackbench, 16 groups</text>
+<text x="712.0" y="389.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="400" fill="#86868b">within 5%</text>
+<text x="48.0" y="439.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#1d1d1f">schbench 1 thread, request latency</text>
+<text x="712.0" y="439.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="400" fill="#86868b">within 5%</text>
+<text x="48.0" y="489.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#1d1d1f">schbench 1 thread, wakeup latency</text>
 <rect x="700.0" y="470" width="127.8" height="26" rx="6" fill="#34c759"/>
-<text x="837.8" y="489" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#34c759">21% lower</text>
-<text x="48" y="539" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">schbench 4 msg threads, request latency</text>
-<rect x="687.4" y="520" width="12.6" height="26" rx="6" fill="#aeaeb2"/>
-<text x="677.4" y="539" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="400" fill="#6e6e73">same</text>
-<text x="48" y="589" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">schbench 4 msg threads, wakeup latency</text>
+<text x="837.8" y="489.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#34c759">21% lower</text>
+<text x="48.0" y="539.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#1d1d1f">schbench 4 msg threads, request latency</text>
+<text x="712.0" y="539.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="400" fill="#86868b">within 5%</text>
+<text x="48.0" y="589.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#1d1d1f">schbench 4 msg threads, wakeup latency</text>
 <rect x="700.0" y="570" width="152.4" height="26" rx="6" fill="#34c759"/>
-<text x="862.4" y="589" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#34c759">25% lower</text>
-<text x="48" y="639" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">schbench 4 msg threads, throughput</text>
-<rect x="697.0" y="620" width="3.0" height="26" rx="6" fill="#aeaeb2"/>
-<text x="687.0" y="639" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="400" fill="#6e6e73">same</text>
-<text x="48" y="689" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" fill="#1d1d1f">Kernel compile</text>
-<rect x="700.0" y="670" width="10.2" height="26" rx="6" fill="#aeaeb2"/>
-<text x="720.2" y="689" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="400" fill="#6e6e73">same</text>
-<text x="48" y="752" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" fill="#86868b">*EEVDF and scx_lavd take about 20 µs per pipe round trip in this VM. Linux 7.0, ARM64 VM. Bars past 40% are clipped.</text>
+<text x="862.4" y="589.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#34c759">25% lower</text>
+<text x="48.0" y="639.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#1d1d1f">schbench 4 msg threads, throughput</text>
+<text x="712.0" y="639.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="400" fill="#86868b">within 5%</text>
+<text x="48.0" y="689.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#1d1d1f">Kernel compile</text>
+<text x="712.0" y="689.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="16" font-weight="400" fill="#86868b">within 5%</text>
+<text x="48.0" y="748.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" font-weight="400" fill="#86868b">*In this VM a pipe round trip takes about 20 µs under EEVDF and 1.2 to 4.3 µs under Lertick.</text>
+<text x="48.0" y="770.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" font-weight="400" fill="#86868b">Bars past 40% are cut short. Linux 7.0, ARM64 VM.</text>
 </svg>
