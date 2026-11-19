@@ -1358,3 +1358,17 @@ Every deadline build holds the 4-CPU wakeup p99 at about 3 ms in every run, 20% 
 The rerun with the large dump buffer ran 40 minutes and 20 cycles without an exit. The first run overlapped video playback on the host, the rerun did not, and `v2`'s 60-minute run was on an idle host, so the ejection may be the deadline order or a host stall. `hb64-run.sh` separates the two: `hackbench -g 64 -l 2000` in a loop, 10-minute blocks, `d50` and `v2` alternating, three blocks each, with the large dump buffer.
 
 `hb64-run.sh`: no exit in 148 runs of `hackbench -g 64 -l 2000` with `d50` and 142 with `v2` (three 10-minute blocks each, alternating). The ejection did not come back under hackbench alone; it happened inside the long run's mixed cycle (nice mix, hackbench 16/32/64, perf messaging, schbench, stress-ng mix, kernel compile). `longab-run.sh` alternates 60-minute long runs, `d50` and `v2`, twice each, with the large dump buffer.
+
+## How often the lag bounds act, 2026-11-18
+
+`MEASURE_CLAMP` counts, per enqueue to a shared queue, the bounds that move a task's vtime: held to `AHEAD_NS` ahead, raised to `BEHIND_NS` behind, held by the `WAIT_MAX_NS` cap, and (separately) wakeups raised to `LAG_NS` behind the clock. `mc-run.sh` with the release configuration (`mc`) and with the deadline order (`mcd`), raw dumps in `clamp-sets.tar.gz`:
+
+| Workload | enqueues | ahead | behind | wait cap | wakeup lag |
+|---|---|---|---|---|---|
+| perf messaging processes, 8 CPUs (3 runs) | 11,779 | 0.01% | 0.02% | 0% | 45% |
+| perf messaging processes, 4 CPUs | 6,570 | 0% | 0% | 0% | 45% |
+| perf messaging threads, 8 CPUs | 14,510 | 0% | 0% | 0% | 34% |
+| hackbench 16 groups | 7,239 | 0% | 0.06% | 0% | 42% |
+| schbench -m4 -t2 | 31,715 | 0% | 0% | 0% | 26% |
+
+The deadline build reads the same. The three stability bounds almost never act in these benchmarks, so they are not what costs perf messaging with processes, and a predicted-wait scheme to keep them from acting has nothing to remove. The wakeup lag is the ordinary sleeper placement, older than the bounds. The 8-CPU perf messaging gap is still open; the shared DSQ's lock and EEVDF's placement of the receiver right after a sync wakeup are the remaining candidates.

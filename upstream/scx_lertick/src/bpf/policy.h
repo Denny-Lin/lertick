@@ -73,6 +73,9 @@ static u64 runnable_weight;
 #define BEHIND_NS (20ULL * NSEC_PER_MSEC)
 #define WAIT_MAX_NS (500ULL * NSEC_PER_MSEC)
 
+#ifndef LERTICK_CLAMP_NOTE
+#define LERTICK_CLAMP_NOTE(kind)
+#endif
 static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
 {
 	u32 w	   = p->scx.weight ? p->scx.weight : 1;
@@ -85,10 +88,14 @@ static __always_inline u64 clamp_ahead(struct task_struct *p, u64 vtime)
 	if (by_now < ahead)
 		ahead = by_now;
 	cap = vtime_now + ahead;
-	if (time_before(cap, vtime))
+	if (time_before(cap, vtime)) {
+		LERTICK_CLAMP_NOTE(by_now < AHEAD_NS * 100 / w ? 2 : 0);
 		return cap;
-	if (time_before(vtime, vtime_now - BEHIND_NS))
+	}
+	if (time_before(vtime, vtime_now - BEHIND_NS)) {
+		LERTICK_CLAMP_NOTE(1);
 		return vtime_now - BEHIND_NS;
+	}
 	return vtime;
 }
 /*

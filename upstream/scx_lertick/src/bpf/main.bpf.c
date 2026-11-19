@@ -233,6 +233,24 @@ static __always_inline bool task_is_long(struct task_struct *p)
 		 slice_fixed * DEADLINE_SCALE /                            \
 			 ((tctx)->eff_weight ? (tctx)->eff_weight : 100) : \
 		 0)
+/*
+ * Measurement only (MEASURE_CLAMP): how often the lag bounds act. c_clamp[0]:
+ * held to AHEAD_NS ahead; [1]: raised to BEHIND_NS behind; [2]: held by the
+ * WAIT_MAX_NS cap; c_lag: wakeups raised to LAG_NS behind; c_enq: enqueues.
+ */
+#ifndef MEASURE_CLAMP
+#define MEASURE_CLAMP 0
+#endif
+u64 c_clamp[3], c_lag, c_enq;
+#define LERTICK_CLAMP_NOTE(kind)                                  \
+	do {                                                      \
+		if (MEASURE_CLAMP && (kind) == 1)                 \
+			__sync_fetch_and_add(&c_clamp[1], 1);     \
+		else if (MEASURE_CLAMP && (kind) == 2)            \
+			__sync_fetch_and_add(&c_clamp[2], 1);     \
+		else if (MEASURE_CLAMP)                           \
+			__sync_fetch_and_add(&c_clamp[0], 1);     \
+	} while (0)
 #define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq, 0)
 #define LERTICK_TASK_CGROUP(p) scx_bpf_task_cgroup(p)
 #include "policy.h"
@@ -880,9 +898,14 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	 * tasks with larger weights would be pulled back to the clock and lose
 	 * their share.
 	 */
+	if (MEASURE_CLAMP)
+		__sync_fetch_and_add(&c_enq, 1);
 	if ((enq_flags & SCX_ENQ_WAKEUP) &&
-	    time_before(vtime, vtime_now - LAG_NS))
+	    time_before(vtime, vtime_now - LAG_NS)) {
 		vtime = vtime_now - LAG_NS;
+		if (MEASURE_CLAMP)
+			__sync_fetch_and_add(&c_lag, 1);
+	}
 	vtime = clamp_ahead(p, vtime);
 
 	if (WAKE_PREEMPT && (enq_flags & SCX_ENQ_WAKEUP) && tctx &&
