@@ -58,6 +58,12 @@ struct Opts {
     #[clap(short = 'f', long, action = clap::ArgAction::SetTrue)]
     fixed: bool,
 
+    /// Override the CPU capacities the kernel reports, for testing placement
+    /// on CPUs of unequal speed: a list such as "0-3=1024,4-7=512". CPUs not
+    /// listed keep the kernel's value.
+    #[clap(long)]
+    cpu_capacity: Option<String>,
+
     /// Time slice in microseconds in fixed mode, and before a task has enough
     /// completed bursts in online mode.
     #[clap(short = 's', long, default_value = "2000")]
@@ -179,6 +185,42 @@ impl<'a> Scheduler<'a> {
             nr_cpus,
             if rodata.nr_domains > 1 { nr_llcs } else { 1 }
         );
+
+        // CPU capacities, largest scaled to 1024. CPUs differ when some are
+        // more than 5% below the largest, as on a machine with big and little
+        // cores; otherwise every CPU is treated alike.
+        let mut caps: Vec<usize> = (0..nr_cpus)
+            .map(|cpu| topo.all_cpus.get(&cpu).map_or(1024, |c| c.cpu_capacity.max(1)))
+            .collect();
+        if let Some(spec) = &opts.cpu_capacity {
+            for item in spec.split(',').filter(|s| !s.is_empty()) {
+                let (range, cap) = item
+                    .split_once('=')
+                    .ok_or_else(|| anyhow::anyhow!("--cpu-capacity: expected CPUS=CAP in {item}"))?;
+                let cap: usize = cap.trim().parse()?;
+                let (lo, hi) = match range.split_once('-') {
+                    Some((a, b)) => (a.trim().parse::<usize>()?, b.trim().parse::<usize>()?),
+                    None => {
+                        let c = range.trim().parse::<usize>()?;
+                        (c, c)
+                    }
+                };
+                for cpu in lo..=hi.min(nr_cpus.saturating_sub(1)) {
+                    caps[cpu] = cap.max(1);
+                }
+            }
+        }
+        let max_cap = caps.iter().copied().max().unwrap_or(1024);
+        for (cpu, cap) in caps.iter().enumerate() {
+            rodata.cpu_cap[cpu] = ((cap * 1024) / max_cap).clamp(1, 1024) as u16;
+        }
+        rodata.cpus_asym = caps.iter().any(|&c| c * 100 < max_cap * 95);
+        if rodata.cpus_asym {
+            info!(
+                "CPU capacities differ: {:?}",
+                (0..nr_cpus).map(|c| rodata.cpu_cap[c]).collect::<Vec<_>>()
+            );
+        }
 
         // Load the BPF program for validation.
         let mut skel = scx_ops_load!(skel, lertick_ops, uei)?;

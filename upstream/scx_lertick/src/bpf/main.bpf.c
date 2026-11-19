@@ -285,6 +285,43 @@ u64 nr_enq_kicks;
  * load balancing. 2 also kicks an idle CPU when the per-CPU DSQ already holds
  * a task.
  */
+/*
+ * CPU capacities from the loader, largest 1024; 0 means 1024. cpus_asym is
+ * set when they differ, as on a machine with big and little cores.
+ */
+const volatile u16  cpu_cap[LERTICK_MAX_CPUS];
+const volatile bool cpus_asym;
+#define ASYM_PLACE 1
+#define BIG_CAP 973 /* within 5% of the largest */
+u64 nr_asym_big;
+
+static __always_inline u32 cap_of(s32 cpu)
+{
+	u16 c = cpu_cap[cpu & (LERTICK_MAX_CPUS - 1)];
+
+	return c ? c : 1024;
+}
+
+/* Claim an idle CPU of the largest capacity for @p, @prev first, or -1. */
+static __always_inline s32 pick_big_idle(struct task_struct *p, s32 prev)
+{
+	u32 n = scx_bpf_nr_cpu_ids(), i;
+
+	if (prev >= 0 && cap_of(prev) >= BIG_CAP &&
+	    bpf_cpumask_test_cpu(prev, p->cpus_ptr) &&
+	    scx_bpf_test_and_clear_cpu_idle(prev))
+		return prev;
+	bpf_for(i, 0, n) {
+		if (i >= LERTICK_MAX_CPUS)
+			break;
+		if (cap_of(i) < BIG_CAP || !bpf_cpumask_test_cpu(i, p->cpus_ptr))
+			continue;
+		if (scx_bpf_test_and_clear_cpu_idle(i))
+			return i;
+	}
+	return -1;
+}
+
 #define STEAL_PCPU 0
 #define WAKER_PREEMPT 0
 #define WAKER_PREEMPT_SRT 0
@@ -1078,7 +1115,22 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 {
 	struct task_ctx *tctx = task_ctx(p);
 	bool		 idle = false;
-	s32 cpu = scx_bpf_select_cpu_dfl(p, prev_cpu, wake_flags, &idle);
+	s32		 cpu  = -1;
+
+	/*
+	 * On CPUs of unequal capacity, a task whose bursts run long takes an
+	 * idle CPU of the largest capacity when one is free, its previous CPU
+	 * first. Short bursts take any idle CPU, as before.
+	 */
+	if (ASYM_PLACE && cpus_asym && tctx && tctx->ewma_burst_ns >= slice_fixed) {
+		cpu = pick_big_idle(p, prev_cpu);
+		if (cpu >= 0) {
+			idle = true;
+			__sync_fetch_and_add(&nr_asym_big, 1);
+		}
+	}
+	if (cpu < 0)
+		cpu = scx_bpf_select_cpu_dfl(p, prev_cpu, wake_flags, &idle);
 
 	if (MEASURE_WAKE || LEARNED_SYNC)
 		note_wake(wake_flags);
