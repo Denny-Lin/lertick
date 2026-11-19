@@ -1363,8 +1363,8 @@ cache line is written by every CPU on each event.
 
 Alternatives, recorded on branch
 [`learn-ab`](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#sync-wakees-stacked-on-the-wakers-cpu-2026-11-19):
-refusing a sync placement whenever the queue held a task lost the cache
-benefit and was slower; refusing it past 48 tasks worked but is a tuned
+refusing a sync placement whenever the queue held a task was slower (13%
+behind EEVDF, against 6% for the release in that set); refusing it past 48 tasks worked but is a tuned
 number; placing wakees by predicted wait stayed about 1% behind that cap on
 perf messaging and was 2.3 times slower than EEVDF on 8-CPU hackbench
 threads.

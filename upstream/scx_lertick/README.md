@@ -27,11 +27,10 @@ charged the CPU time they actually used, so `nice` values and cgroup
 All queues share one virtual clock, and how far a task may sit ahead of it or
 behind it is bounded, so no task waits long for the clock to catch up.
 
-A task woken by a waker that is about to sleep waits in a queue of the
-waker's CPU, which runs it next, while the data they share is still in its
-cache. A CPU with nothing else to run takes from the longest of these
-queues, so a waker that wakes many tasks at once does not leave other CPUs
-idle.
+A task woken with the sync hint waits in a queue of the waker's CPU, which
+takes from it before the LLC queue. A CPU with nothing else to run takes
+from the longest of these queues, so the tasks a waker wakes at once do not
+all wait on its CPU while other CPUs idle.
 
 A CPU prefers a queued task that last ran on it when that task is near the head
 of the queue, so a preempted task usually resumes where its cache is.
