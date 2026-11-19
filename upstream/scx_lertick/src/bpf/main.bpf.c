@@ -287,7 +287,8 @@ u64 nr_enq_kicks;
  */
 #define STEAL_PCPU 0
 #define WAKER_PREEMPT 0
-u64 nr_waker_preempts;
+#define WAKER_PREEMPT_SRT 0
+u64 nr_waker_preempts, nr_srt_spared;
 /* PREEMPT_PCPU and CPUQ_FAIR: see take_next_pcpu(). */
 #define PREEMPT_PCPU 0
 #define PREEMPT_MIN_NS (1ULL * NSEC_PER_MSEC)
@@ -1365,7 +1366,55 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	 * Otherwise a waker that keeps running, as in a futex handoff, holds the
 	 * wakee for its whole slice.
 	 */
-	if (WAKER_PREEMPT && tctx && (enq_flags & SCX_ENQ_WAKEUP) &&
+	/*
+	 * WAKER_PREEMPT 3: like EEVDF's wakeup check, compare the wakee's
+	 * deadline with that of the task running on the CPU it was placed on,
+	 * whichever CPU that is, and preempt that task if the wakee's is earlier.
+	 */
+	if (WAKER_PREEMPT == 3 && tctx && (enq_flags & SCX_ENQ_WAKEUP)) {
+		s32		    c	= scx_bpf_task_cpu(p);
+		struct task_struct *cur = __COMPAT_scx_bpf_cpu_curr(c);
+		struct task_ctx	   *ct	= cur && cur != p ? task_ctx(cur) : NULL;
+
+		if (ct && ct->running) {
+			u32 cw	= ct->eff_weight ? ct->eff_weight : 100;
+			u64 ran = cur->se.sum_exec_runtime > ct->runtime_start_ns ?
+					  cur->se.sum_exec_runtime - ct->runtime_start_ns :
+					  0;
+			/* The running task's vtime as charged so far, plus its offset. */
+			u64 cdl = cur->scx.dsq_vtime + ran * 100 / cw +
+				  slice_fixed * DEADLINE_SCALE / cw;
+
+			/*
+			 * WAKER_PREEMPT 4: also require that the running task is
+			 * predicted to run longer than the wakee, so a task about to
+			 * finish its burst (and perhaps release a lock) is left alone.
+			 */
+			/* SRT 2: without trusted predictions on both sides, do not preempt. */
+			bool longer = WAKER_PREEMPT_SRT < 2;
+
+			if (WAKER_PREEMPT_SRT && model_trusted(ct) && model_trusted(tctx)) {
+				u64 cur_ran = ct->episode_runtime_ns + ran;
+
+				/*
+				 * A task already past its prediction is not about to
+				 * finish: the prediction missed, so treat it as long.
+				 */
+				longer = cur_ran >= ct->prediction_ns ||
+					 ct->prediction_ns - cur_ran > tctx->prediction_ns;
+				if (!longer)
+					__sync_fetch_and_add(&nr_srt_spared, 1);
+			}
+			if (longer && time_before(vtime, cdl)) {
+				p->scx.dsq_vtime = vtime;
+				scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL_ON | c, slice,
+						   enq_flags | SCX_ENQ_PREEMPT);
+				__sync_fetch_and_add(&nr_waker_preempts, 1);
+				return;
+			}
+		}
+	}
+	if (WAKER_PREEMPT && WAKER_PREEMPT < 3 && tctx && (enq_flags & SCX_ENQ_WAKEUP) &&
 	    scx_bpf_task_cpu(p) == bpf_get_smp_processor_id()) {
 		struct task_struct *cur = bpf_get_current_task_btf();
 		struct task_ctx	   *ct	= cur != p ? task_ctx(cur) : NULL;

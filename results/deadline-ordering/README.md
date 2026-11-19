@@ -1585,3 +1585,54 @@ task woken while all CPUs are busy and its waker keeps running on the
 same CPU, as in thread pools and lock handoffs under full load; the
 exam's gamesim audio misses and main thread wakeup p99 show the same
 effect at a smaller scale.
+
+### EEVDF-style wakeup preemption, and preempting only long runners, 2026-11-19
+
+4-CPU half of the `wk`/`wk2` set (raw in `wk34-sets.tar.gz`): `wk` was
+worse than the release on schbench -m1 -t1 request p99 (-8.8% against
++9.8%), -m1 -t1 wakeup p99 (+8.3% against +28.0%), -m4 -t2 request p99
+(-9.9% against +6.7%) and RPS (-4.8% against +3.8%); `wk2` lost 8% RPS.
+
+`WAKER_PREEMPT` 3 (`wk3`) does EEVDF's wakeup check: the wakee preempts the
+task running on the CPU it was placed on if its deadline is earlier than
+that task's, counting the time the task has run so far. stress-ng futex:
+570,840 ops/s for one instance on one CPU, 361,069 for 8 on 8 CPUs.
+Held-out set, 6 runs (`wk3full-run.sh`), against EEVDF:
+
+| Measure | 8 CPUs: release | `wk3` | 4 CPUs: release | `wk3` |
+|---|---|---|---|---|
+| perf messaging processes | +15.7% | +14.7% | +11.5% | +9.2% |
+| perf messaging threads | +21.4% | +19.8% | +17.6% | +17.6% |
+| perf pipe | +88.5% | +85.8% | +93.4% | +93.7% |
+| hackbench threads | +26.8% | +26.8% | +33.1% | +25.9% |
+| hackbench 16 groups | +14.5% | +14.9% | +8.8% | +6.5% |
+| schbench -m1 -t1 request p99 | -1.9% | +2.1% | +0.2% | -4.6% |
+| schbench -m1 -t1 wakeup p99 | +16.7% | +24.2% | +22.0% | +16.3% |
+| schbench -m4 -t2 request p99 | +3.7% | -8.7% | +15.6% | +12.8% |
+| schbench -m4 -t2 wakeup p99 | +36.8% | +43.4% | +19.5% | +4.1% |
+| schbench -m4 -t2 RPS | +0.5% | -0.7% | +28.5% | +13.3% |
+| kernel compile | +2.6% | +2.4% | -1.7% | -6.0% |
+
+All three preemption builds lose on 8-CPU -m4 -t2 request p99 (-7.5 to
+-9.6%), and `wk3` costs more on 4 CPUs.
+
+`WAKER_PREEMPT_SRT` adds to `wk3` a condition from the predictions: preempt
+only if the running task is past its prediction, or its predicted remainder
+is longer than the wakee's predicted burst, so that a task about to finish
+its burst is left alone. With untrusted predictions, 1 (`wk4a`) falls back
+to `wk3` and 2 (`wk4b`) does not preempt. futex: `wk4a` 570,595 and
+404,665 ops/s, `wk4b` 334 and 379,896 (a waker that never sleeps never
+completes a burst, so its model is never trusted). schbench -m4 -t2 on 4
+CPUs, 8 runs each (`sbab.sh`), medians:
+
+| Arm | wakeup p99 (us) | request p99 (us) | RPS |
+|---|---|---|---|
+| EEVDF | 3,780 | 40,320 | 239.7 |
+| release (`sp3`) | 3,072 | 40,576 | 255.0 |
+| `wk3` | 2,988 | 41,984 | 224.9 |
+| `wk4a` | 5,216 | 41,152 | 233.8 |
+| `wk4b` | 5,232 | 41,216 | 234.8 |
+
+The prediction condition keeps the futex gain but makes the 4-CPU wakeup
+p99 70% worse than the release's. No preemption build so far fixes futex
+without a cost elsewhere; none is taken, and the release does not change.
