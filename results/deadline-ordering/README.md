@@ -28,6 +28,11 @@ than one LLC and CPU hotplug are untested.
 
 Newest first. The kept changes are in the current code.
 
+- 2026-11-19, kept: handling of CPUs of unequal capacity (big and little
+  cores): bursts learned as work, long bursts placed on idle big CPUs, and
+  long runners handed from little to idle big CPUs. Checked only with
+  capacities declared on the VM's alike CPUs
+  ([record](RECORD.md#cpus-of-unequal-capacity-2026-11-19)).
 - 2026-11-19, kept: queue sync wakees on a queue of the waker's CPU that
   idle CPUs can take from, and count statistics per CPU. perf messaging with
   processes went from 14% behind EEVDF to 15% ahead on 8 CPUs

@@ -283,3 +283,25 @@ Bare-metal tests are required before broader CPU-performance conclusions.
 Fairness, starvation, task churn, affinity, and scheduling overhead remain CPU
 validation topics. Memory-management experiments are outside Lertick's scope.
 The archived memory-controller protocol is background research only.
+
+## Report from your machine
+
+`hw-report.sh` compares scx_lertick with the kernel's default scheduler on
+the machine it runs on and writes `lertick-report-*/report.md`, ready to
+paste into an issue. It needs a sched_ext kernel, root, and some of perf,
+hackbench, schbench and stress-ng; missing tools only skip their tests.
+
+```sh
+sudo benchmarks/hw-report.sh /path/to/scx_lertick 5
+```
+
+The report lists the CPU model, topology, CPU capacities, SMT state and
+kernel version, and no task names or PIDs. Reports from machines with big
+and little cores, SMT or more than one L3 cache are the most useful, since
+none of those has been tested yet. On a machine with big and little cores,
+a second report with the option `--no-asym-rotate` shows what handing
+long-running tasks to the big cores changes:
+
+```sh
+sudo benchmarks/hw-report.sh /path/to/scx_lertick 5 --no-asym-rotate
+```
