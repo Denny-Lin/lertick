@@ -1343,3 +1343,43 @@ Benchmarks, 8 runs each, against EEVDF and `v2` in the same sessions (`x4` with 
 | `final5` | 6 / 4 / 1 | 7 / 3 / 1 | 4 / 6 / 1 | 4 / 7 / 0 |
 
 Over both sessions (`dl_ratio.py`), the deadline build is 8 / 2 / 1 against EEVDF on 4 CPUs and 4 / 6 / 1 on 8 CPUs. Its -m4 -t2 wakeup p99 on 4 CPUs is 19% below EEVDF's in both sessions and steady across runs (3.02 to 3.05 ms), where `v2` moved between 3 and 5 ms. perf messaging with processes remains the loss: 8% on 4 CPUs and 6% on 8 CPUs over the two sessions, from level to 15% per session, as for `v2`. The README's other-scheduler counts stay those of `v2` in the brawl session, labelled as the previous build.
+
+## Stealable CPU queues, 2026-11-19
+
+The loss on perf messaging with processes came from sync wakeups.
+`sync_local()` put a sync wakee on the waker's local DSQ however many tasks
+already waited there, and no other CPU can take a task from a local DSQ. A
+perf messaging sender keeps running while it writes to its 20 receivers, so
+they stacked behind it: in 8-CPU perf messaging with processes, 29,679 of
+31,728 sync placements went to a non-empty local DSQ, and 12,432 found 16 or
+more tasks there.
+
+The release now queues a sync wakee on a DSQ of the waker's CPU. That CPU
+takes from it first, as it did from its local DSQ. A CPU with nothing else
+to run takes from the CPU queue holding the most tasks, in its own domain
+first, and an idle CPU is kicked when a task joins a queue that already
+holds one. The statistics counters also moved to a per-CPU array, so no
+cache line is written by every CPU on each event.
+
+Alternatives, recorded on branch
+[`learn-ab`](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#sync-wakees-stacked-on-the-wakers-cpu-2026-11-19):
+refusing a sync placement whenever the queue held a task lost the cache
+benefit and was slower; refusing it past 48 tasks worked but is a tuned
+number; placing wakees by predicted wait stayed about 1% behind that cap on
+perf messaging and was 2.3 times slower than EEVDF on 8-CPU hackbench
+threads.
+
+`rel3-run.sh`, one session, 6 runs per arm, against EEVDF and the previous
+release (`v5`). Better/same/worse against EEVDF: on 8 CPUs 8 / 3 / 0 (the
+previous release 5 / 4 / 2), on 4 CPUs 7 / 3 / 1 (5 / 3 / 3). perf
+messaging with processes went from 14% behind EEVDF to 15% ahead on 8 CPUs
+and from 16% behind to 7% ahead on 4 CPUs. The one loss, 4-CPU schbench
+-m4 -t2 request p99 at 10% above EEVDF, is the same for the previous
+release in this session (40.6 and 40.7 ms against 37.0 ms); earlier
+sessions measured it 1 to 4% above EEVDF. Raw data in `rel3-sets.tar.gz`.
+
+Safety checks of the same build, after the benchmarks (`rel3-run.sh`): the
+fairness gate passes 3 of 3; cgroup weights 2.00, 1.00 and 3.03; the CI
+scheduler test 3 of 3, 20 attach/detach cycles and the edge cases
+without a stall; the stress battery and a 30-minute long run (18 cycles)
+without an exit. Logs in `rel3-checks.tar.gz`.
