@@ -31,7 +31,7 @@
 
 </details>
 
-<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile, none of them used to choose Lertick's settings. Lertick runs in its default learned (`online`) mode on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Against EEVDF: the current version (deadline order, 2026-11-18), median of 2 sessions of 8 runs each. Against the other schedulers: the previous build (without the deadline order), all six run in one session, shuffled, 8 runs; the deadline order mainly lowers Lertick's 4-CPU wakeup latency, so these counts are conservative. The kernel compile rebuilds kernel/sched. Physical hardware is untested. [All runs →](results/deadline-ordering/README.md#deadline-order-2026-11-18)</sub>
+<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a kernel compile. They were first run as a held-out check; later rounds also used them to choose between variants. Lertick runs in its default learned (`online`) mode on one ARM64 VM (Linux 7.0) using 4 or 8 CPUs; "same" means within 5%. Against EEVDF: the current version (deadline order, 2026-11-18), median of 2 sessions of 8 runs each. Against the other schedulers: the previous build (without the deadline order), all six run in one session, shuffled, 8 runs; the deadline order mainly lowers Lertick's 4-CPU wakeup latency, so these counts are conservative. The kernel compile rebuilds kernel/sched. Physical hardware is untested. [All runs →](results/deadline-ordering/RECORD.md#deadline-order-2026-11-18)</sub>
 
 ## Get started
 
