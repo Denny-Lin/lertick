@@ -572,7 +572,10 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		u64 slice = choose_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
 
 		stat_add(LERTICK_STAT_LOCAL_ENQUEUE, 1);
-		scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL, slice, 0);
+		if (idle)
+			scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL, slice, 0);
+		else
+			queue_on_cpu(p, cpu, slice);
 		if (tctx)
 			publish(tctx);
 	}
@@ -971,6 +974,9 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 		if (ret)
 			return ret;
 	}
+	ret = create_cpu_dsqs();
+	if (ret)
+		return ret;
 	if (cpuperf_mode != LERTICK_CPUPERF_UTIL)
 		return ret;
 	t = bpf_map_lookup_elem(&idle_timer_map, &zero);

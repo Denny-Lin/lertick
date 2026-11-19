@@ -1,26 +1,23 @@
 # Learned slices and queue order
 
 This folder holds the experiments behind the current scheduler: the time slice
-learned per task, the queue ordered by vtime plus half that slice, and the
-variants that were tried and dropped. The current code is the same as
-sched-ext/scx#3994 at commit `45d1fda`.
+learned per task, the queue ordered by vtime plus half that slice, sync
+wakees queued where idle CPUs can take them, and the variants that were tried
+and dropped. The scx copy at sched-ext/scx#3994 commit `45d1fda` does not yet
+have the CPU queues.
 
 ## Status
 
-On 4 CPUs Lertick is better than EEVDF on 8 of the 11 benchmarks, the same on
-2 and worse on 1. On 8 CPUs it is better on 4, the same on 6 and worse on 1.
-These are medians of two sessions of 8 runs
-([numbers](RECORD.md#deadline-order-2026-11-18)).
+On 8 CPUs Lertick is better than EEVDF on 8 of the 11 benchmarks, the same on
+3 and worse on none. On 4 CPUs it is better on 7, the same on 3 and worse on
+1. These are medians of 6 runs in one session
+([numbers](RECORD.md#stealable-cpu-queues-2026-11-19)).
 
-The loss is perf bench messaging with processes, 6 to 8% behind EEVDF. The
-cause is not known yet. It is not lost CPU time or the lag bounds, and placing
-the wakee by a learned guess does not help
-([notes](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#what-the-8-cpu-perf-messaging-loss-is-not-2026-11-18),
-[lag bounds](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#how-often-the-lag-bounds-act-2026-11-18)).
-The shared queue's lock and the way EEVDF places the receiver after a sync
-wakeup have not been tested.
+The 4-CPU loss is schbench -m 4 -t 2 request p99, 10% above EEVDF. The
+previous release measured the same in that session, and earlier sessions put
+it 1 to 4% above EEVDF, so it is not from the latest change.
 
-scx_bpfland, scx_lavd, scx_p2dq and scx_flash were compared with the previous
+scx_bpfland, scx_lavd, scx_p2dq and scx_flash were compared with an earlier
 version only, in one session
 ([table](RECORD.md#same-session-comparison-2026-11-18)).
 
@@ -31,6 +28,15 @@ than one LLC and CPU hotplug are untested.
 
 Newest first. The kept changes are in the current code.
 
+- 2026-11-19, kept: queue sync wakees on a queue of the waker's CPU that
+  idle CPUs can take from, and count statistics per CPU. perf messaging with
+  processes went from 14% behind EEVDF to 15% ahead on 8 CPUs
+  ([record](RECORD.md#stealable-cpu-queues-2026-11-19),
+  [experiments](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#sync-wakees-stacked-on-the-wakers-cpu-2026-11-19)).
+- 2026-11-19, dropped: refusing sync placements past a queue length, and
+  placing wakees by predicted wait. The cap worked but is a tuned number;
+  the predicted wait was 2.3 times slower than EEVDF on 8-CPU hackbench
+  threads (same links).
 - 2026-11-18, kept: order the queue by vtime plus half the predicted slice.
   The 4-CPU schbench -m 4 -t 2 wakeup p99 is now 19% below EEVDF's
   ([record](RECORD.md#deadline-order-2026-11-18),

@@ -8,30 +8,30 @@
 
 ## Performance
 
-Lertick was tested on 11 common scheduler benchmarks in an ARM64 virtual machine (Linux 7.0) with 4 and 8 CPUs. Compared with Linux's default scheduler (EEVDF), it is faster on `perf bench pipe` and hackbench with threads, has lower schbench wakeup latency, and is 6 to 8% slower on `perf bench messaging` with processes. The rest are within 5% or better. It has not been tested on physical hardware yet.
+Lertick was tested on 11 common scheduler benchmarks in an ARM64 virtual machine (Linux 7.0) with 4 and 8 CPUs. Compared with Linux's default scheduler (EEVDF), it is faster on `perf bench pipe`, `perf bench messaging` and hackbench, and has lower schbench wakeup latency. On 4 CPUs its schbench request latency with 4 message threads is 10% higher, as with the previous version. The rest are within 5% or better. It has not been tested on physical hardware yet.
 
 <p align="center">
-  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks. Against Linux EEVDF, Lertick is better on 8, the same on 2 and worse on 1. Against sched_ext schedulers, with the previous Lertick version: scx_bpfland 9 better, 2 same, 0 worse; scx_lavd 8, 2 and 1; scx_p2dq 7, 2 and 2; scx_flash 8, 2 and 1." width="1120" />
+  <img src="docs/assets/lertick-scoreboard-cpu4.svg" alt="4 CPUs, 11 benchmarks. Against Linux EEVDF, Lertick is better on 7, the same on 3 and worse on 1. Against sched_ext schedulers, with an earlier Lertick version: scx_bpfland 9 better, 2 same, 0 worse; scx_lavd 8, 2 and 1; scx_p2dq 7, 2 and 2; scx_flash 8, 2 and 1." width="1120" />
 </p>
 
 <p align="center">
-  <img src="docs/assets/lertick-scoreboard-cpu8.svg" alt="8 CPUs, 11 benchmarks. Against Linux EEVDF, Lertick is better on 4, the same on 6 and worse on 1. Against sched_ext schedulers, with the previous Lertick version: scx_bpfland 8 better, 3 same, 0 worse; scx_lavd 4, 6 and 1; scx_p2dq 5, 6 and 0; scx_flash 8, 3 and 0." width="1120" />
+  <img src="docs/assets/lertick-scoreboard-cpu8.svg" alt="8 CPUs, 11 benchmarks. Against Linux EEVDF, Lertick is better on 8, the same on 3 and worse on 0. Against sched_ext schedulers, with an earlier Lertick version: scx_bpfland 8 better, 3 same, 0 worse; scx_lavd 4, 6 and 1; scx_p2dq 5, 6 and 0; scx_flash 8, 3 and 0." width="1120" />
 </p>
 
 <details>
 <summary><strong>Each benchmark against Linux EEVDF</strong></summary>
 
 <p align="center">
-  <img src="docs/assets/lertick-vs-eevdf-cpu4.svg" alt="4 CPUs, median of 2 sessions: Lertick is better than Linux EEVDF on perf messaging threads, perf pipe, hackbench threads and 16 groups, schbench 1-thread wakeup latency and schbench 4 message threads request latency, wakeup latency and throughput; within 5% on schbench 1-thread request latency and kernel compile; worse on perf messaging processes." width="1120" />
+  <img src="docs/assets/lertick-vs-eevdf-cpu4.svg" alt="4 CPUs, medians of 6 runs: Lertick is better than Linux EEVDF on perf messaging processes and threads, perf pipe, hackbench threads and 16 groups, and schbench wakeup latency with 1 thread and with 4 message threads; within 5% on schbench 1-thread request latency, schbench throughput and kernel compile; worse on schbench request latency with 4 message threads." width="1120" />
 </p>
 
 <p align="center">
-  <img src="docs/assets/lertick-vs-eevdf-cpu8.svg" alt="8 CPUs, median of 2 sessions: Lertick is better than Linux EEVDF on perf pipe, hackbench threads, and schbench wakeup latency with 1 and with 4 message threads; within 5% on perf messaging threads, hackbench 16 groups, schbench request latency, schbench throughput and kernel compile; worse on perf messaging processes." width="1120" />
+  <img src="docs/assets/lertick-vs-eevdf-cpu8.svg" alt="8 CPUs, medians of 6 runs: Lertick is better than Linux EEVDF on perf messaging processes and threads, perf pipe, hackbench threads and 16 groups, schbench wakeup latency with 1 thread and with 4 message threads, and kernel compile; within 5% on schbench request latency with 1 thread and with 4 message threads and schbench throughput; worse on none." width="1120" />
 </p>
 
 </details>
 
-<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a rebuild of kernel/sched. They were also used to choose between design variants. Lertick ran with its default settings. [How it was measured](results/deadline-ordering/README.md#how-results-are-measured) · [All runs](results/deadline-ordering/RECORD.md#deadline-order-2026-11-18)</sub>
+<sub>Benchmarks: perf bench sched messaging and pipe, hackbench, schbench and a rebuild of kernel/sched. They were also used to choose between design variants. Lertick ran with its default settings. [How it was measured](results/deadline-ordering/README.md#how-results-are-measured) · [All runs](results/deadline-ordering/RECORD.md#stealable-cpu-queues-2026-11-19)</sub>
 
 ## Get started
 

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="632" viewBox="0 0 1120 632" role="img" aria-labelledby="t d">
 <title id="t">Lertick against other schedulers on 8 CPUs</title>
-<desc id="d">On 8 CPUs, out of 11 benchmarks, Lertick against Linux EEVDF: better on 4, the same on 6, worse on 1. The previous Lertick version against sched_ext schedulers: scx_bpfland: better on 8, the same on 3, worse on 0; scx_lavd: better on 4, the same on 6, worse on 1; scx_p2dq: better on 5, the same on 6, worse on 0; scx_flash: better on 8, the same on 3, worse on 0.</desc>
+<desc id="d">On 8 CPUs, out of 11 benchmarks, Lertick against Linux EEVDF: better on 8, the same on 3, worse on 0. An earlier Lertick version against sched_ext schedulers: scx_bpfland: better on 8, the same on 3, worse on 0; scx_lavd: better on 4, the same on 6, worse on 1; scx_p2dq: better on 5, the same on 6, worse on 0; scx_flash: better on 8, the same on 3, worse on 0.</desc>
 <rect width="1120" height="632" rx="24" fill="#f5f5f7"/>
 <text x="48.0" y="64.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="30" font-weight="700" fill="#1d1d1f">8 CPUs: Lertick against other schedulers</text>
 <text x="48.0" y="100.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" fill="#6e6e73">How many of 11 benchmarks Lertick is better on, the same on, or worse on.</text>
@@ -12,14 +12,12 @@
 <text x="350.4" y="137.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" font-weight="400" fill="#6e6e73">Worse</text>
 <text x="48.0" y="194.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="20" font-weight="600" fill="#1d1d1f">Linux EEVDF</text>
 <text x="48.0" y="216.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" font-weight="400" fill="#86868b">kernel default</text>
-<rect x="241.0" y="176" width="300.5" height="40" rx="6" fill="#34c759"/>
-<text x="391.3" y="203.0" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">4</text>
-<rect x="543.5" y="176" width="451.8" height="40" rx="6" fill="#aeaeb2"/>
-<text x="769.5" y="203.0" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">6</text>
-<rect x="997.4" y="176" width="73.6" height="40" rx="6" fill="#ff3b30"/>
-<text x="1034.2" y="203.0" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">1</text>
+<rect x="241.0" y="176" width="603.1" height="40" rx="6" fill="#34c759"/>
+<text x="542.5" y="203.0" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">8</text>
+<rect x="846.1" y="176" width="224.9" height="40" rx="6" fill="#aeaeb2"/>
+<text x="958.5" y="203.0" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">3</text>
 <line x1="48" y1="240" x2="1072" y2="240" stroke="#d2d2d7" stroke-width="1"/>
-<text x="48.0" y="270.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" fill="#6e6e73">sched_ext schedulers, compared with the previous Lertick version</text>
+<text x="48.0" y="270.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" fill="#6e6e73">sched_ext schedulers, compared with an earlier Lertick version</text>
 <text x="48.0" y="314.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="20" font-weight="600" fill="#1d1d1f">scx_bpfland</text>
 <text x="48.0" y="336.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="15" font-weight="400" fill="#86868b">version 1.1.2</text>
 <rect x="241.0" y="296" width="603.1" height="40" rx="6" fill="#34c759"/>
@@ -46,5 +44,5 @@
 <text x="542.5" y="539.0" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">8</text>
 <rect x="846.1" y="512" width="224.9" height="40" rx="6" fill="#aeaeb2"/>
 <text x="958.5" y="539.0" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">3</text>
-<text x="48.0" y="602.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" font-weight="400" fill="#86868b">Linux 7.0, ARM64 VM. EEVDF: median of 2 sessions of 8 runs. sched_ext schedulers: one session of 8 runs.</text>
+<text x="48.0" y="602.0" text-anchor="start" font-family="-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif" font-size="14" font-weight="400" fill="#86868b">Linux 7.0, ARM64 VM. EEVDF: medians of 6 runs. sched_ext schedulers: one session of 8 runs.</text>
 </svg>

@@ -15,14 +15,14 @@ ROWS = [  # label, higher_is_better, kind
     ("schbench 4 msg threads, throughput", True, "rps"),
     ("Kernel compile", False, "time"),
 ]
-# EEVDF: the deadline-ordering build, from dl_ratio.py (median over the
-# sessions x4 and final5, 8 runs each). The sched_ext schedulers: the
-# previous build (v2) run with them in the brawl session (brawl_ratio.py),
-# since the deadline build has not run in one session with them.
+# EEVDF: the release with stealable CPU queues (rel3), one session of 6 runs
+# against EEVDF and the previous release (rel3-run.sh). The sched_ext
+# schedulers: an earlier build (v2) run with them in the brawl session
+# (brawl_ratio.py), since later builds have not run in one session with them.
 # In ROWS order; positive is better for Lertick.
-EEVDF = {  # median over sessions of 8 runs
-    4: [-8.0, 9.5, 93.7, 29.0, 11.4, 0.6, 19.2, 6.7, 19.4, 12.6, 0.7],
-    8: [-5.8, 1.7, 85.6, 12.1, 3.3, 0.0, 21.3, -2.1, 25.4, -0.2, 1.7],
+EEVDF = {  # medians of 6 runs, one session
+    4: [7.3, 15.0, 93.6, 35.1, 12.1, -0.4, 13.9, -9.9, 19.6, 3.7, 1.5],
+    8: [15.3, 23.2, 85.5, 27.6, 14.9, 1.1, 19.0, 0.3, 20.1, -0.6, 7.5],
 }
 OTHERS = {  # same session (brawl), 8 runs
     "scx_bpfland": {4: [13.2, 29.5, 69.0, 20.0, 21.2, -1.9, 11.8, 85.6, 38.2, 32.3, -3.6],
@@ -72,12 +72,12 @@ def draw(cpus, path):
     b, s, w = tally(pcts)
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="t d">',
            f'<title id="t">Lertick compared with Linux EEVDF on {cpus} CPUs, per benchmark</title>',
-           f'<desc id="d">Difference between Lertick and Linux EEVDF on {cpus} CPUs, median of 2 sessions of 8 runs: '
+           f'<desc id="d">Difference between Lertick and Linux EEVDF on {cpus} CPUs, medians of 6 runs: '
            f'Lertick is better on {b}, within 5% on {s} and worse on {w} of {len(ROWS)} benchmarks. '
            'Green is better than EEVDF, red is worse.</desc>',
            f'<rect width="{W}" height="{H}" rx="24" fill="{BG}"/>',
            text(48, 64, f"{cpus} CPUs: each benchmark against Linux EEVDF", 30, weight="700"),
-           text(48, 100, "Right of the line is better for Lertick. Median of 2 sessions of 8 runs.", 18, MUTED),
+           text(48, 100, "Right of the line is better for Lertick. Medians of 6 runs.", 18, MUTED),
            f'<line x1="{zero_x}" y1="{top - 18}" x2="{zero_x}" y2="{top + rh * len(ROWS) - 10}" stroke="{FAINT}" stroke-width="2"/>',
            text(zero_x, top - 28, "same as EEVDF", 14, MUTED, anchor="middle"),
            text(zero_x - 110, top - 28, "← worse", 14, RED, anchor="end"),
@@ -102,7 +102,7 @@ def draw(cpus, path):
             out.append(text(x + 16, y + 19, txt, 16, "#ffffff", "700"))
         else:
             out.append(text(x - 10, y + 19, txt, 16, color, "700", "end"))
-    out.append(text(48, H - 48, "*In this VM a pipe round trip takes about 20 µs under EEVDF and 1.2 to 4.3 µs under Lertick.", 14, FAINT))
+    out.append(text(48, H - 48, "*In this VM a pipe round trip takes about 19 µs under EEVDF and 1.2 to 2.7 µs under Lertick.", 14, FAINT))
     out.append(text(48, H - 26, "Bars past 40% are cut short. Linux 7.0, ARM64 VM.", 14, FAINT))
     out.append('</svg>')
     open(path, "w").write("\n".join(out) + "\n")
@@ -137,7 +137,7 @@ def scoreboard(cpus, path):
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="t d">',
            f'<title id="t">Lertick against other schedulers on {cpus} CPUs</title>',
            f'<desc id="d">On {cpus} CPUs, out of {n} benchmarks, Lertick against {says(eevdf[0], eevdf[2])}. '
-           'The previous Lertick version against sched_ext schedulers: '
+           'An earlier Lertick version against sched_ext schedulers: '
            + '; '.join(says(name, c) for name, _, c in others) + '.</desc>',
            f'<rect width="{W}" height="{H}" rx="24" fill="{BG}"/>',
            text(48, 64, f"{cpus} CPUs: Lertick against other schedulers", 30, weight="700"),
@@ -149,10 +149,10 @@ def scoreboard(cpus, path):
         lx += 22 + 8.2 * len(label) + 28
     out += row(first, *eevdf)
     out.append(f'<line x1="48" y1="{group}" x2="{W - 48}" y2="{group}" stroke="#d2d2d7" stroke-width="1"/>')
-    out.append(text(48, group + 30, "sched_ext schedulers, compared with the previous Lertick version", 15, MUTED, "600"))
+    out.append(text(48, group + 30, "sched_ext schedulers, compared with an earlier Lertick version", 15, MUTED, "600"))
     for i, (name, sub, counts) in enumerate(others):
         out += row(rest + i * rh, name, sub, counts)
-    out.append(text(48, H - 30, "Linux 7.0, ARM64 VM. EEVDF: median of 2 sessions of 8 runs. sched_ext schedulers: one session of 8 runs.", 14, FAINT))
+    out.append(text(48, H - 30, "Linux 7.0, ARM64 VM. EEVDF: medians of 6 runs. sched_ext schedulers: one session of 8 runs.", 14, FAINT))
     out.append('</svg>')
     open(path, "w").write("\n".join(out) + "\n")
 
