@@ -1498,3 +1498,18 @@ The costs are learned, but choosing which task to steal by them changes
 neither time nor migrations beyond noise. Not taken. The release itself now
 migrates less than EEVDF in this benchmark, where the build before the CPU
 queues migrated 60% more.
+
+## Held-out exam, hypothesis fixed 2026-11-19 before the run
+
+None of these workloads was used to choose a variant. Arms: EEVDF and the
+release (`rel3`, the code merged to main and pushed to sched-ext/scx#3994),
+shuffled in each of 5 repetitions (`exam.sh`). Pass: no workload's main
+metric more than 5% worse than EEVDF, median over repetitions. Whatever the
+outcome, it is recorded here and the design is not changed to fit it.
+
+| Workload | Main metric |
+|---|---|
+| `gamesim` 60 fps, main 4 ms, render 6 ms, audio 0.5 ms every 5 ms, 20 s, on 4 CPUs beside 4 CPU hogs | frames missed |
+| stress-ng futex, mq, matrix and fork, 8 workers each, 15 s, 8 CPUs | bogo ops per second |
+| zstd -T8 -10 of `drivers/net` from the kernel tree, 8 CPUs | time |
+| A rebuild of `mm/` in the kernel tree, -j8, 8 CPUs | time |
