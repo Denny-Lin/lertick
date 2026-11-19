@@ -13,8 +13,8 @@ These are medians of two sessions of 8 runs
 ([numbers](RECORD.md#deadline-order-2026-11-18)).
 
 The loss is perf bench messaging with processes, 6 to 8% behind EEVDF. The
-cause is not known yet. Lost CPU time, wakee placement by a learned guess and
-the lag bounds have been ruled out
+cause is not known yet. It is not lost CPU time or the lag bounds, and placing
+the wakee by a learned guess does not help
 ([notes](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#what-the-8-cpu-perf-messaging-loss-is-not-2026-11-18),
 [lag bounds](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#how-often-the-lag-bounds-act-2026-11-18)).
 The shared queue's lock and the way EEVDF places the receiver after a sync
