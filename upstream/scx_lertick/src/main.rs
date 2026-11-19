@@ -27,6 +27,7 @@ use log::{debug, info, warn};
 use scx_stats::prelude::*;
 use scx_utils::NR_CPU_IDS;
 use scx_utils::Topology;
+use scx_utils::compat;
 use scx_utils::UserExitInfo;
 use scx_utils::build_id;
 use scx_utils::libbpf_clap_opts::LibbpfOpts;
@@ -220,6 +221,14 @@ impl<'a> Scheduler<'a> {
                 "CPU capacities differ: {:?}",
                 (0..nr_cpus).map(|c| rodata.cpu_cap[c]).collect::<Vec<_>>()
             );
+        }
+
+        // With CPUs of unequal capacity, dispatch() may hand a long-running
+        // task to an idle big CPU; ENQ_LAST makes the kernel queue it again
+        // even when its CPU has nothing else to run, instead of keeping it.
+        let cpus_asym = skel.maps.rodata_data.as_ref().unwrap().cpus_asym;
+        if cpus_asym {
+            skel.struct_ops.lertick_ops_mut().flags |= *compat::SCX_OPS_ENQ_LAST;
         }
 
         // Load the BPF program for validation.
