@@ -78,6 +78,8 @@ struct task_ctx {
 	__s32		     features[LERTICK_FEATURES];
 	u64		     runtime_start_ns;
 	u64		     episode_runtime_ns;
+	u64 episode_work_ns; /* CAP_INVARIANT: runtime scaled by CPU capacity */
+	u32 run_cap; /* capacity of the CPU it last ran on */
 	u64		     last_sleep_ns;
 	u64		     last_burst_ns;
 	u64		     ewma_burst_ns;
@@ -292,6 +294,15 @@ u64 nr_enq_kicks;
 const volatile u16  cpu_cap[LERTICK_MAX_CPUS];
 const volatile bool cpus_asym;
 #define ASYM_PLACE 1
+/*
+ * CAP_INVARIANT: learn bursts as work, the run time scaled by the capacity
+ * of the CPU it ran on (1024 = the largest), so a burst learned on a little
+ * CPU predicts the right time on a big one. A slice is the predicted work
+ * left, scaled back by the capacity of the CPU the task last ran on. With
+ * all capacities 1024 nothing changes.
+ */
+#define CAP_INVARIANT 1
+#define CI_DEBUG 0
 #define BIG_CAP 973 /* within 5% of the largest */
 u64 nr_asym_big;
 
@@ -717,6 +728,7 @@ static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 	tctx->episode_active = true;
 	tctx->episode_valid  = tctx->has_slept && (enq_flags & SCX_ENQ_WAKEUP);
 	tctx->episode_runtime_ns = 0;
+	tctx->episode_work_ns	 = 0;
 	tctx->prediction_ns	 = 0;
 
 	tctx->features[0]	 = LERTICK_Q;
@@ -786,14 +798,25 @@ u64 nr_short_kicks;
 /* Remaining slice: the predicted burst less what already ran, within bounds. */
 static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 {
-	u64 slice = slice_fixed;
+	u64 slice = slice_fixed, pred = tctx ? tctx->prediction_ns : 0;
 
+	/* In time on the CPU the task last ran on (see CAP_INVARIANT). */
+	if (CAP_INVARIANT && tctx) {
+		u32 cap = tctx->run_cap ? tctx->run_cap : 1024;
+
+		/* A segment still running counts at this CPU's capacity. */
+		u64 pending = consumed_ns > tctx->episode_runtime_ns ?
+				      consumed_ns - tctx->episode_runtime_ns :
+				      0;
+
+		pred	    = pred * 1024 / cap;
+		consumed_ns = tctx->episode_work_ns * 1024 / cap + pending;
+	}
 	if (tctx && mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
-	    model_trusted(tctx) &&
-	    tctx->prediction_ns > consumed_ns) {
-		u64 rest = tctx->prediction_ns - consumed_ns;
+	    model_trusted(tctx) && pred > consumed_ns) {
+		u64 rest = pred - consumed_ns;
 
-		if (LONG_TO_FIXED && tctx->prediction_ns > slice_max) {
+		if (LONG_TO_FIXED && pred > slice_max) {
 			/*
 			 * The burst will be cut anyway: a longer slice would
 			 * only make waiting tasks wait longer.
@@ -1696,6 +1719,7 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 		return;
 	tctx->runtime_start_ns = p->se.sum_exec_runtime;
 	tctx->running	       = true;
+	tctx->run_cap	       = cap_of(scx_bpf_task_cpu(p));
 	if (STEAL_COST && !tctx->episode_runtime_ns)
 		tctx->sc_mig = scx_bpf_task_cpu(p) != tctx->sc_last_cpu;
 	if (PRED_PLACE && tctx->pp_where) {
@@ -1776,6 +1800,8 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	rw = runnable_weight;
 	clock_advance(delta * 100 / (rw < 100 ? 100 : rw));
 	tctx->episode_runtime_ns += delta;
+	tctx->episode_work_ns +=
+		CAP_INVARIANT ? delta * cap_of(scx_bpf_task_cpu(p)) / 1024 : delta;
 }
 
 /*
@@ -1808,7 +1834,12 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 	 * A running task gets stopping(p, false) before this callback, so the
 	 * last service segment is already in episode_runtime_ns exactly once.
 	 */
-	burst = tctx->episode_runtime_ns;
+	burst = CAP_INVARIANT ? tctx->episode_work_ns : tctx->episode_runtime_ns;
+	if (CI_DEBUG && p->comm[0] == 'b' && p->comm[1] == 'p' && p->comm[2] == '_')
+		bpf_printk("ci cpu=%d cap=%u run=%llu work=%llu pred=%llu slice=%llu",
+			   scx_bpf_task_cpu(p), tctx->run_cap, tctx->episode_runtime_ns,
+			   tctx->episode_work_ns, tctx->prediction_ns,
+			   task_slice(tctx, 0));
 	if (tctx->episode_active && tctx->episode_valid && burst &&
 	    !(p->flags & PF_EXITING)) {
 		__s32 target = lertick_scale_ns_q16(burst, REFERENCE_NS);
