@@ -1383,3 +1383,43 @@ fairness gate passes 3 of 3; cgroup weights 2.00, 1.00 and 3.03; the CI
 scheduler test 3 of 3, 20 attach/detach cycles and the edge cases
 without a stall; the stress battery and a 30-minute long run (18 cycles)
 without an exit. Logs in `rel3-checks.tar.gz`.
+
+## CPUs of unequal capacity, 2026-11-19
+
+Machines with big and little cores had no handling at all: a burst learned
+in time on a little core predicted too long a slice on a big one, and a task
+that never sleeps stayed on whichever core it started on. The port now reads
+each CPU's capacity, scaled so the largest is 1024: the kernel's own values
+(`cpuX/cpu_capacity`) where it exports them, otherwise scx_utils' estimate,
+but only when that finds little cores (a spread of 30% or more), so that the
+few percent between favored cores of one type do not count. When some CPU
+is more than 5% below the largest:
+
+- bursts are learned as work, their time scaled by the capacity of the CPU
+  they ran on, in the per-task model, the waker slots and the program table,
+  and a slice is the predicted work scaled back by the capacity of the CPU
+  the task last ran on;
+- a woken task whose average burst is at least the fixed slice takes an idle
+  CPU of the largest capacity, its previous CPU first;
+- a task past the fixed slice in its current burst on a little CPU is handed
+  to an idle big CPU, through a queue only that CPU takes from, with
+  `SCX_OPS_ENQ_LAST` so that the kernel queues it again, as scx_bpfland's
+  rotation does. `--no-asym-rotate` turns this off.
+
+`--cpu-capacity` overrides the capacities, so all of this ran in the VM
+with CPUs 0-3 declared at 1024 and 4-7 at 512 (the CPUs are in fact alike,
+so this checks behaviour, not speed). A 1 ms burst on CPU 4 was learned as
+0.53 ms of work and one on CPU 0 as 1.08 ms. Three CPU hogs started on CPUs
+4-7 and then allowed on all CPUs ran on 0, 1 and 2 two seconds later; with
+`--no-asym-rotate` they stayed on 4 to 7 or moved only through the shared
+queue. With the override, the nice-mix gate passed 3 of 3, cgroup weights
+were 2.00, 1.00 and 3.02, and the CI scheduler test, 20 attach/detach
+cycles, the edge cases, the stress battery and a 30-minute long run (18
+cycles) ran without an exit. Without it the capacities are all 1024, every
+new path is skipped and work equals time, and the nice-mix gate passed 3 of
+3. Logs in `hybrid-checks.tar.gz`.
+
+Not covered: any machine that really has big and little cores, power use,
+SMT siblings and LLCs when picking a big core, and CPU hotplug while a task
+waits to be handed over. `benchmarks/hw-report.sh` collects reports from
+such machines.
