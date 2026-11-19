@@ -1393,7 +1393,7 @@ median over rounds. Negative is faster than EEVDF.
 | Change | vs EEVDF | Verdict |
 |---|---|---|
 | Release configuration (`q0`, `h0`) | +2 to +9% over 6 sets | the loss |
-| Refuse a sync placement when the local DSQ holds any task (`qse`) | +13% | dropped: loses the cache benefit |
+| Refuse a sync placement when the local DSQ holds any task (`qse`) | +13% | dropped: slower |
 | Kick an idle CPU after each shared enqueue (`qek`) | +7% | dropped: no effect |
 | Refuse past 4, 8, 16 queued (`qs4` to `h16`) | -1 to +5% | partial |
 | Refuse past 24, 32, 48, 64 queued (`h24` to `h64`) | -7 to -12% | works; 32 to 64 is a plateau |
