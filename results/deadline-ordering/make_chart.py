@@ -15,14 +15,14 @@ ROWS = [  # label, higher_is_better, kind
     ("schbench 4 msg threads, throughput", True, "rps"),
     ("Kernel compile", False, "time"),
 ]
-# 4 CPUs: from brawl_ratio.py (EEVDF: median over the sessions final, x1, x2,
-# x3 and brawl; the others: directly in the brawl session; kernel compile is
-# the kernel/sched rebuild). 8 CPUs: the same, over the sessions final, x3
-# and brawl.
+# EEVDF: the deadline-ordering build, from dl_ratio.py (median over the
+# sessions x4 and final5, 8 runs each). The sched_ext schedulers: the
+# previous build (v2) run with them in the brawl session (brawl_ratio.py),
+# since the deadline build has not run in one session with them.
 # In ROWS order; positive is better for Lertick.
 EEVDF = {  # median over sessions of 8 runs
-    4: [-7.8, 2.7, 93.7, 26.6, 9.0, -1.2, 18.0, -1.1, 4.9, 22.4, -0.4],
-    8: [-10.3, 2.2, 88.2, 12.3, 3.5, -0.2, 20.2, -0.4, 38.4, 0.0, -0.3],
+    4: [-8.0, 9.5, 93.7, 29.0, 11.4, 0.6, 19.2, 6.7, 19.4, 12.6, 0.7],
+    8: [-5.8, 1.7, 85.6, 12.1, 3.3, 0.0, 21.3, -2.1, 25.4, -0.2, 1.7],
 }
 OTHERS = {  # same session (brawl), 8 runs
     "scx_bpfland": {4: [13.2, 29.5, 69.0, 20.0, 21.2, -1.9, 11.8, 85.6, 38.2, 32.3, -3.6],
@@ -35,8 +35,8 @@ OTHERS = {  # same session (brawl), 8 runs
                   8: [21.7, 44.0, 87.7, 36.9, 46.6, 2.6, 26.7, 5.3, 66.8, 0.4, -0.3]},
 }
 SAME = 5.0  # percent; matches the held-out verdict
-RUNS = {4: "median of 5 sessions", 8: "median of 3 sessions"}  # how the EEVDF numbers were taken
-OTHER_NOTE = {4: "same session", 8: "same session"}  # how the other schedulers were compared
+RUNS = {4: "median of 2 sessions", 8: "median of 2 sessions"}  # how the EEVDF numbers were taken
+OTHER_NOTE = {4: "previous build, same session", 8: "previous build, same session"}  # how the other schedulers were compared
 CAP = 40.0  # bars longer than this are clipped and marked with an arrow
 LABEL_END = 400  # right edge of the longest benchmark label
 FONT = "-apple-system,BlinkMacSystemFont,SF Pro Display,Segoe UI,Arial,sans-serif"

@@ -1320,3 +1320,20 @@ Against EEVDF the README uses the median over the five sessions with both EEVDF 
 | kernel/sched build (s) | 2.39 | 2.40 | 2.43 | 2.39 | 2.41 | 2.40 |
 
 Directly, better/same/worse: scx_bpfland 8/3/0, scx_lavd 4/6/1, scx_p2dq 5/6/0, scx_flash 8/3/0. Against EEVDF, the median over the three 8-CPU sessions with both (`final`, `x3`, `brawl`): 4/6/1, the loss being perf messaging with processes (10.3%). On 8 CPUs Lertick has the lowest schbench -m4 -t2 wakeup p99 of the six.
+
+## Deadline order, 2026-11-18
+
+The scx port now orders each LLC's DSQ by a virtual deadline: the vtime plus half the slice the task is given (`DEADLINE_PCT` 50), so a task predicted to run briefly goes ahead of longer ones about as far behind, without preemption. The offset lives in `dsq_vtime` only while the task is queued; `running()` removes it, so the charge and the clock still use the vtime, and `keep_prev()` compares the running task with the same offset for a fixed slice (`LERTICK_PREV_DEADLINE`, a new policy hook that the product leaves at 0). The experiments behind it are on branch `learn-ab` (`DEADLINE`, `DEADLINE_SCALE`): shorter slices for long bursts, five kinds of wakeup preemption chosen by the model, narrower queue rules and placement by a learned "waker sleeps soon" all failed first; 50% was the share that kept perf messaging level with `v2`, against 100 and 200%.
+
+Safety. The experimental build was ejected once, in the 10th minute of a 30-minute long run that overlapped video playback on the host ("watchdog failed to check in for 5.001s" in `hackbench -g 64`; logs in `d50-long-ejection.tar.gz`). It did not come back in a 40-minute rerun, in 148 runs of `hackbench -g 64`, in two 60-minute long runs alternating with `v2` (29 and 30 cycles), or in the 60-minute run of the release checks below (36 cycles). The cause is not established: a rare stall the deadline order allows, or a host stall of the VM.
+
+Release checks of the sched-ext/scx fork commit with the deadline order (`final5-run.sh`, raw data in `final5-sets.tar.gz`, logs in `final5-checks.tar.gz`): `cargo test -p scx_catalog` passes; veristat accepts all 18 programs (largest 3,629 instructions); the fairness gate passes 3 of 3; cgroup weights 2.00, 1.00 and 3.03; the CI scheduler test 3 of 3, 20 attach/detach cycles and the six edge cases without a stall; the stress battery and a 60-minute long run without an exit.
+
+Benchmarks, 8 runs each, against EEVDF and `v2` in the same sessions (`x4` with the experimental `d50`, `final5` with the release commit). Better/same/worse against EEVDF:
+
+| Session | 4 CPUs: v2 | deadline | 8 CPUs: v2 | deadline |
+|---|---|---|---|---|
+| `x4` | 5 / 4 / 2 | 7 / 4 / 0 | 4 / 7 / 0 | 4 / 6 / 1 |
+| `final5` | 6 / 4 / 1 | 7 / 3 / 1 | 4 / 6 / 1 | 4 / 7 / 0 |
+
+Over both sessions (`dl_ratio.py`), the deadline build is 8 / 2 / 1 against EEVDF on 4 CPUs and 4 / 6 / 1 on 8 CPUs. Its -m4 -t2 wakeup p99 on 4 CPUs is 19% below EEVDF's in both sessions and steady across runs (3.02 to 3.05 ms), where `v2` moved between 3 and 5 ms. perf messaging with processes remains the loss: 8% on 4 CPUs and 6% on 8 CPUs over the two sessions, from level to 15% per session, as for `v2`. The README's other-scheduler counts stay those of `v2` in the brawl session, labelled as the previous build.
