@@ -27,10 +27,12 @@ use libbpf_rs::MapFlags;
 use libbpf_rs::OpenObject;
 use log::{debug, info, warn};
 use scx_stats::prelude::*;
+use scx_utils::CoreType;
 use scx_utils::NR_CPU_IDS;
 use scx_utils::Topology;
 use scx_utils::UserExitInfo;
 use scx_utils::build_id;
+use scx_utils::compat;
 use scx_utils::libbpf_clap_opts::LibbpfOpts;
 use scx_utils::scx_ops_attach;
 use scx_utils::scx_ops_load;
@@ -59,6 +61,18 @@ struct Opts {
     /// Use the same time slice for every task instead of learning it.
     #[clap(short = 'f', long, action = clap::ArgAction::SetTrue)]
     fixed: bool,
+
+    /// Override the CPU capacities the kernel reports, to test the handling
+    /// of CPUs of unequal speed on a machine whose CPUs are alike: a list
+    /// such as "0-3=1024,4-7=512". CPUs not listed keep their value.
+    #[clap(long)]
+    cpu_capacity: Option<String>,
+
+    /// On CPUs of unequal capacity, do not hand a task that keeps running on
+    /// a little CPU to an idle big one. Tasks then stay where they run, which
+    /// may save power but leaves big CPUs idle.
+    #[clap(long, action = clap::ArgAction::SetTrue)]
+    no_asym_rotate: bool,
 
     /// Time slice in microseconds in fixed mode, and before a task has enough
     /// completed bursts in online mode.
@@ -183,6 +197,69 @@ impl<'a> Scheduler<'a> {
             nr_cpus,
             if rodata.nr_domains > 1 { nr_llcs } else { 1 }
         );
+
+        // CPU capacities, the largest scaled to 1024. The kernel's own values
+        // (cpuX/cpu_capacity) are used where it exports them; otherwise
+        // scx_utils' estimate from CPPC or cpufreq counts only when it finds
+        // little cores (a spread of 30% or more), so that the few percent
+        // between favored cores of one type do not count as big and little.
+        let kernel_caps: Option<Vec<usize>> = (0..nr_cpus)
+            .map(|cpu| topo.all_cpus.get(&cpu).and_then(|c| c.kernel_cpu_capacity))
+            .collect();
+        let has_little = topo
+            .all_cpus
+            .values()
+            .any(|c| matches!(c.core_type, CoreType::Little));
+        let mut caps: Vec<usize> = match kernel_caps {
+            Some(k) => k,
+            None if has_little => (0..nr_cpus)
+                .map(|cpu| topo.all_cpus.get(&cpu).map_or(1024, |c| c.cpu_capacity))
+                .collect(),
+            None => vec![1024; nr_cpus],
+        };
+        for cap in caps.iter_mut() {
+            *cap = (*cap).max(1);
+        }
+        if let Some(spec) = &opts.cpu_capacity {
+            for item in spec.split(',').filter(|s| !s.is_empty()) {
+                let (range, cap) = item
+                    .split_once('=')
+                    .with_context(|| format!("--cpu-capacity: expected CPUS=CAP, got {item}"))?;
+                let cap: usize = cap.trim().parse()?;
+                let (lo, hi) = match range.split_once('-') {
+                    Some((a, b)) => (a.trim().parse::<usize>()?, b.trim().parse::<usize>()?),
+                    None => {
+                        let c = range.trim().parse::<usize>()?;
+                        (c, c)
+                    }
+                };
+                for cpu in lo..=hi.min(nr_cpus.saturating_sub(1)) {
+                    caps[cpu] = cap.max(1);
+                }
+            }
+        }
+        let max_cap = caps.iter().copied().max().unwrap_or(1024);
+        let cpus_asym = caps.iter().any(|&c| c * 100 < max_cap * 95);
+        {
+            let rodata = skel.maps.rodata_data.as_mut().unwrap();
+            for (cpu, cap) in caps.iter().enumerate() {
+                rodata.cpu_cap[cpu] = ((cap * 1024) / max_cap).clamp(1, 1024) as u16;
+            }
+            rodata.cpus_asym = cpus_asym;
+            rodata.asym_rotate = !opts.no_asym_rotate;
+        }
+        if cpus_asym {
+            info!(
+                "CPU capacities differ: {:?}",
+                caps.iter().map(|c| c * 1024 / max_cap).collect::<Vec<_>>()
+            );
+            // dispatch() may hand a task that keeps running on a little CPU
+            // to an idle big one; ENQ_LAST makes the kernel queue it again
+            // even when its CPU has nothing else to run.
+            if !opts.no_asym_rotate {
+                skel.struct_ops.lertick_ops_mut().flags |= *compat::SCX_OPS_ENQ_LAST;
+            }
+        }
 
         // Load the BPF program for validation.
         let mut skel = scx_ops_load!(skel, lertick_ops, uei)?;

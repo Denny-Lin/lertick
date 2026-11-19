@@ -107,6 +107,9 @@ struct task_ctx {
 	__s32		     features[LERTICK_FEATURES];
 	u64		     runtime_start_ns;
 	u64		     episode_runtime_ns;
+	u64 episode_work_ns; /* the same, scaled by CPU capacity */
+	u32 run_cap; /* capacity of the CPU it last ran on */
+	s32 rotate_to; /* big CPU + 1 that dispatch() hands it to */
 	u64		     last_sleep_ns;
 	u64		     last_burst_ns;
 	u64		     ewma_burst_ns;
@@ -346,6 +349,7 @@ static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 	tctx->episode_active = true;
 	tctx->episode_valid  = tctx->has_slept && (enq_flags & SCX_ENQ_WAKEUP);
 	tctx->episode_runtime_ns = 0;
+	tctx->episode_work_ns	 = 0;
 	tctx->prediction_ns	 = 0;
 	/* On a wakeup the running task is the waker. */
 	tctx->waker		 = (u32)bpf_get_current_pid_tgid();
@@ -367,19 +371,77 @@ static void begin_episode(struct task_ctx *tctx, u64 enq_flags)
 }
 
 /*
+ * CPU capacities, from the loader, the largest 1024. cpus_asym is set when
+ * some CPU is more than 5% below the largest in the kernel's capacities, or
+ * when scx_utils finds little cores, as on a machine with big and little
+ * cores. Without it, nothing below changes the scheduling: every
+ * capacity is 1024.
+ *
+ * With it, bursts are learned as work, their run time scaled by the
+ * capacity of the CPU they ran on, so a burst learned on a little CPU
+ * predicts the right time on a big one; a woken task whose bursts run long
+ * takes an idle CPU of the largest capacity; and a task that keeps running
+ * on a little CPU is handed to an idle big one (asym_rotate).
+ */
+const volatile u16  cpu_cap[LERTICK_MAX_CPUS];
+const volatile bool cpus_asym;
+const volatile bool asym_rotate = true;
+
+#define BIG_CAP 973 /* within 5% of the largest */
+/* Tasks handed to a big CPU wait here, taken by that CPU only. */
+#define ROT_DSQ(cpu) (0x20000ULL + (u64)(cpu))
+
+static __always_inline u32 cap_of(s32 cpu)
+{
+	u16 c = cpu_cap[cpu & (LERTICK_MAX_CPUS - 1)];
+
+	return cpus_asym && c ? c : 1024;
+}
+
+/* Claim an idle CPU of the largest capacity for @p, @prev first, or -1. */
+static __always_inline s32 pick_big_idle(struct task_struct *p, s32 prev)
+{
+	u32 n = scx_bpf_nr_cpu_ids(), i;
+
+	if (prev >= 0 && cap_of(prev) >= BIG_CAP &&
+	    bpf_cpumask_test_cpu(prev, p->cpus_ptr) &&
+	    scx_bpf_test_and_clear_cpu_idle(prev))
+		return prev;
+	bpf_for(i, 0, n)
+	{
+		if (i >= LERTICK_MAX_CPUS)
+			break;
+		if (cap_of(i) < BIG_CAP || !bpf_cpumask_test_cpu(i, p->cpus_ptr))
+			continue;
+		if (scx_bpf_test_and_clear_cpu_idle(i))
+			return i;
+	}
+	return -1;
+}
+
+/*
  * Remaining slice: the predicted burst less what already ran, within bounds.
  * A burst predicted past slice_max is cut whatever its slice, so it gets
  * slice_fixed: a longer slice would only make waiting tasks wait longer.
  */
 static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 {
-	u64 slice = slice_fixed;
+	u64 slice = slice_fixed, pred = tctx ? tctx->prediction_ns : 0;
 
+	/* Work to time on the CPU the task last ran on (see cpus_asym). */
+	if (cpus_asym && tctx) {
+		u32 cap	    = tctx->run_cap ? tctx->run_cap : 1024;
+		u64 pending = consumed_ns > tctx->episode_runtime_ns ?
+				      consumed_ns - tctx->episode_runtime_ns :
+				      0;
+
+		pred	    = pred * 1024 / cap;
+		consumed_ns = tctx->episode_work_ns * 1024 / cap + pending;
+	}
 	if (tctx && mode == LERTICK_MODE_ONLINE && tctx->episode_valid &&
-	    tctx->model.updates >= min_train_samples &&
-	    tctx->prediction_ns <= slice_max &&
-	    tctx->prediction_ns > consumed_ns) {
-		slice = tctx->prediction_ns - consumed_ns;
+	    tctx->model.updates >= min_train_samples && pred <= slice_max &&
+	    pred > consumed_ns) {
+		slice = pred - consumed_ns;
 		stat_inc(LERTICK_STAT_ADAPTIVE_SLICES);
 	}
 
@@ -396,7 +458,15 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 {
 	struct task_ctx *tctx = task_ctx(p);
 	bool		 idle = false;
-	s32 cpu = scx_bpf_select_cpu_dfl(p, prev_cpu, wake_flags, &idle);
+	s32		 cpu  = -1;
+
+	/* A task whose bursts run long takes an idle big CPU if one is free. */
+	if (cpus_asym && tctx && tctx->ewma_burst_ns >= slice_fixed) {
+		cpu  = pick_big_idle(p, prev_cpu);
+		idle = cpu >= 0;
+	}
+	if (cpu < 0)
+		cpu = scx_bpf_select_cpu_dfl(p, prev_cpu, wake_flags, &idle);
 
 	/* select_cpu() precedes runnable() on a wakeup and can insert directly. */
 	if (tctx && !tctx->episode_active) {
@@ -428,6 +498,25 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	struct task_ctx *tctx  = task_ctx(p);
 	u64		 vtime = p->scx.dsq_vtime;
 	u64 slice = task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
+
+	/* A task dispatch() handed to a big CPU waits for that CPU only. */
+	if (tctx && tctx->rotate_to) {
+		s32 dst = tctx->rotate_to - 1;
+
+		tctx->rotate_to = 0;
+		if (!(enq_flags & SCX_ENQ_WAKEUP) &&
+		    bpf_cpumask_test_cpu(dst, p->cpus_ptr)) {
+			scx_bpf_dsq_insert_vtime(p, ROT_DSQ(dst), slice_fixed,
+						 p->scx.dsq_vtime, enq_flags);
+			scx_bpf_kick_cpu(dst, 0);
+			return;
+		}
+		/*
+		 * Not handed over after all. dst was claimed as idle: kick it
+		 * so that it goes idle again and can be picked.
+		 */
+		scx_bpf_kick_cpu(dst, 0);
+	}
 
 	/* A task dequeued without running still carries its offset. */
 	if (tctx && tctx->dl_off) {
@@ -468,6 +557,37 @@ void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 	bool continuing = prev && (prev->scx.flags & SCX_TASK_QUEUED);
 	struct task_ctx *tctx;
 	u64		 consumed;
+
+	if (cpus_asym && asym_rotate) {
+		/* A task handed to this CPU first. */
+		if (LERTICK_MOVE_TO_LOCAL(ROT_DSQ(cpu)))
+			return;
+		/*
+		 * A task that has run past the fixed slice in its current burst
+		 * on a little CPU goes to an idle big CPU, as the kernel moves a
+		 * misfit task. It is not kept here: the kernel queues it again
+		 * (SCX_OPS_ENQ_LAST, which the loader sets on such machines)
+		 * and enqueue() hands it over.
+		 */
+		tctx = continuing ? task_ctx(prev) : NULL;
+		if (tctx && cap_of(cpu) < BIG_CAP) {
+			u64 run = tctx->episode_runtime_ns;
+
+			if (tctx->running &&
+			    prev->se.sum_exec_runtime > tctx->runtime_start_ns)
+				run += prev->se.sum_exec_runtime -
+				       tctx->runtime_start_ns;
+			if (run >= slice_fixed) {
+				s32 big = pick_big_idle(prev, -1);
+
+				if (big >= 0) {
+					tctx->rotate_to = big + 1;
+					take_next(cpu);
+					return;
+				}
+			}
+		}
+	}
 
 	if (!((continuing && keep_prev(prev, task_ctx(prev), cpu)) ||
 	      (!take_next(cpu) && continuing)))
@@ -536,6 +656,7 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 		return;
 	tctx->runtime_start_ns = p->se.sum_exec_runtime;
 	tctx->running	       = true;
+	tctx->run_cap	       = cap_of(scx_bpf_task_cpu(p));
 }
 
 /*
@@ -569,6 +690,7 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	rw = runnable_weight;
 	clock_advance(delta * 100 / (rw < 100 ? 100 : rw));
 	tctx->episode_runtime_ns += delta;
+	tctx->episode_work_ns += delta * cap_of(scx_bpf_task_cpu(p)) / 1024;
 }
 
 /*
@@ -596,8 +718,10 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 	/*
 	 * A running task gets stopping(p, false) before this callback, so the
 	 * last service segment is already in episode_runtime_ns exactly once.
+	 * Bursts are learned as work (see cpus_asym), which is their run time
+	 * when the CPUs are alike.
 	 */
-	burst = tctx->episode_runtime_ns;
+	burst = tctx->episode_work_ns;
 	if (tctx->episode_active && tctx->episode_valid && burst &&
 	    !(p->flags & PF_EXITING)) {
 		__s32 target = lertick_scale_ns_q16(burst, REFERENCE_NS);
@@ -734,7 +858,16 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 			return ret;
 	}
 
-	return create_cpu_dsqs();
+	ret = create_cpu_dsqs();
+	if (ret || !cpus_asym || !asym_rotate)
+		return ret;
+	bpf_for(d, 0, scx_bpf_nr_cpu_ids())
+	{
+		ret = scx_bpf_create_dsq(ROT_DSQ(d), -1);
+		if (ret)
+			return ret;
+	}
+	return 0;
 }
 
 /*

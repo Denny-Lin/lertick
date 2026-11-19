@@ -35,6 +35,14 @@ all wait on its CPU while other CPUs idle.
 A CPU prefers a queued task that last ran on it when that task is near the head
 of the queue, so a preempted task usually resumes where its cache is.
 
+On CPUs of unequal capacity, as with big and little cores, bursts are learned
+as work, their time scaled by the capacity of the CPU they ran on, so a burst
+learned on a little CPU predicts the right slice on a big one. A woken task
+whose bursts run long takes an idle big CPU when one is free, and a task that
+keeps running on a little CPU is handed to an idle big one; `--no-asym-rotate`
+turns that hand-over off. `--cpu-capacity` overrides the capacities, to try
+this on CPUs that are alike.
+
 ## Typical Use Case
 
 Workloads where tasks alternate short CPU bursts with sleeps, such as message
@@ -43,5 +51,9 @@ passing and pipelines.
 ## Production Ready?
 
 No, it is experimental. It has only run in an ARM64 virtual machine, not on
-physical hardware, SMT or hybrid CPUs, or machines with more than one LLC.
-Threaded cgroups are not weighted specially.
+physical hardware, SMT or hybrid CPUs, or machines with more than one LLC; the
+handling of big and little cores was tested only with `--cpu-capacity`. It
+does not weigh energy, so on battery it may move long-running tasks to big
+cores where an energy-aware scheduler would not, and it picks a big core
+without regard to its LLC or a busy SMT sibling. Threaded cgroups are not
+weighted specially.
