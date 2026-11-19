@@ -28,6 +28,10 @@ than one LLC and CPU hotplug are untested.
 
 Newest first. The kept changes are in the current code.
 
+- 2026-11-19, kept: a running task moves off a core whose other thread is
+  busy to a whole idle core, and whether a running task is worth moving
+  follows its predicted burst. Checked only with SMT siblings declared on
+  the VM ([record](RECORD.md#smt-and-moving-running-tasks-by-their-prediction-2026-11-19)).
 - 2026-11-19, kept: handling of CPUs of unequal capacity (big and little
   cores): bursts learned as work, long bursts placed on idle big CPUs, and
   long runners handed from little to idle big CPUs. Checked only with

@@ -74,6 +74,22 @@ struct Opts {
     #[clap(long, action = clap::ArgAction::SetTrue)]
     no_asym_rotate: bool,
 
+    /// Override the SMT siblings the kernel reports, to test the handling of
+    /// cores with two hardware threads on a machine without SMT: a list of
+    /// sibling pairs such as "0-1,2-3,4-5,6-7".
+    #[clap(long)]
+    smt_siblings: Option<String>,
+
+    /// Do not move a task that keeps running on a core whose other thread is
+    /// busy to a whole idle core.
+    #[clap(long, action = clap::ArgAction::SetTrue)]
+    no_smt_balance: bool,
+
+    /// Decide whether to move a running task to a better CPU by the time
+    /// past the fixed slice only, instead of by its predicted burst.
+    #[clap(long, action = clap::ArgAction::SetTrue)]
+    no_pred_move: bool,
+
     /// Time slice in microseconds in fixed mode, and before a task has enough
     /// completed bursts in online mode.
     #[clap(short = 's', long, default_value = "2000")]
@@ -253,12 +269,56 @@ impl<'a> Scheduler<'a> {
                 "CPU capacities differ: {:?}",
                 caps.iter().map(|c| c * 1024 / max_cap).collect::<Vec<_>>()
             );
-            // dispatch() may hand a task that keeps running on a little CPU
-            // to an idle big one; ENQ_LAST makes the kernel queue it again
-            // even when its CPU has nothing else to run.
-            if !opts.no_asym_rotate {
-                skel.struct_ops.lertick_ops_mut().flags |= *compat::SCX_OPS_ENQ_LAST;
+        }
+
+        // SMT siblings: the other hardware thread of each CPU's core, from
+        // the topology or from --smt-siblings.
+        let mut sibling = vec![None::<usize>; nr_cpus];
+        match &opts.smt_siblings {
+            Some(spec) => {
+                for pair in spec.split(',').filter(|s| !s.is_empty()) {
+                    let (a, b) = pair
+                        .split_once('-')
+                        .with_context(|| format!("--smt-siblings: expected A-B, got {pair}"))?;
+                    let (a, b) = (a.trim().parse::<usize>()?, b.trim().parse::<usize>()?);
+                    if a < nr_cpus && b < nr_cpus && a != b {
+                        sibling[a] = Some(b);
+                        sibling[b] = Some(a);
+                    }
+                }
             }
+            None => {
+                for core in topo.all_cores.values() {
+                    let cpus: Vec<usize> = core.cpus.keys().copied().collect();
+                    if cpus.len() >= 2 {
+                        for (i, &cpu) in cpus.iter().enumerate() {
+                            if cpu < nr_cpus {
+                                sibling[cpu] = Some(cpus[(i + 1) % cpus.len()]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let smt_on = sibling.iter().any(|s| s.is_some());
+        {
+            let rodata = skel.maps.rodata_data.as_mut().unwrap();
+            for (cpu, sib) in sibling.iter().enumerate() {
+                rodata.cpu_sibling[cpu] = sib.map_or(0, |s| s as u16 + 1);
+            }
+            rodata.smt_on = smt_on;
+            rodata.smt_balance = !opts.no_smt_balance;
+            rodata.pred_move = !opts.no_pred_move;
+        }
+        if smt_on {
+            info!("SMT siblings: {:?}", sibling);
+        }
+
+        // dispatch() may hand a task that keeps running to a better idle
+        // CPU; ENQ_LAST makes the kernel queue it again even when its CPU
+        // has nothing else to run.
+        if (cpus_asym && !opts.no_asym_rotate) || (smt_on && !opts.no_smt_balance) {
+            skel.struct_ops.lertick_ops_mut().flags |= *compat::SCX_OPS_ENQ_LAST;
         }
 
         // Load the BPF program for validation.
@@ -297,6 +357,7 @@ impl<'a> Scheduler<'a> {
             nr_continuations: self.stat(lertick_stat_LERTICK_STAT_CONTINUATIONS),
             nr_adaptive_slices: self.stat(lertick_stat_LERTICK_STAT_ADAPTIVE_SLICES),
             nr_training_updates: self.stat(lertick_stat_LERTICK_STAT_TRAINING_UPDATES),
+            nr_handovers: self.stat(lertick_stat_LERTICK_STAT_HANDOVERS),
         }
     }
 

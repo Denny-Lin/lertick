@@ -1423,3 +1423,41 @@ Not covered: any machine that really has big and little cores, power use,
 SMT siblings and LLCs when picking a big core, and CPU hotplug while a task
 waits to be handed over. `benchmarks/hw-report.sh` collects reports from
 such machines.
+
+## SMT, and moving running tasks by their prediction, 2026-11-19
+
+A task that never sleeps is placed only once, so two of them that start on
+the two threads of one core stay there while other cores idle, each at a
+fraction of a core's speed. The loader now reads each CPU's sibling thread
+from the topology (`--smt-siblings` declares pairs for testing). A task
+that keeps running while the other thread of its core is busy is handed to
+a whole idle core of the same or a larger capacity, through the same queue
+as the hand-over to big CPUs (`--no-smt-balance` turns it off), and the
+pick of an idle big CPU prefers a whole idle core. This is the active
+balancing of scx_bpfland, done at the end of a slice.
+
+Whether a running task is worth moving now follows its prediction where the
+model is trusted: it moves while at least `slice_min` (0.5 ms) of the larger
+of its prediction and its average burst is left, or once it has run twice
+that; otherwise, as before, once it has run past the fixed slice
+(`--no-pred-move` keeps that rule for all tasks). A task about to finish
+its burst then stays rather than finishing on a cold cache.
+
+On the VM with siblings declared as 0-1, 2-3, 4-5 and 6-7, two CPU hogs
+started on CPUs 0 and 1 and then allowed on all CPUs ran on different cores
+(0 and 2) two seconds later, and stayed on 0 and 1 with `--no-smt-balance`
+or without the declaration. Two tasks with 2.3 ms bursts on CPUs 0 and 1
+were handed over 0 and 3 times in two runs under the fixed-slice rule and 0
+and 1 times by prediction; few hand-overs arise, since slices already end
+near the predicted end of a burst. Safety checks of the build before the
+prediction rule, with the siblings declared: the nice-mix gate 3 of 3,
+cgroup weights 2.00, 1.00 and 3.02, the CI scheduler test 3 of 3, 20
+attach/detach cycles, the edge cases, the stress battery and a 30-minute
+long run (15 cycles) without an exit, and the gate 3 of 3 with neither and
+with both siblings and capacities declared. The build with the prediction
+rule passed the gate 3 of 3 with siblings, capacities, both and neither
+declared, and the CI scheduler test, 20 attach/detach cycles and the edge
+cases with both declared. Logs in `smt-checks.tar.gz`.
+
+Not covered: real SMT hardware, cores with more than two threads (only one
+sibling is checked), and SMT when an idle CPU steals.

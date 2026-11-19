@@ -43,6 +43,14 @@ keeps running on a little CPU is handed to an idle big one; `--no-asym-rotate`
 turns that hand-over off. `--cpu-capacity` overrides the capacities, to try
 this on CPUs that are alike.
 
+On cores with two hardware threads, a task that keeps running while the
+other thread of its core is busy moves to a whole idle core, as the kernel's
+load balancing spreads busy threads over cores; `--no-smt-balance` turns
+this off and `--smt-siblings` declares sibling pairs for testing. Whether a
+running task is worth moving at all follows its predicted burst: one about
+to finish stays rather than finish on a cold cache (`--no-pred-move` uses
+the fixed slice instead).
+
 ## Typical Use Case
 
 Workloads where tasks alternate short CPU bursts with sleeps, such as message
@@ -55,5 +63,6 @@ physical hardware, SMT or hybrid CPUs, or machines with more than one LLC; the
 handling of big and little cores was tested only with `--cpu-capacity`. It
 does not weigh energy, so on battery it may move long-running tasks to big
 cores where an energy-aware scheduler would not, and it picks a big core
-without regard to its LLC or a busy SMT sibling. Threaded cgroups are not
+without regard to its LLC. With more than two threads per core, only one
+sibling is checked. Threaded cgroups are not
 weighted specially.
