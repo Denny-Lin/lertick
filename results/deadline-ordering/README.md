@@ -1468,3 +1468,33 @@ Requeuing preempted tasks on their CPU now makes this benchmark 2.4 times
 slower, and in this set the release is 12% below EEVDF on request p99, so
 the 10% of the release session is within the session-to-session swing.
 Rejected; nothing changes in the release.
+
+## Stealing by learned migration cost, 2026-11-19
+
+`STEAL_COST` gives each task a migration cost: how much longer its bursts
+run when they start on a CPU other than the one it last ran on, learned per
+task, or per program name until the task has 4 bursts of each kind. A
+stealing CPU takes, among the first 4 tasks of the per-CPU DSQ it steals
+from, the one with the lowest cost. Build `sc` is the release (`sp3`) with
+this switch.
+
+In 8-CPU hackbench threads, 99,613 cost lookups used the task's own
+estimate, 4,865 the program's and 28 found none, and 19,933 of 26,249
+steals took a task other than the head. The run took 0.595 to 0.610 s
+against 0.594 to 0.604 s for `sp3`.
+
+8-CPU perf messaging with processes, 20 rounds of 5 runs (`msg-run.sh`,
+raw in `steal-cost-sets.tar.gz`): `sp3` 11.6% and `sc` 9.9% below EEVDF;
+`sc` was faster than `sp3` in 6 of 20 rounds. `pstat.sh`, 6 runs, medians
+(`pstat-sc.txt`):
+
+| Arm | time (s) | context switches | migrations | task clock (ms) |
+|---|---|---|---|---|
+| EEVDF | 0.418 | 142,456 | 5,279 | 3,008 |
+| `sp3` | 0.362 | 16,175 | 4,966 | 2,617 |
+| `sc` | 0.361 | 15,243 | 4,853 | 2,611 |
+
+The costs are learned, but choosing which task to steal by them changes
+neither time nor migrations beyond noise. Not taken. The release itself now
+migrates less than EEVDF in this benchmark, where the build before the CPU
+queues migrated 60% more.
