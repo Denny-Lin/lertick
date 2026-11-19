@@ -1372,3 +1372,64 @@ The rerun with the large dump buffer ran 40 minutes and 20 cycles without an exi
 | schbench -m4 -t2 | 31,715 | 0% | 0% | 0% | 26% |
 
 The deadline build reads the same. The three stability bounds almost never act in these benchmarks, so they are not what costs perf messaging with processes, and a predicted-wait scheme to keep them from acting has nothing to remove. The wakeup lag is the ordinary sleeper placement, older than the bounds. The 8-CPU perf messaging gap is still open; the shared DSQ's lock and EEVDF's placement of the receiver right after a sync wakeup are the remaining candidates.
+
+## Sync wakees stacked on the waker's CPU, 2026-11-19
+
+The 8-CPU perf messaging loss comes from `sync_local()`. It queues a sync
+wakee on the waker's local DSQ however many tasks already wait there, and no
+other CPU can take a task from a local DSQ. A perf messaging sender keeps
+running while it writes to its 20 receivers, so they stack behind it. With
+the release configuration, 93% of sync placements in 8-CPU perf messaging
+with processes went to a non-empty local DSQ (31,233 of 33,487), and the
+depth was 16 to 31 for 7,047 of them and 32 or more for 5,385.
+`sq-run.sh` counts this; raw counters and times are in `sync-sets.tar.gz`.
+
+Measurement: `msg-run.sh`, perf messaging with processes on 8 CPUs, arms
+shuffled each round, 5 runs per attach. Each round's median is divided by
+EEVDF's in the same round (`paired.py`, `abres.sh`); the tables give the
+median over rounds. Negative is faster than EEVDF.
+
+| Change | vs EEVDF | Verdict |
+|---|---|---|
+| Release configuration (`q0`, `h0`) | +2 to +9% over 6 sets | the loss |
+| Refuse a sync placement when the local DSQ holds any task (`qse`) | +13% | dropped: loses the cache benefit |
+| Kick an idle CPU after each shared enqueue (`qek`) | +7% | dropped: no effect |
+| Refuse past 4, 8, 16 queued (`qs4` to `h16`) | -1 to +5% | partial |
+| Refuse past 24, 32, 48, 64 queued (`h24` to `h64`) | -7 to -12% | works; 32 to 64 is a plateau |
+| Place by predicted wait, two linear models (`pm2`) | -10 to -12% | about 1.5% behind `h48` |
+| `pm2` with a learned cache benefit per program pair (`pm3`) | -9% | no gain from the table |
+| `pm2` with an error margin, an all-CPU feature, or both | -8 to -11% | no gain |
+| `pm2` with one model per local DSQ length range (`ppc2`) | -11% | no gain |
+| `pm2` with the waker's wakee flips as a feature (`pfl`, `pfp`) | -11 to -12% | 1% behind `h48` |
+| Predict wait plus burst (`pcm`) | -11.5% | 0.9% behind `h48`, see below |
+| Stealable per-CPU queue (`sp1`, `sp2`) | -13 to -13.5% | ahead of `h48` in 16 and 18 of 24 rounds |
+
+The best cap does not move with the CPU count. On 2, 4 and 6 CPUs
+(`sweep.sh`) the best of 0, 8, 16, 24, 32, 48 and 64 was 48 or 64 each time:
+-16%, -9% and -9% against EEVDF, where no cap was -5%, +14% and +14%.
+
+Full held-out set, 6 runs per arm (`cap-run.sh`, `full2-run.sh`,
+`full3-run.sh`, raw data in `sync-heldout.tar.gz`). `h48` and the stealable
+queue (`sp3`, with the domain-first steal) were each no more than 5% behind
+EEVDF on any of the 11 measures on 4 or 8 CPUs. `pcm` took 1.7 to 1.9 s for
+8-CPU hackbench threads where `h48` took 0.63 s and EEVDF 0.77 s: its local
+model learned early that local placement was slow and, never choosing it
+again (153 local against 733,943 shared), never learned otherwise. With one
+choice in 32 taken the other way (`pcx`), its predicted waits matched the
+measured ones (1.21 against 1.19 ms locally), yet it still sent 90% of
+wakees away and took 1.2 to 1.5 s. Minimizing each wakee's own wait does
+not account for what moving it costs the other tasks.
+
+The stealable queue (`STEAL_PCPU`) puts a sync wakee on a DSQ of the
+waker's CPU, which that CPU takes from first. A CPU with nothing else to
+run takes from the per-CPU DSQ holding the most tasks, in its own domain
+first, and an idle CPU is kicked when a task joins a non-empty per-CPU DSQ.
+In 8-CPU hackbench threads about two thirds of these wakees ran on the
+waker's CPU and one third was stolen; it took 0.56 to 0.57 s. It needs no
+tuned number. `sp3` passed the safety checks (`sp3-check.sh`): the fairness
+gate 3 of 3, cgroup weights 2.00, 1.00 and 3.03, the CI scheduler test 3 of
+3, 20 attach and detach cycles, the edge cases and the stress battery
+without an exit, and a 30-minute long run (18 cycles).
+
+Not done: choosing which task to steal by a learned migration cost
+(`STEAL_COST`, written, not yet run), and any test on more than one LLC.
