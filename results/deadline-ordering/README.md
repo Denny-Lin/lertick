@@ -1379,9 +1379,10 @@ The 8-CPU perf messaging loss comes from `sync_local()`. It queues a sync
 wakee on the waker's local DSQ however many tasks already wait there, and no
 other CPU can take a task from a local DSQ. A perf messaging sender keeps
 running while it writes to its 20 receivers, so they stack behind it. With
-the release configuration, 93% of sync placements in 8-CPU perf messaging
-with processes went to a non-empty local DSQ (31,233 of 33,487), and the
-depth was 16 to 31 for 7,047 of them and 32 or more for 5,385.
+the release configuration, 29,679 of 31,728 sync placements in 8-CPU perf
+messaging with processes went to a non-empty local DSQ, and the depth was 16
+to 31 for 7,047 of them and 32 or more for 5,385 (`h0`; an earlier count
+with `q0` found 31,233 of 33,487 non-empty).
 `sq-run.sh` counts this; raw counters and times are in `sync-sets.tar.gz`.
 
 Measurement: `msg-run.sh`, perf messaging with processes on 8 CPUs, arms
