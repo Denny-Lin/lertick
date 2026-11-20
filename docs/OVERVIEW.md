@@ -33,12 +33,21 @@ The table above describes Phase 2. The current scheduler is compared with EEVDF 
 - A CPU prefers a queued task that last ran on it when that task is within 2 ms of the queue head (first 8 entries). A synchronous wakeup may queue on the waker's CPU within the same 2 ms bound. Sleeper credit is at most 2 ms.
 - `nice` and hierarchical cgroup `cpu.weight` set each task's effective weight. A task whose slice ends keeps its CPU while it is ahead of the first queued task that can run there, for at most 20 ms. CPU bandwidth limits (`cpu.max`) are not enforced.
 - CPU bursts accumulate across preemption and slice expiration; verified wake-to-sleep episodes provide labels. Attachment and exit are censored.
-- Per-task five-feature Q16 linear model with bounded LMS updates. Features: bias, previous burst, burst EWMA, sleep interval and queue depth.
-- `--model-init ewma` initializes that model from causal burst history; the default remains `bias`. Use shadow mode to evaluate the prior while keeping fixed slice budgets.
-- `--model-update carry` retains fractional LMS updates that otherwise round to zero; the default remains `trunc`. These experimental options require workload-specific evaluation and do not establish a scheduling advantage.
+- Per-task five-feature Q16 linear model with bounded LMS updates. Features: bias, burst guess, burst EWMA, sleep interval and queue depth. The burst guess is the last burst started by the same waker while that has recently been closer than the EWMA, otherwise the EWMA.
+- A new model predicts the burst guess as it is, and its learning step starts at 1/8 and shrinks to 1/64 after 32 updates. `--model-init bias|ewma` and `--model-update trunc|carry` select the earlier starting weights and fixed-step updates.
+- Each program name (comm) also trains a shared model. A task takes it over when it first wakes or changes name, counted as two learned bursts, so short-lived processes such as a compiler's predict from their first burst.
+- The queue is ordered by vtime plus half the slice over the task's weight, so a task predicted to run briefly runs before longer ones about as far behind, without preempting anyone.
 
 - Training and inference execute inside eBPF; the C/libbpf loader handles attachment and JSONL telemetry.
-- Default prediction-selected budgets are 0.5–5 ms after eight valid labels, with a 2 ms fallback. Bounds apply to newly assigned budgets, not exact execution time or resumed remaining budgets.
+- Default prediction-selected budgets are 0.5–3 ms after two valid labels, with a 2 ms fallback. A burst predicted past 3 ms gets the 2 ms fallback, since a longer slice would only make other tasks wait. Bounds apply to newly assigned budgets, not exact execution time or resumed remaining budgets.
+
+### CPUs of unequal capacity and SMT
+
+On a machine whose CPU capacities differ by more than 5% (big and little cores), bursts are learned as work, scaled by the capacity of the CPU they ran on; a woken task whose bursts run long takes an idle big CPU; and a task that keeps running on a little CPU is handed to an idle big one. Capacities come from the kernel's `cpu_capacity`, or on Intel hybrid parts from the maximum frequencies.
+
+With SMT, a task that keeps running on a core whose other thread is busy moves to a whole idle core of the same or larger capacity. Whether a running task is worth moving follows its predicted burst: it stays when it is about to finish.
+
+On machines without these CPUs nothing changes. `--no-asym-rotate`, `--no-smt-balance` and `--no-pred-move` turn the moves off; `--cpu-capacity 0-3=1024,4-7=512` and `--smt-siblings 0-1,2-3` declare capacities and siblings for testing. Both were checked only with declared values on the ARM64 VM; real hybrid and SMT hardware is untested.
 
 An earlier eight-vCPU, full-preemption shadow comparison of both options reduced model
 MAE by about 52–82% across four custom workloads, mostly catching up with EWMA.

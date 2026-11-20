@@ -15,7 +15,11 @@
 #define LERTICK_DEFAULT_SLICE_NS 2000000ULL
 #define LERTICK_MIN_SLICE_NS 500000ULL
 #define LERTICK_MAX_SLICE_NS 3000000ULL
-#define LERTICK_MIN_TRAIN_SAMPLES 8U
+/*
+ * Bursts a task's model learns from before its prediction sets the slice. A
+ * task that takes over its program's model counts as having learned two.
+ */
+#define LERTICK_MIN_TRAIN_SAMPLES 2U
 #define LERTICK_MAX_TASK_SNAPSHOTS 4096U
 
 enum lertick_mode {
@@ -23,6 +27,26 @@ enum lertick_mode {
 	LERTICK_MODE_SHADOW = 1,
 	LERTICK_MODE_ONLINE = 2,
 	LERTICK_MODE_EWMA = 3,
+};
+
+/* Starting weights of a new model (--model-init). */
+enum lertick_model_init {
+	/* Predict the burst guess (feature 1) as it is. */
+	LERTICK_MODEL_INIT_GUESS = 0,
+	/* A fixed 2.5 ms bias. */
+	LERTICK_MODEL_INIT_BIAS = 1,
+	/* Predict the burst average (feature 2) as it is. */
+	LERTICK_MODEL_INIT_EWMA = 2,
+};
+
+/* Learning step of the model (--model-update). */
+enum lertick_model_update {
+	/* 1/8 for the first 8 updates, 1/16 up to 32, then 1/64. */
+	LERTICK_MODEL_UPDATE_DECAY = 0,
+	/* 1/64 throughout, fractions below one Q16 unit dropped. */
+	LERTICK_MODEL_UPDATE_TRUNC = 1,
+	/* 1/64 throughout, fractions carried to the next update. */
+	LERTICK_MODEL_UPDATE_CARRY = 2,
 };
 
 enum lertick_stat {
@@ -59,6 +83,7 @@ enum lertick_stat {
 	LERTICK_STAT_CPUPERF_IDLE_SETS,
 	LERTICK_STAT_CONTRACT_APPLIED,
 	LERTICK_STAT_CONTRACT_STALE,
+	LERTICK_STAT_HANDOVERS,
 	LERTICK_STAT_COUNT,
 };
 

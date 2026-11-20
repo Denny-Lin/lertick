@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased — 2026-11-19 (product parity with the scx copy)
+
+### The product scheduler learns and places tasks as the scx copy does
+
+- Bursts are guessed from the last burst the same waker started, program
+  names share a model, and a new model starts from that guess with a
+  learning step that shrinks over 32 updates. A model is trusted after two
+  bursts instead of eight. `--model-init bias` and `--model-update trunc`
+  restore the earlier behavior.
+- The queue is ordered by vtime plus half the slice, and a burst predicted
+  past the 3 ms cap gets the 2 ms fixed slice.
+- Big and little cores and SMT siblings are detected and used (see the
+  [overview](OVERVIEW.md#cpus-of-unequal-capacity-and-smt)), with
+  `--cpu-capacity`, `--no-asym-rotate`, `--smt-siblings`,
+  `--no-smt-balance` and `--no-pred-move`. Telemetry adds a `handovers`
+  counter and the detected capacities.
+- With `--summary-only`, which the service uses, per-task snapshots are no
+  longer copied to the snapshot map, which that mode never reads. With
+  `--track-all` the copies made hackbench -g 64 take 31 to 42 s on the
+  8-CPU VM instead of 19 s, and under the long stress run the scheduler
+  was ejected for a stall; it now takes 19 to 24 s.
+
 ## Unreleased — 2026-11-18 (license)
 
 ### One license: GPL-2.0-only

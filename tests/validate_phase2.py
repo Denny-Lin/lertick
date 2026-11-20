@@ -574,8 +574,8 @@ def main():
                         default=["lifecycle", "concurrent-fork", "fairness", "recovery"])
     parser.add_argument("--fairness-seconds", type=int, default=9)
     parser.add_argument("--recovery-repetitions", type=int, default=3)
-    parser.add_argument("--model-init", choices=("bias", "ewma"), default="bias")
-    parser.add_argument("--model-update", choices=("trunc", "carry"), default="trunc")
+    parser.add_argument("--model-init", choices=("guess", "bias", "ewma"), default="guess")
+    parser.add_argument("--model-update", choices=("decay", "trunc", "carry"), default="decay")
     args = parser.parse_args()
     if not 9 <= args.fairness_seconds <= 60 or not 3 <= args.recovery_repetitions <= 10:
         parser.error("fairness-seconds must be 9..60; recovery-repetitions must be 3..10")
