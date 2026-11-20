@@ -1369,8 +1369,13 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 	publish(tctx);
 }
 
-s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
-		   struct scx_init_task_args *args)
+/*
+ * Sleepable so the task storage is allocated with GFP_KERNEL. An atomic
+ * allocation of the context failed in 2 of 20 quick reattaches, and a failed
+ * init_task disables the scheduler.
+ */
+s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init_task, struct task_struct *p,
+			    struct scx_init_task_args *args)
 {
 	struct task_ctx *tctx = bpf_task_storage_get(&task_ctx_stor, p, 0,
 						BPF_LOCAL_STORAGE_GET_F_CREATE);
