@@ -75,6 +75,7 @@ static const char *const stat_names[LERTICK_STAT_COUNT] = {
 	[LERTICK_STAT_CPUPERF_IDLE_SETS] = "cpuperf_idle_sets",
 	[LERTICK_STAT_CONTRACT_APPLIED] = "contract_applied",
 	[LERTICK_STAT_CONTRACT_STALE] = "contract_stale",
+	[LERTICK_STAT_HANDOVERS] = "handovers",
 };
 
 static int print_libbpf(enum libbpf_print_level level, const char *fmt, va_list args)
@@ -464,6 +465,178 @@ single:
 	skel->rodata->nr_domains = 1;
 }
 
+/* Parse a CPU list such as "0-3,8" into @mark; false on a syntax error. */
+static bool parse_cpulist(const char *text, bool *mark, unsigned ncpus)
+{
+	const char *s = text;
+
+	while (*s) {
+		char *end;
+		unsigned long lo, hi;
+
+		lo = strtoul(s, &end, 10);
+		if (end == s)
+			return false;
+		hi = lo;
+		s = end;
+		if (*s == '-') {
+			hi = strtoul(++s, &end, 10);
+			if (end == s || hi < lo)
+				return false;
+			s = end;
+		}
+		for (unsigned long c = lo; c <= hi && c < ncpus; c++)
+			mark[c] = true;
+		if (*s == ',')
+			s++;
+		else if (*s)
+			return false;
+	}
+	return true;
+}
+
+struct sched_topo {
+	bool asym, smt;
+	unsigned cap[LERTICK_MAX_CPUS];
+};
+
+/*
+ * CPU capacities and SMT siblings for scheduling (cpu_cap, cpu_sibling).
+ * Capacities are the kernel's (cpuN/cpu_capacity) where it exports them for
+ * every CPU. Otherwise, only on Intel hybrid parts (a cpu_atom PMU), the
+ * maximum frequencies stand in for them, so that the few percent between
+ * favored cores of one type never count as big and little. @cap_spec
+ * ("0-3=1024,4-7=512") and @smt_spec ("0-1,2-3") override what the kernel
+ * reports, to test the handling on a machine without such CPUs.
+ */
+static int sched_topology(struct scx_lertick *skel, unsigned ncpus, const char *cap_spec,
+			  const char *smt_spec, struct sched_topo *t)
+{
+	static bool atom[LERTICK_MAX_CPUS];
+	unsigned max_cap = 1, cpu;
+	bool kernel_caps = true, have_atom = false;
+	int sibling[LERTICK_MAX_CPUS];
+	char path[128], buf[256];
+
+	for (cpu = 0; cpu < ncpus; cpu++) {
+		snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%u/cpu_capacity", cpu);
+		t->cap[cpu] = read_text(path, buf, sizeof(buf)) ? (unsigned)atoi(buf) : 0;
+		if (!t->cap[cpu])
+			kernel_caps = false;
+	}
+	if (!kernel_caps) {
+		if (read_text("/sys/devices/cpu_atom/cpus", buf, sizeof(buf)))
+			have_atom = parse_cpulist(buf, atom, ncpus);
+		for (cpu = 0; cpu < ncpus; cpu++) {
+			t->cap[cpu] = 1024;
+			snprintf(path, sizeof(path),
+				 "/sys/devices/system/cpu/cpu%u/cpufreq/cpuinfo_max_freq", cpu);
+			if (have_atom && read_text(path, buf, sizeof(buf)) && atoi(buf) > 0)
+				t->cap[cpu] = (unsigned)atoi(buf);
+		}
+	}
+	for (const char *s = cap_spec; s && *s;) {
+		char item[64], *eq;
+		const char *comma = strchr(s, ',');
+		size_t len = comma ? (size_t)(comma - s) : strlen(s);
+		static bool mark[LERTICK_MAX_CPUS];
+		unsigned long cap;
+
+		if (!len || len >= sizeof(item))
+			goto bad_cap;
+		memcpy(item, s, len);
+		item[len] = 0;
+		eq = strchr(item, '=');
+		if (!eq)
+			goto bad_cap;
+		*eq++ = 0;
+		cap = strtoul(eq, NULL, 10);
+		memset(mark, 0, sizeof(mark));
+		if (!cap || cap > 100000 || !parse_cpulist(item, mark, ncpus))
+			goto bad_cap;
+		for (cpu = 0; cpu < ncpus; cpu++)
+			if (mark[cpu])
+				t->cap[cpu] = (unsigned)cap;
+		s += len + (comma ? 1 : 0);
+	}
+	for (cpu = 0; cpu < ncpus; cpu++) {
+		if (!t->cap[cpu])
+			t->cap[cpu] = 1;
+		if (t->cap[cpu] > max_cap)
+			max_cap = t->cap[cpu];
+	}
+	t->asym = false;
+	for (cpu = 0; cpu < ncpus; cpu++) {
+		t->cap[cpu] = t->cap[cpu] * 1024 / max_cap;
+		if (!t->cap[cpu])
+			t->cap[cpu] = 1;
+		if (t->cap[cpu] * 100 < 1024 * 95)
+			t->asym = true;
+		skel->rodata->cpu_cap[cpu] = (__u16)t->cap[cpu];
+	}
+
+	for (cpu = 0; cpu < ncpus; cpu++)
+		sibling[cpu] = -1;
+	if (smt_spec) {
+		for (const char *s = smt_spec; *s;) {
+			char *end;
+			unsigned long a, b;
+
+			a = strtoul(s, &end, 10);
+			if (end == s || *end != '-')
+				goto bad_smt;
+			s = end + 1;
+			b = strtoul(s, &end, 10);
+			if (end == s || (*end && *end != ','))
+				goto bad_smt;
+			s = *end ? end + 1 : end;
+			if (a < ncpus && b < ncpus && a != b) {
+				sibling[a] = (int)b;
+				sibling[b] = (int)a;
+			}
+		}
+	} else {
+		for (cpu = 0; cpu < ncpus; cpu++) {
+			static bool mark[LERTICK_MAX_CPUS];
+			unsigned next = ncpus, first = ncpus, c;
+
+			snprintf(path, sizeof(path),
+				 "/sys/devices/system/cpu/cpu%u/topology/thread_siblings_list", cpu);
+			memset(mark, 0, sizeof(mark));
+			if (!read_text(path, buf, sizeof(buf)) || !parse_cpulist(buf, mark, ncpus))
+				continue;
+			/* The next thread of the core, wrapping around. */
+			for (c = 0; c < ncpus; c++) {
+				if (!mark[c] || c == cpu)
+					continue;
+				if (first == ncpus)
+					first = c;
+				if (c > cpu && next == ncpus)
+					next = c;
+			}
+			if (next == ncpus)
+				next = first;
+			if (next < ncpus)
+				sibling[cpu] = (int)next;
+		}
+	}
+	t->smt = false;
+	for (cpu = 0; cpu < ncpus; cpu++) {
+		skel->rodata->cpu_sibling[cpu] = sibling[cpu] < 0 ? 0 : (__u16)(sibling[cpu] + 1);
+		if (sibling[cpu] >= 0)
+			t->smt = true;
+	}
+	skel->rodata->cpus_asym = t->asym;
+	skel->rodata->smt_on = t->smt;
+	return 0;
+bad_cap:
+	fprintf(stderr, "--cpu-capacity: expected a list such as 0-3=1024,4-7=512.\n");
+	return -1;
+bad_smt:
+	fprintf(stderr, "--smt-siblings: expected a list such as 0-1,2-3.\n");
+	return -1;
+}
+
 static unsigned parse_uint(const char *text, unsigned min, unsigned max)
 {
 	char *end;
@@ -492,8 +665,20 @@ static void usage(FILE *out, const char *argv0)
 		"  --notify                Signal readiness through systemd NOTIFY_SOCKET\n"
 		"  --verbose               Emit libbpf debug/verifier diagnostics\n"
 		"  --profile               Time in-kernel model operations (observer cost)\n"
-		"  --model-init bias|ewma  Linear-model prior (default bias; ewma uses burst history)\n"
-		"  --model-update trunc|carry  Fixed-point LMS update precision (default trunc)\n"
+		"  --model-init guess|bias|ewma\n"
+		"                          Starting weights of a new model (default guess: predict\n"
+		"                          the burst guess; bias: 2.5 ms; ewma: burst history)\n"
+		"  --model-update decay|trunc|carry\n"
+		"                          Learning step (default decay: large, then shrinking;\n"
+		"                          trunc and carry: fixed 1/64)\n"
+		"  --cpu-capacity LIST     Override CPU capacities, e.g. 0-3=1024,4-7=512\n"
+		"  --no-asym-rotate        Do not hand a task running on a little CPU to an\n"
+		"                          idle big one\n"
+		"  --smt-siblings LIST     Override SMT sibling pairs, e.g. 0-1,2-3\n"
+		"  --no-smt-balance        Do not move a task off a core whose other thread is\n"
+		"                          busy\n"
+		"  --no-pred-move          Move running tasks by time past the fixed slice\n"
+		"                          only, not by their predicted burst\n"
 		"  --sample-ms N           Snapshot interval (100..3600000); default 60000 for\n"
 		"                          continuous use, 1000 for finite research runs\n"
 		"  --tracked-tgid PID      Track this TGID (default comm prefix lertick)\n"
@@ -579,8 +764,13 @@ int main(int argc, char **argv)
 	unsigned cpuperf = LERTICK_CPUPERF_MAX;
 	bool lerwatt = false, lerwatt_auto = false, cpu_report;
 	unsigned pin_mask = 0;
-	bool model_init_ewma = false;
-	bool model_update_carry = false;
+	unsigned model_init = LERTICK_MODEL_INIT_GUESS;
+	unsigned model_update = LERTICK_MODEL_UPDATE_DECAY;
+	static const char *const model_init_names[] = { "guess", "bias", "ewma" };
+	static const char *const model_update_names[] = { "decay", "trunc", "carry" };
+	const char *cap_spec = NULL, *smt_spec = NULL;
+	bool no_asym_rotate = false, no_smt_balance = false, no_pred_move = false;
+	static struct sched_topo stopo;
 	static struct ltlw_topology topo;
 	struct ltlw_demand_state demand = { 0 };
 	struct lt_demand_rec *demand_mem = MAP_FAILED;
@@ -591,7 +781,9 @@ int main(int argc, char **argv)
 	enum { OPT_CHECK = 1000, OPT_SAMPLE, OPT_TRACK, OPT_FIXED, OPT_MIN, OPT_MAX,
 	       OPT_PARTIAL, OPT_FAULT, OPT_STALL, OPT_DANGER, OPT_EXPECT, OPT_PROFILE, OPT_ALL,
 	       OPT_CPUPERF, OPT_LERWATT, OPT_LERWATT_AUTO, OPT_MODEL_INIT, OPT_MODEL_UPDATE,
-	       OPT_VERIFY, OPT_MAINTENANCE, OPT_VERSION, OPT_SUMMARY, OPT_FULL_STATS, OPT_NOTIFY };
+	       OPT_VERIFY, OPT_MAINTENANCE, OPT_VERSION, OPT_SUMMARY, OPT_FULL_STATS, OPT_NOTIFY,
+	       OPT_CPU_CAP, OPT_NO_ASYM_ROTATE, OPT_SMT_SIBLINGS, OPT_NO_SMT_BALANCE,
+	       OPT_NO_PRED_MOVE };
 	static const struct option opts[] = {
 		{ "mode", required_argument, NULL, 'm' }, { "duration", required_argument, NULL, 'd' },
 		{ "stats-json", required_argument, NULL, 'o' }, { "verbose", no_argument, NULL, 'v' },
@@ -613,6 +805,11 @@ int main(int argc, char **argv)
 		{ "lerwatt-auto", no_argument, NULL, OPT_LERWATT_AUTO },
 		{ "model-init", required_argument, NULL, OPT_MODEL_INIT },
 		{ "model-update", required_argument, NULL, OPT_MODEL_UPDATE },
+		{ "cpu-capacity", required_argument, NULL, OPT_CPU_CAP },
+		{ "no-asym-rotate", no_argument, NULL, OPT_NO_ASYM_ROTATE },
+		{ "smt-siblings", required_argument, NULL, OPT_SMT_SIBLINGS },
+		{ "no-smt-balance", no_argument, NULL, OPT_NO_SMT_BALANCE },
+		{ "no-pred-move", no_argument, NULL, OPT_NO_PRED_MOVE },
 		{ NULL, 0, NULL, 0 },
 	};
 	while ((opt = getopt_long(argc, argv, "m:d:o:vh", opts, NULL)) != -1) {
@@ -661,19 +858,28 @@ int main(int argc, char **argv)
 		case OPT_LERWATT: lerwatt = true; lerwatt_auto = false; break;
 		case OPT_LERWATT_AUTO: lerwatt = true; lerwatt_auto = true; break;
 		case OPT_MODEL_INIT:
-			if (strcmp(optarg, "bias") && strcmp(optarg, "ewma")) {
+			for (model_init = 0; model_init < 3; model_init++)
+				if (!strcmp(optarg, model_init_names[model_init]))
+					break;
+			if (model_init == 3) {
 				usage(stderr, argv[0]);
 				return 2;
 			}
-			model_init_ewma = !strcmp(optarg, "ewma");
 			break;
 		case OPT_MODEL_UPDATE:
-			if (strcmp(optarg, "trunc") && strcmp(optarg, "carry")) {
+			for (model_update = 0; model_update < 3; model_update++)
+				if (!strcmp(optarg, model_update_names[model_update]))
+					break;
+			if (model_update == 3) {
 				usage(stderr, argv[0]);
 				return 2;
 			}
-			model_update_carry = !strcmp(optarg, "carry");
 			break;
+		case OPT_CPU_CAP: cap_spec = optarg; break;
+		case OPT_NO_ASYM_ROTATE: no_asym_rotate = true; break;
+		case OPT_SMT_SIBLINGS: smt_spec = optarg; break;
+		case OPT_NO_SMT_BALANCE: no_smt_balance = true; break;
+		case OPT_NO_PRED_MOVE: no_pred_move = true; break;
 		default: usage(stderr, argv[0]); return 2;
 		}
 	}
@@ -818,13 +1024,31 @@ int main(int argc, char **argv)
 	skel->rodata->fault_stall = fault;
 	skel->rodata->stall_tgid = stall_tgid;
 	skel->rodata->profile_model = profile;
-	skel->rodata->model_init_ewma = model_init_ewma;
-	skel->rodata->model_update_carry = model_update_carry;
+	skel->rodata->model_init = model_init;
+	skel->rodata->model_update = model_update;
 	skel->rodata->track_all = track_all;
+	skel->rodata->publish_snapshots = !summary_only;
 	skel->rodata->cpuperf_mode = cpuperf;
 	skel->rodata->lerwatt_enabled = lerwatt;
 	skel->rodata->nr_cpus = ncpus < (int)LERTICK_MAX_CPUS ? (unsigned)ncpus : LERTICK_MAX_CPUS;
 	llc_domains(skel, skel->rodata->nr_cpus);
+	if (sched_topology(skel, skel->rodata->nr_cpus, cap_spec, smt_spec, &stopo)) {
+		status = 2;
+		goto cleanup;
+	}
+	skel->rodata->asym_rotate = !no_asym_rotate;
+	skel->rodata->smt_balance = !no_smt_balance;
+	skel->rodata->pred_move = !no_pred_move;
+	/*
+	 * dispatch() may hand a task that keeps running to a better idle CPU;
+	 * ENQ_LAST makes the kernel queue it again even when its CPU has
+	 * nothing else to run.
+	 */
+	if ((stopo.asym && !no_asym_rotate) || (stopo.smt && !no_smt_balance)) {
+		__u64 flag = SCX_OPS_ENQ_LAST;
+		if (!flag) { fprintf(stderr, "BLOCKER: kernel lacks the ENQ_LAST flag.\n"); status = 1; goto cleanup; }
+		skel->struct_ops.lertick_ops->flags |= flag;
+	}
 	if (lerwatt) {
 		skel->rodata->lerwatt_session_id = topo.session_id;
 		for (unsigned i = 0; i < LW_CONTRACT_MAX_CLUSTERS; i++)
@@ -955,8 +1179,15 @@ int main(int argc, char **argv)
 			lerwatt ? "true" : "false");
 		fprintf(out, ",\"lerwatt_session_id\":%llu,\"contract_version\":%d",
 			U64(topo.session_id), LW_CONTRACT_VERSION);
-		fprintf(out, ",\"model_init\":\"%s\"", model_init_ewma ? "ewma" : "bias");
-		fprintf(out, ",\"model_update\":\"%s\"", model_update_carry ? "carry" : "trunc");
+		fprintf(out, ",\"model_init\":\"%s\"", model_init_names[model_init]);
+		fprintf(out, ",\"model_update\":\"%s\"", model_update_names[model_update]);
+		fprintf(out, ",\"cpus_asym\":%s,\"asym_rotate\":%s,\"smt\":%s,\"smt_balance\":%s,\"pred_move\":%s,\"cpu_capacity\":[",
+			stopo.asym ? "true" : "false", no_asym_rotate ? "false" : "true",
+			stopo.smt ? "true" : "false", no_smt_balance ? "false" : "true",
+			no_pred_move ? "false" : "true");
+		for (unsigned c = 0; c < skel->rodata->nr_cpus; c++)
+			fprintf(out, "%s%u", c ? "," : "", stopo.cap[c]);
+		fputc(']', out);
 		fprintf(out, ",\"duration_seconds\":%u,\"sample_ms\":%u,\"summary_only\":%s,\"version\":",
 			duration, sample_ms, summary_only ? "true" : "false");
 		json_string(out, LERTICK_VERSION);

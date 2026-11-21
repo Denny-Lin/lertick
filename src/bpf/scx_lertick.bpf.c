@@ -35,13 +35,19 @@ const volatile u32 min_train_samples = LERTICK_MIN_TRAIN_SAMPLES;
 /* Zero selects comm names beginning with "lertick"; otherwise select a TGID. */
 const volatile u32 tracked_tgid;
 const volatile bool track_all;
+/*
+ * Copy each learned task's snapshot to task_snapshots for user space. Off
+ * with --summary-only, which never reads them: with every task learned, the
+ * copies on each callback slowed hackbench -g 64 by about 70%.
+ */
+const volatile bool publish_snapshots = true;
 /* Disposable-VM watchdog test only; userspace gates this behind partial mode. */
 const volatile bool fault_stall;
 const volatile u32 stall_tgid;
 /* Optional diagnostic clocks; primary benchmarks leave this disabled. */
 const volatile bool profile_model;
-const volatile bool model_init_ewma;
-const volatile bool model_update_carry;
+const volatile u32 model_init = LERTICK_MODEL_INIT_GUESS;
+const volatile u32 model_update = LERTICK_MODEL_UPDATE_DECAY;
 /* LERTICK_CPUPERF_MAX never calls scx_bpf_cpuperf_set(), as before. */
 const volatile u32 cpuperf_mode = LERTICK_CPUPERF_MAX;
 /* Optional Lerwatt plug-in: read lw_contract, keep demand counters. */
@@ -61,6 +67,55 @@ const volatile u16 cpu_cap_override[LERTICK_MAX_CPUS];
 
 #define LERTICK_QUEUE_REFERENCE 16U
 
+/* Wakers remembered per task. */
+#define NR_WAKERS 4
+
+/*
+ * Share of a task's slice, in percent, added to its vtime to order the DSQ.
+ * A task predicted to run briefly gets a short slice and so an earlier
+ * deadline, and runs before longer ones that are about as far behind in
+ * vtime, without preempting anyone.
+ */
+#define DEADLINE_PCT 50
+
+/*
+ * Update count a task keeps when it takes over its program's model, so that
+ * it still learns with a large step (see train_model()).
+ */
+#define PROG_INHERIT_UPDATES 2ULL
+
+/*
+ * CPU capacities for scheduling, from the loader, the largest 1024. Unlike
+ * cpu_cap_override, which only shapes frequency requests, these change
+ * where tasks run. cpus_asym is set when some CPU is more than 5% below the
+ * largest in the kernel's capacities, or when the loader finds little cores.
+ * Without it every capacity is 1024 and nothing below changes scheduling.
+ *
+ * With it, bursts are learned as work, their run time scaled by the
+ * capacity of the CPU they ran on; a woken task whose bursts run long takes
+ * an idle CPU of the largest capacity; and a task that keeps running on a
+ * little CPU is handed to an idle big one (asym_rotate).
+ */
+const volatile u16 cpu_cap[LERTICK_MAX_CPUS];
+const volatile bool cpus_asym;
+const volatile bool asym_rotate = true;
+
+/*
+ * SMT siblings, from the loader: cpu_sibling[cpu] is the other hardware
+ * thread of the CPU's core plus one, 0 for none. A task that keeps running
+ * on a core whose other thread is busy too moves to a whole idle core
+ * (smt_balance).
+ */
+const volatile u16 cpu_sibling[LERTICK_MAX_CPUS];
+const volatile bool smt_on;
+const volatile bool smt_balance = true;
+/* Decide moves of running tasks by their predicted burst (worth_moving()). */
+const volatile bool pred_move = true;
+
+#define BIG_CAP 973 /* within 5% of the largest */
+/* Tasks handed to a CPU wait here, taken by that CPU only. */
+#define ROT_DSQ(cpu) (0x20000ULL + (u64)(cpu))
+
 UEI_DEFINE(uei);
 
 struct task_ctx {
@@ -68,6 +123,9 @@ struct task_ctx {
 	__s32 features[LERTICK_FEATURES];
 	u64 runtime_start_ns;
 	u64 episode_runtime_ns;
+	u64 episode_work_ns;	/* the same, scaled by CPU capacity */
+	u32 run_cap;		/* capacity of the CPU it last ran on */
+	s32 rotate_to;		/* CPU + 1 that dispatch() hands it to */
 	u64 last_sleep_ns;
 	u64 last_burst_ns;
 	u64 ewma_burst_ns;
@@ -88,8 +146,40 @@ struct task_ctx {
 	u32 rq_weight;		/* weight counted in runnable_weight, 0 when not counted */
 	bool cg_counted;	/* rq_weight is also counted in its cgroup's sums */
 	u32 eff_weight;		/* weight of the last charge; dispatch() cannot look up cgroups */
+	char prog_comm[LERTICK_COMM_LEN]; /* program whose model it last took over */
+	u32 waker;		/* pid that woke the current episode */
+	u32 waker_pid[NR_WAKERS]; /* the last wakers of this task ... */
+	u64 waker_burst[NR_WAKERS]; /* ... and the last burst each one started */
+	u32 waker_next;
+	u64 waker_err, avg_err;	/* recent error of the two burst guesses */
+	u64 dl_off;		/* deadline offset in dsq_vtime while queued */
 	struct lertick_task_snapshot snapshot;
 };
+
+/*
+ * A model per task name (comm), trained with every completed burst of the
+ * learned tasks with that name. Short-lived processes, such as a compiler's,
+ * then predict from their first burst with what earlier processes of the
+ * program learned. A task that renames itself only changes which model it
+ * starts from: the prediction sets the slice, never the vtime charge.
+ * Updates take no lock, so concurrent ones can be lost; that only slows the
+ * learning.
+ */
+struct prog_key {
+	char comm[LERTICK_COMM_LEN];
+};
+
+struct prog_val {
+	struct lertick_model model;
+	u64 ewma_burst_ns;
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(max_entries, 4096);
+	__type(key, struct prog_key);
+	__type(value, struct prog_val);
+} prog_stor SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_TASK_STORAGE);
@@ -408,7 +498,287 @@ static __always_inline struct task_ctx *task_ctx(struct task_struct *p)
 #define NSEC_PER_MSEC (1000ULL * NSEC_PER_USEC)
 #define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq)
 #define LERTICK_TASK_CGROUP(p) __COMPAT_scx_bpf_task_cgroup(p)
+/* keep_prev() compares the running task with the deadline of a fixed slice. */
+#define LERTICK_PREV_DEADLINE(p, tctx)                     \
+	(fixed_slice_ns * DEADLINE_PCT /                   \
+	 ((tctx) && (tctx)->eff_weight ? (tctx)->eff_weight : 100))
 #include "policy.h"
+
+/* A new model, with the starting weights --model-init chose. */
+static __always_inline void start_model(struct lertick_model *model)
+{
+	if (model_init == LERTICK_MODEL_INIT_EWMA) {
+		lertick_model_init_ewma(model);
+		return;
+	}
+	lertick_model_init(model);
+	if (model_init == LERTICK_MODEL_INIT_GUESS) {
+		/* No worse than the burst guess before it has learned anything. */
+		model->weight_q16[0] = 0;
+		model->weight_q16[1] = LERTICK_Q;
+	}
+}
+
+/*
+ * One least-mean-squares step whose size starts large and shrinks (1/8 for
+ * the first 8 updates, 1/16 up to 32, then 1/64), so a model adapts within a
+ * few bursts and is stable afterwards. Returns the clipped residual.
+ */
+static __s32 train_decay(struct lertick_model *model,
+			 const __s32 features[LERTICK_FEATURES], __s32 target_q16)
+{
+	__s64 error = (__s64)lertick_clip_q16(target_q16) -
+		      lertick_model_raw_q16(model, features);
+	__s64 alpha = model->updates < 8 ? LERTICK_Q / 8 :
+		      model->updates < 32 ? LERTICK_Q / 16 : LERTICK_ALPHA_Q16;
+	int i;
+
+	if (error > LERTICK_Q)
+		error = LERTICK_Q;
+	if (error < -LERTICK_Q)
+		error = -LERTICK_Q;
+	bpf_for(i, 0, LERTICK_FEATURES) {
+		__s64 update;
+
+		if (i >= LERTICK_FEATURES)
+			break;
+		update = lertick_trunc_shift(alpha * error * lertick_clip_q16(features[i]), 32);
+		model->weight_q16[i] = lertick_clip_weight(
+			(__s64)lertick_clip_weight(model->weight_q16[i]) + update);
+	}
+	if (model->updates != ~(__u64)0)
+		model->updates++;
+	return (__s32)error;
+}
+
+/* Train @model with the update rule --model-update chose. */
+static __s32 train_model(struct lertick_model *model,
+			 const __s32 features[LERTICK_FEATURES], __s32 target_q16)
+{
+	if (model_update == LERTICK_MODEL_UPDATE_CARRY)
+		return lertick_model_train_carry(model, features, target_q16);
+	if (model_update == LERTICK_MODEL_UPDATE_TRUNC)
+		return lertick_model_train(model, features, target_q16);
+	return train_decay(model, features, target_q16);
+}
+
+static __always_inline bool learning(void)
+{
+	return mode == LERTICK_MODE_ONLINE || mode == LERTICK_MODE_SHADOW;
+}
+
+static __always_inline bool same_comm(const char *a, const char *b)
+{
+	u64 x[2], y[2];
+
+	__builtin_memcpy(x, a, sizeof(x));
+	__builtin_memcpy(y, b, sizeof(y));
+	return x[0] == y[0] && x[1] == y[1];
+}
+
+/*
+ * When @p's name differs from the one its model was taken for (first wakeup,
+ * exec, rename), take over the model of its new name. Its update count is
+ * capped, since threads of one program can behave differently and each must
+ * still adapt to its own bursts.
+ */
+static void prog_sync(struct task_struct *p, struct task_ctx *tctx)
+{
+	struct prog_key key = {};
+	struct prog_val *v;
+
+	if (!learning() || !tctx->tracked || same_comm(tctx->prog_comm, p->comm))
+		return;
+	__builtin_memcpy(tctx->prog_comm, p->comm, sizeof(tctx->prog_comm));
+	__builtin_memcpy(key.comm, p->comm, sizeof(key.comm));
+	v = bpf_map_lookup_elem(&prog_stor, &key);
+	if (!v)
+		return;
+	tctx->model = v->model;
+	tctx->ewma_burst_ns = v->ewma_burst_ns;
+	if (tctx->model.updates > PROG_INHERIT_UPDATES)
+		tctx->model.updates = PROG_INHERIT_UPDATES;
+}
+
+/* Train @p's program model with the burst that just completed. */
+static void prog_learn(struct task_struct *p, struct task_ctx *tctx,
+		       __s32 target, u64 burst)
+{
+	struct prog_key key = {};
+	struct prog_val *v;
+
+	__builtin_memcpy(key.comm, p->comm, sizeof(key.comm));
+	v = bpf_map_lookup_elem(&prog_stor, &key);
+	if (!v) {
+		struct prog_val init = {};
+
+		start_model(&init.model);
+		bpf_map_update_elem(&prog_stor, &key, &init, BPF_NOEXIST);
+		v = bpf_map_lookup_elem(&prog_stor, &key);
+		if (!v)
+			return;
+	}
+	train_model(&v->model, tctx->features, target);
+	v->ewma_burst_ns = v->ewma_burst_ns ? v->ewma_burst_ns * 3 / 4 + burst / 4 : burst;
+}
+
+/* Slot of the current episode's waker among the task's last wakers, or -1. */
+static __always_inline int waker_slot(struct task_ctx *tctx)
+{
+	int i, slot = -1;
+
+	bpf_for(i, 0, NR_WAKERS) {
+		if (tctx->waker_pid[i % NR_WAKERS] == tctx->waker)
+			slot = i % NR_WAKERS;
+	}
+	return slot;
+}
+
+/*
+ * The burst guess fed to the model: the last burst this waker started, while
+ * that has recently been closer than the burst average, else the average.
+ * A thread that alternates between two kinds of work, each started by a
+ * different waker, then gets the right length for each; a task whose bursts
+ * vary at random keeps the steadier average.
+ */
+static __always_inline u64 burst_guess(struct task_ctx *tctx)
+{
+	int slot = waker_slot(tctx);
+
+	if (slot >= 0 && tctx->waker_err < tctx->avg_err)
+		return tctx->waker_burst[slot % NR_WAKERS];
+	return tctx->ewma_burst_ns;
+}
+
+/*
+ * Score both burst guesses against the burst that just completed, and
+ * remember it as this waker's last.
+ */
+static void learn_waker(struct task_ctx *tctx, u64 burst)
+{
+	int slot = waker_slot(tctx);
+	u64 g = slot >= 0 ? tctx->waker_burst[slot % NR_WAKERS] :
+		(tctx->last_burst_ns < LERTICK_REFERENCE_NS ? tctx->last_burst_ns :
+		 LERTICK_REFERENCE_NS);
+	u64 a = tctx->ewma_burst_ns;
+
+	tctx->waker_err = tctx->waker_err * 7 / 8 + (g > burst ? g - burst : burst - g) / 8;
+	tctx->avg_err = tctx->avg_err * 7 / 8 + (a > burst ? a - burst : burst - a) / 8;
+	if (slot < 0) {
+		slot = tctx->waker_next % NR_WAKERS;
+		tctx->waker_next++;
+		tctx->waker_pid[slot % NR_WAKERS] = tctx->waker;
+	}
+	tctx->waker_burst[slot % NR_WAKERS] = burst;
+}
+
+static __always_inline u32 cap_of(s32 cpu)
+{
+	u16 c = cpu_cap[cpu & (LERTICK_MAX_CPUS - 1)];
+
+	return cpus_asym && c ? c : 1024;
+}
+
+static __always_inline s32 sibling_of(s32 cpu)
+{
+	return smt_on ? (s32)cpu_sibling[cpu & (LERTICK_MAX_CPUS - 1)] - 1 : -1;
+}
+
+/* Is the other thread of @cpu's core busy? */
+static __always_inline bool sibling_busy(s32 cpu)
+{
+	const struct cpumask *idle;
+	s32 sib = sibling_of(cpu);
+	bool busy;
+
+	if (sib < 0)
+		return false;
+	idle = scx_bpf_get_idle_cpumask();
+	busy = !bpf_cpumask_test_cpu(sib, idle);
+	scx_bpf_put_idle_cpumask(idle);
+	return busy;
+}
+
+/* Is @cpu idle in @idle, and its sibling, if any, too? */
+static __always_inline bool core_idle_in(s32 cpu, const struct cpumask *idle)
+{
+	s32 sib = sibling_of(cpu);
+
+	return bpf_cpumask_test_cpu(cpu, idle) &&
+	       (sib < 0 || bpf_cpumask_test_cpu(sib, idle));
+}
+
+/*
+ * Claim an idle CPU for @p: of the largest capacity if @big, of a whole idle
+ * core if @whole, @prev first. Returns -1 if there is none.
+ */
+static __always_inline s32 pick_idle(struct task_struct *p, s32 prev, bool big,
+				     bool whole)
+{
+	const struct cpumask *idle = scx_bpf_get_idle_cpumask();
+	u32 n = scx_bpf_nr_cpu_ids(), i;
+	s32 cpu = -1;
+
+	if (prev >= 0 && (!big || cap_of(prev) >= BIG_CAP) &&
+	    bpf_cpumask_test_cpu(prev, p->cpus_ptr) &&
+	    (!whole || core_idle_in(prev, idle)) &&
+	    scx_bpf_test_and_clear_cpu_idle(prev)) {
+		cpu = prev;
+		goto out;
+	}
+	bpf_for(i, 0, n) {
+		if (i >= LERTICK_MAX_CPUS)
+			break;
+		if ((big && cap_of(i) < BIG_CAP) ||
+		    !bpf_cpumask_test_cpu(i, p->cpus_ptr) ||
+		    (whole && !core_idle_in(i, idle)))
+			continue;
+		if (scx_bpf_test_and_clear_cpu_idle(i)) {
+			cpu = i;
+			break;
+		}
+	}
+out:
+	scx_bpf_put_idle_cpumask(idle);
+	return cpu;
+}
+
+/* An idle CPU of the largest capacity, of a whole idle core if possible. */
+static __always_inline s32 pick_big_idle(struct task_struct *p, s32 prev)
+{
+	s32 cpu = smt_on ? pick_idle(p, prev, true, true) : -1;
+
+	return cpu >= 0 ? cpu : pick_idle(p, prev, true, false);
+}
+
+/*
+ * Is a task that has run @run of its current burst worth moving to a better
+ * CPU? With a trusted prediction, the burst is expected to last the larger of
+ * the prediction and the average burst (as time on the CPU it runs on): it
+ * is worth moving while at least min_slice_ns of that is left, or once it
+ * has run twice as long, so that the prediction has plainly missed. Without
+ * a trusted prediction, it is worth moving once it has run past the fixed
+ * slice.
+ */
+static __always_inline bool worth_moving(struct task_ctx *tctx, u64 run)
+{
+	u32 cap = tctx->run_cap ? tctx->run_cap : 1024;
+	u64 expect;
+
+	if (!pred_move || mode != LERTICK_MODE_ONLINE || !tctx->episode_valid ||
+	    tctx->model.updates < min_train_samples)
+		return run >= fixed_slice_ns;
+	expect = tctx->prediction_ns > tctx->ewma_burst_ns ? tctx->prediction_ns :
+		 tctx->ewma_burst_ns;
+	expect = expect * 1024 / cap;
+	return run >= 2 * expect || run + min_slice_ns <= expect;
+}
+
+/* Do tasks handed over in dispatch() wait in ROT_DSQ()? */
+static __always_inline bool handover_on(void)
+{
+	return (cpus_asym && asym_rotate) || (smt_on && smt_balance);
+}
 
 static __always_inline void refresh_tracking(struct task_struct *p,
 					    struct task_ctx *tctx)
@@ -430,7 +800,7 @@ static __always_inline void publish(struct task_ctx *tctx)
 {
 	u32 pid;
 
-	if (!tctx->tracked)
+	if (!publish_snapshots || !tctx->tracked)
 		return;
 	tctx->snapshot.episode_runtime_ns = tctx->episode_runtime_ns;
 	tctx->snapshot.episode_active = tctx->episode_active;
@@ -466,8 +836,11 @@ static __always_inline void begin_episode(struct task_struct *p,
 	tctx->episode_active = true;
 	tctx->episode_valid = tctx->has_slept && (enq_flags & SCX_ENQ_WAKEUP);
 	tctx->episode_runtime_ns = 0;
+	tctx->episode_work_ns = 0;
 	tctx->prediction_ns = 0;
 	tctx->ewma_prediction_ns = tctx->ewma_burst_ns;
+	/* On a wakeup the running task is the waker. */
+	tctx->waker = (u32)bpf_get_current_pid_tgid();
 	tctx->wake_ns = tctx->episode_valid ? now : 0;
 	if (lerwatt_enabled)
 		tctx->latcrit = lertick_latency_critical(tctx->episode_valid, sleep_ns,
@@ -477,7 +850,7 @@ static __always_inline void begin_episode(struct task_struct *p,
 	tctx->snapshot.last_censor_reason = tctx->episode_valid ? LERTICK_CENSOR_NONE :
 		LERTICK_CENSOR_ATTACH_OR_UNVERIFIED_WAKE;
 	tctx->features[0] = LERTICK_Q;
-	tctx->features[1] = lertick_scale_ns_q16(tctx->last_burst_ns,
+	tctx->features[1] = lertick_scale_ns_q16(burst_guess(tctx),
 					      LERTICK_REFERENCE_NS);
 	tctx->features[2] = lertick_scale_ns_q16(tctx->ewma_burst_ns,
 					      LERTICK_REFERENCE_NS);
@@ -504,15 +877,28 @@ static __always_inline void begin_episode(struct task_struct *p,
 
 static __always_inline u64 choose_slice(struct task_ctx *tctx, u64 consumed_ns)
 {
-	u64 slice = fixed_slice_ns;
+	u64 slice = fixed_slice_ns, pred = tctx ? tctx->prediction_ns : 0;
 	bool adaptive = false;
 
+	/* Work to time on the CPU the task last ran on (see cpus_asym). */
+	if (cpus_asym && tctx) {
+		u32 cap = tctx->run_cap ? tctx->run_cap : 1024;
+		u64 pending = consumed_ns > tctx->episode_runtime_ns ?
+			consumed_ns - tctx->episode_runtime_ns : 0;
+
+		pred = pred * 1024 / cap;
+		consumed_ns = tctx->episode_work_ns * 1024 / cap + pending;
+	}
+	/*
+	 * A burst predicted past max_slice_ns is cut whatever its slice, so it
+	 * gets fixed_slice_ns: a longer slice would only make others wait.
+	 */
 	if (tctx && (mode == LERTICK_MODE_ONLINE || mode == LERTICK_MODE_EWMA) &&
 	    tctx->tracked && tctx->episode_valid &&
 	    (mode == LERTICK_MODE_EWMA ? tctx->snapshot.completed_bursts :
 	     tctx->model.updates) >= min_train_samples &&
-	    tctx->prediction_ns > consumed_ns) {
-		slice = tctx->prediction_ns - consumed_ns;
+	    pred <= max_slice_ns && pred > consumed_ns) {
+		slice = pred - consumed_ns;
 		adaptive = true;
 	}
 	if (slice < min_slice_ns)
@@ -556,12 +942,22 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 {
 	struct task_ctx *tctx = task_ctx(p);
 	bool idle = false;
-	s32 cpu = scx_bpf_select_cpu_dfl(p, prev_cpu, wake_flags, &idle);
+	s32 cpu = -1;
+
+	/* A task whose bursts run long takes an idle big CPU if one is free. */
+	if (cpus_asym && tctx && tctx->ewma_burst_ns >= fixed_slice_ns &&
+	    !is_fault_target(p)) {
+		cpu = pick_big_idle(p, prev_cpu);
+		idle = cpu >= 0;
+	}
+	if (cpu < 0)
+		cpu = scx_bpf_select_cpu_dfl(p, prev_cpu, wake_flags, &idle);
 
 	if (tctx) {
 		refresh_tracking(p, tctx);
 		/* select_cpu precedes runnable on a wakeup and can insert directly. */
 		if (!tctx->episode_active) {
+			prog_sync(p, tctx);
 			begin_episode(p, tctx, SCX_ENQ_WAKEUP);
 			tctx->started_in_select = true;
 		}
@@ -592,9 +988,32 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 		stat_add(LERTICK_STAT_FAULT_STALLS, 1);
 		return;
 	}
+	/* A task dispatch() handed to another CPU waits for that CPU only. */
+	if (tctx && tctx->rotate_to) {
+		s32 dst = tctx->rotate_to - 1;
+
+		tctx->rotate_to = 0;
+		if (!(enq_flags & SCX_ENQ_WAKEUP) &&
+		    bpf_cpumask_test_cpu(dst, p->cpus_ptr)) {
+			scx_bpf_dsq_insert_vtime(p, ROT_DSQ(dst), fixed_slice_ns,
+						 p->scx.dsq_vtime, enq_flags);
+			scx_bpf_kick_cpu(dst, 0);
+			return;
+		}
+		/*
+		 * Not handed over after all. dst was claimed as idle: kick it
+		 * so that it goes idle again and can be picked.
+		 */
+		scx_bpf_kick_cpu(dst, 0);
+	}
 	if (tctx)
 		refresh_tracking(p, tctx);
 	slice = choose_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
+	/* A task dequeued without running still carries its offset. */
+	if (tctx && tctx->dl_off) {
+		vtime -= tctx->dl_off;
+		tctx->dl_off = 0;
+	}
 	/*
 	 * Sleeper credit is bounded independently of model output. Only a
 	 * wakeup is a sleeper: a task requeued after its slice keeps its vtime,
@@ -604,6 +1023,18 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	if ((enq_flags & SCX_ENQ_WAKEUP) && time_before(vtime, vtime_now - LAG_NS))
 		vtime = vtime_now - LAG_NS;
 	vtime = clamp_ahead(p, vtime);
+	/*
+	 * Order the queue by deadline: vtime plus a share of the slice. The
+	 * offset stays in dsq_vtime only while queued; running() removes it,
+	 * so the charge and the clock use the vtime.
+	 */
+	if (tctx) {
+		u32 w = tctx->eff_weight ? tctx->eff_weight :
+			p->scx.weight ? p->scx.weight : 1;
+
+		tctx->dl_off = slice * DEADLINE_PCT / w;
+		vtime += tctx->dl_off;
+	}
 	stat_add(LERTICK_STAT_GLOBAL_ENQUEUE, 1);
 	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice, vtime, enq_flags);
 	if (tctx)
@@ -613,6 +1044,50 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 {
 	bool continuing = prev && (prev->scx.flags & SCX_TASK_QUEUED) && !is_fault_target(prev);
+
+	if (handover_on()) {
+		struct task_ctx *hctx = continuing ? task_ctx(prev) : NULL;
+		u64 run = 0;
+		s32 dst = -1;
+
+		/* A task handed to this CPU first. */
+		if (LERTICK_MOVE_TO_LOCAL(ROT_DSQ(cpu)))
+			return;
+		if (hctx) {
+			run = hctx->episode_runtime_ns;
+			if (hctx->running && prev->se.sum_exec_runtime > hctx->runtime_start_ns)
+				run += prev->se.sum_exec_runtime - hctx->runtime_start_ns;
+		}
+		/*
+		 * A task worth moving on a little CPU goes to an idle big CPU, as
+		 * the kernel moves a misfit task. It is not kept here: the kernel
+		 * queues it again (SCX_OPS_ENQ_LAST, set by the loader) and
+		 * enqueue() hands it over.
+		 */
+		if (hctx && cpus_asym && asym_rotate && cap_of(cpu) < BIG_CAP &&
+		    worth_moving(hctx, run))
+			dst = pick_big_idle(prev, -1);
+		/*
+		 * Likewise, a task that keeps running while the other thread of
+		 * its core is busy goes to a whole idle core of the same or a
+		 * larger capacity.
+		 */
+		if (dst < 0 && hctx && smt_on && smt_balance && sibling_busy(cpu) &&
+		    worth_moving(hctx, run)) {
+			dst = pick_idle(prev, -1, cap_of(cpu) >= BIG_CAP, true);
+			if (dst >= 0 && cap_of(dst) < cap_of(cpu)) {
+				/* Never to a slower CPU: give the claim back. */
+				scx_bpf_kick_cpu(dst, 0);
+				dst = -1;
+			}
+		}
+		if (dst >= 0 && hctx) {
+			stat_add(LERTICK_STAT_HANDOVERS, 1);
+			hctx->rotate_to = dst + 1;
+			take_next(cpu);
+			return;
+		}
+	}
 
 	/* Explicitly reinsert a continuing task to avoid the kernel's DFL refill. */
 	if ((continuing && keep_prev(prev, task_ctx(prev), cpu)) || (!take_next(cpu) && continuing)) {
@@ -670,9 +1145,10 @@ void BPF_STRUCT_OPS(lertick_runnable, struct task_struct *p, u64 enq_flags)
 	}
 	refresh_tracking(p, tctx);
 	/* Migration can produce runnable notifications without a new wakeup. */
-	if (!tctx->episode_active)
+	if (!tctx->episode_active) {
+		prog_sync(p, tctx);
 		begin_episode(p, tctx, enq_flags);
-	else if (tctx->started_in_select) {
+	} else if (tctx->started_in_select) {
 		/* Confirm the wakeup before admitting this episode as a label. */
 		if (!(enq_flags & SCX_ENQ_WAKEUP))
 			tctx->episode_valid = false;
@@ -710,6 +1186,10 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 	struct task_ctx *tctx = task_ctx(p);
 	u64 observed_slice = p->scx.slice;
 
+	if (tctx && tctx->dl_off) {
+		p->scx.dsq_vtime -= tctx->dl_off;
+		tctx->dl_off = 0;
+	}
 	clock_raise(p->scx.dsq_vtime);
 	stat_add(LERTICK_STAT_RUNS, 1);
 	cpu_on_running(p, tctx);
@@ -732,6 +1212,7 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 	tctx->wake_ns = 0;
 	tctx->runtime_start_ns = p->se.sum_exec_runtime;
 	tctx->running = true;
+	tctx->run_cap = cap_of(scx_bpf_task_cpu(p));
 	if (tctx->tracked) {
 		tctx->snapshot.runs++;
 		tctx->snapshot.observed_running_slice_ns = observed_slice;
@@ -786,6 +1267,7 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	rw = runnable_weight;
 	clock_advance(delta * 100 / (rw < 100 ? 100 : rw));
 	tctx->episode_runtime_ns = service.consumed_ns;
+	tctx->episode_work_ns += delta * cap_of(scx_bpf_task_cpu(p)) / 1024;
 	stat_add(LERTICK_STAT_RUNTIME_NS, delta);
 	cpu_account_run(delta, tctx->latcrit);
 	if (tctx->tracked) {
@@ -813,8 +1295,12 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 	 * callback. put_prev_task_scx() then suppresses stopping for !QUEUED.
 	 * The final service segment is therefore already included exactly once.
 	 */
-	/* Non-sleep quiescence preserves the episode across migration/preemption. */
-	burst = tctx->episode_runtime_ns;
+	/*
+	 * Non-sleep quiescence preserves the episode across migration/preemption.
+	 * Bursts are learned as work (see cpus_asym), which equals their run
+	 * time when the CPUs are alike.
+	 */
+	burst = tctx->episode_work_ns;
 	if (tctx->episode_active && tctx->tracked) {
 		if (p->flags & PF_EXITING) {
 			censor_episode(tctx, LERTICK_CENSOR_EXIT);
@@ -857,8 +1343,9 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 				u64 started = profile_model ? bpf_ktime_get_ns() : 0;
 
 				tctx->snapshot.last_training_error_q16 =
-					model_update_carry ? lertick_model_train_carry(&tctx->model, tctx->features, target) :
-					lertick_model_train(&tctx->model, tctx->features, target);
+					train_model(&tctx->model, tctx->features, target);
+				prog_learn(p, tctx, target, bounded);
+				learn_waker(tctx, bounded);
 				if (profile_model)
 					stat_add(LERTICK_STAT_TRAINING_TIME_NS, bpf_ktime_get_ns() - started);
 				stat_add(LERTICK_STAT_TRAINING_UPDATES, 1);
@@ -882,8 +1369,13 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 	publish(tctx);
 }
 
-s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
-		   struct scx_init_task_args *args)
+/*
+ * Sleepable so the task storage is allocated with GFP_KERNEL. An atomic
+ * allocation of the context failed in 2 of 20 quick reattaches, and a failed
+ * init_task disables the scheduler.
+ */
+s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init_task, struct task_struct *p,
+			    struct scx_init_task_args *args)
 {
 	struct task_ctx *tctx = bpf_task_storage_get(&task_ctx_stor, p, 0,
 						BPF_LOCAL_STORAGE_GET_F_CREATE);
@@ -893,10 +1385,7 @@ s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
 		/* Runtime ownership is essential: reject rather than mischarge vtime. */
 		return -ENOMEM;
 	}
-	if (model_init_ewma)
-		lertick_model_init_ewma(&tctx->model);
-	else
-		lertick_model_init(&tctx->model);
+	start_model(&tctx->model);
 	refresh_tracking(p, tctx);
 	stat_add(LERTICK_STAT_INIT_TASKS, 1);
 	return 0;
@@ -918,6 +1407,8 @@ void BPF_STRUCT_OPS(lertick_disable, struct task_struct *p)
 	tctx->episode_active = false;
 	tctx->episode_valid = false;
 	tctx->has_slept = false;
+	/* enable() restarts the vtime at the clock, without any offset. */
+	tctx->dl_off = 0;
 	publish(tctx);
 }
 
@@ -977,6 +1468,13 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init)
 	ret = create_cpu_dsqs();
 	if (ret)
 		return ret;
+	if (handover_on()) {
+		bpf_for(d, 0, scx_bpf_nr_cpu_ids()) {
+			ret = scx_bpf_create_dsq(ROT_DSQ(d), -1);
+			if (ret)
+				return ret;
+		}
+	}
 	if (cpuperf_mode != LERTICK_CPUPERF_UTIL)
 		return ret;
 	t = bpf_map_lookup_elem(&idle_timer_map, &zero);
