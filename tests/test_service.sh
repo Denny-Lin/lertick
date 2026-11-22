@@ -87,7 +87,7 @@ with tempfile.TemporaryDirectory(prefix='lertick-service-fixtures-') as td:
  text=(project/'scripts/service_manager.sh').read_text().replace('unit_dir=/etc/systemd/system',f'unit_dir={unitdir}').replace('lock_dir=/run/lertick-deploy',f'lock_dir={lockdir}').replace('config_dir=/etc/lertick',f'config_dir={configdir}').replace('[ -d /run/systemd/system ]',f'[ -d {systemdrun} ]')
  exe(tree/'scripts/service_manager.sh',text);exe(tree/'deploy.sh',(project/'deploy.sh').read_text());exe(tree/'build/scx_lertick',mux+'\n# revision one\n');exe(tree/'scripts/native_build.sh',mux)
  exe(tree/'scripts/collect_report.py','#!/usr/bin/env python3\nprint("{}")\n')
- (tree/'templates').mkdir();(tree/'templates/lertick.service.in').write_text((project/'templates/lertick.service.in').read_text())
+ (tree/'scripts/lertick.service.in').write_text((project/'scripts/lertick.service.in').read_text())
  (tree/'src/userspace').mkdir(parents=True);(tree/'src/userspace/scx_lertick.c').touch();(tree/'Makefile').touch()
  for name in ['id','uname','stat','cat','sha256sum','flock','cp','systemctl','sudo']:exe(tools/name,mux)
  service=w/'service.json';state=w/'state';log=w/'log';log.touch()

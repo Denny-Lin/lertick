@@ -55,7 +55,7 @@ docs/DEPLOYMENT.md                proposed Ubuntu/QEMU setup and recovery
 src/                             documented future C/BPF boundary
 tests/                           current docs checker; future semantic/VM tests
 benchmarks/                      future reproducible harness contract
-examples/                        future terminal demonstration contract
+docs/TERMINAL_EXAMPLE.md         terminal demonstration
 .github/workflows/               unprivileged documentation CI
 .github/ISSUE_TEMPLATE/           bug, research, benchmark submissions
 ```
@@ -72,7 +72,7 @@ Compatibility reports must distinguish build, verifier acceptance, successful at
 
 ## Demonstration and credible adoption
 
-The future [terminal demo](../../examples/README.md) should show foreground startup, learned updates, actual bounded policy choices, workload measurements, and return to the default scheduler. Include skipped/censored labels and costs. Do not print fake improvement numbers or use documentation checks as evidence that the scheduler works.
+The future [terminal demo](../TERMINAL_EXAMPLE.md) should show foreground startup, learned updates, actual bounded policy choices, workload measurements, and return to the default scheduler. Include skipped/censored labels and costs. Do not print fake improvement numbers or use documentation checks as evidence that the scheduler works.
 
 Before inviting broad deployment, publish the minimal source, exact environment manifest, raw benchmark data, negative results, recovery recordings, limitations, and license inventory. A technical article can explain the model and tradeoffs; a short demo can reproduce one result. Engage upstream through concrete bug reports and small compatibility fixes after local validation. Stars are an outcome, not a technical acceptance criterion.
 

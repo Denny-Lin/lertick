@@ -19,7 +19,7 @@ REQUIRED = (
     "README.md", "LICENSE", ".github/CONTRIBUTING.md",
     ".github/CODE_OF_CONDUCT.md", ".github/SECURITY.md", "docs/CHANGELOG.md", "docs/DEPLOYMENT.md",
     "src/README.md", "tests/README.md", "benchmarks/README.md",
-    "examples/README.md", ".github/workflows/docs.yml", "docs/PHASE1_RESULTS.md",
+    "docs/TERMINAL_EXAMPLE.md", ".github/workflows/docs.yml", "docs/PHASE1_RESULTS.md",
     "docs/DECISIONS.md", "docs/NAMING.md", "docs/REBRAND_VALIDATION.md",
     "docs/planning/README.md", "docs/legal/THIRD_PARTY.md", "results/phase1/README.md",
     "docs/README.md", "docs/INSTALL.md", "docs/OVERVIEW.md", "docs/assets/lertick-overview.svg",

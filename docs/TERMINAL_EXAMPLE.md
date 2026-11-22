@@ -1,7 +1,7 @@
 # Lertick terminal example
 
 These are implemented commands. Run them inside the prepared Linux QEMU guest
-after following the [deployment and build guide](../docs/DEPLOYMENT.md).
+after following the [deployment and build guide](DEPLOYMENT.md).
 The actual tested environment on 2026-10-09 was Ubuntu 24.04.5 ARM64,
 Linux `7.0.0-38-generic`, QEMU 10.2.1 with HVF hardware acceleration.
 

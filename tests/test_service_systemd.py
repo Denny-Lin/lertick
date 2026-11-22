@@ -94,13 +94,13 @@ def main():
     work.mkdir(mode=0o700)
     checkout = work / "source"
     checkout.mkdir()
-    for directory in ("build", "scripts", "templates", "src/userspace"):
+    for directory in ("build", "scripts", "src/userspace"):
         (checkout / directory).mkdir(parents=True)
     shutil.copy2(loader, checkout / "build/scx_lertick")
     (checkout / "build/scx_lertick").chmod(0o755)
     (checkout / "Makefile").write_text("# test-only already-built source tree\n")
     (checkout / "src/userspace/scx_lertick.c").write_text("/* test-only source sentinel */\n")
-    for name in ("deploy.sh", "scripts/service_manager.sh", "templates/lertick.service.in"):
+    for name in ("deploy.sh", "scripts/service_manager.sh", "scripts/lertick.service.in"):
         text = (source / name).read_text().replace("lertick.service", unit)
         if name == "scripts/service_manager.sh":
             assert "lock_dir=/run/lertick-deploy" in text and "config_dir=/etc/lertick" in text
@@ -110,7 +110,7 @@ def main():
         (checkout / name).chmod(0o755 if name.endswith(".sh") else 0o644)
     # The test-only unit-name replacement also changes the helpers' source
     # template filename and their fixed immutable-bundle unit filename.
-    shutil.copy2(checkout / "templates/lertick.service.in", checkout / "templates" / (unit + ".in"))
+    shutil.copy2(checkout / "scripts/lertick.service.in", checkout / "scripts" / (unit + ".in"))
     shutil.copy2(source / "scripts/collect_report.py", checkout / "scripts/collect_report.py")
     (checkout / "scripts/collect_report.py").chmod(0o755)
     environment = dict(os.environ, PREFIX=str(prefix), DESTDIR="")

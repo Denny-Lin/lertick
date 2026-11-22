@@ -107,8 +107,7 @@ with tempfile.TemporaryDirectory(prefix='lertick-deploy-fixtures-') as directory
     manager=(project/'scripts/service_manager.sh').read_text().replace('unit_dir=/etc/systemd/system',f'unit_dir={work}/etc/systemd/system').replace('lock_dir=/run/lertick-deploy',f'lock_dir={work}/run/lertick-deploy').replace('config_dir=/etc/lertick',f'config_dir={work}/etc/lertick').replace('[ -d /run/systemd/system ]',f'[ -d {work}/no-systemd ]')
     executable(tree/'scripts/service_manager.sh',manager)
     executable(tree/'scripts/collect_report.py','#!/usr/bin/env python3\nprint("{}")\n')
-    (tree/'templates').mkdir()
-    (tree/'templates/lertick.service.in').write_text((project/'templates/lertick.service.in').read_text())
+    (tree/'scripts/lertick.service.in').write_text((project/'scripts/lertick.service.in').read_text())
     state = work/'state'; state.write_text('disabled')
     log = work/'calls.jsonl'; log.touch()
     env = dict(os.environ, PATH=str(tools)+os.pathsep+os.environ['PATH'], STUB_LOG=str(log),
