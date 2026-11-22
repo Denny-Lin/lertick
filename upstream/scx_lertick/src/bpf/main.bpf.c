@@ -858,10 +858,12 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 }
 
 /*
- * Allocate and initialize the context of a new task.
+ * Allocate and initialize the context of a new task. Sleepable, so that the
+ * context is allocated with GFP_KERNEL: an atomic allocation can fail, and a
+ * failed init_task disables the scheduler.
  */
-s32 BPF_STRUCT_OPS(lertick_init_task, struct task_struct *p,
-		   struct scx_init_task_args *args)
+s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init_task, struct task_struct *p,
+			    struct scx_init_task_args *args)
 {
 	struct task_ctx *tctx;
 
