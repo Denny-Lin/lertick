@@ -1,0 +1,23 @@
+built ab1
+built ab2
+built ab3
+built ab4
+built ab5
+== ablation 02:42:07
+base default f4=1785079 f1=559550 q1=8240 w1=52 q2=38016 w2=3788 rps=247 hb=1
+ab3    BAD f4=-15% f1=-2% q1=-0% w1=+15% q2=-22% w2=-1% rps=-8% hb=+34% worse:q2,rps
+pv4ck  BAD f4=-30% f1=-3% q1=-1% w1=+15% q2=-22% w2=+0% rps=-10% hb=+34% worse:q2,rps
+ab5    BAD f4=-30% f1=-4% q1=-1% w1=+12% q2=-16% w2=-10% rps=-6% hb=+34% worse:q2,w2,rps
+ab2    BAD f4=-35% f1=-4% q1=-1% w1=+17% q2=-19% w2=+6% rps=-9% hb=+34% worse:q2,rps
+ab4    BAD f4=-41% f1=-1% q1=-1% w1=+15% q2=-16% w2=+4% rps=-11% hb=+34% worse:q2,rps
+ab1    BAD f4=-100% f1=-100% q1=-1% w1=+16% q2=-48% w2=-7% rps=+1% hb=+34% worse:q2,w2
+ab1      mq=+29% msg1CPU=+11% futex8=0%ofLinux futex1=0%ofLinux n=4
+ab2      mq=-6% msg1CPU=-20% futex8=46%ofLinux futex1=96%ofLinux n=4
+ab3      mq=-10% msg1CPU=-1% futex8=88%ofLinux futex1=98%ofLinux n=4
+ab4      mq=-10% msg1CPU=-1% futex8=20%ofLinux futex1=99%ofLinux n=4
+ab5      mq=-17% msg1CPU=-104% futex8=60%ofLinux futex1=98%ofLinux n=4
+default  mq=+0% msg1CPU=+0% futex8=100%ofLinux futex1=100%ofLinux n=4
+pv4ck    mq=+26% msg1CPU=+0% futex8=63%ofLinux futex1=96%ofLinux n=4
+== done 03:05:20
+
+[exited with code 0]

@@ -46,9 +46,11 @@ const SCHEDULER_NAME: &str = "scx_lertick";
 
 /// scx_lertick: weighted virtual-time scheduling with learned time slices.
 ///
-/// Tasks wait in one queue per LLC, ordered by weighted virtual time. In online
-/// mode each task trains a small linear model inside BPF on its own completed
-/// CPU bursts, and the prediction sets its next time slice. Fairness always
+/// Tasks wait in one queue per LLC, ordered by weighted virtual time plus half
+/// their slice in virtual time, or on their CPU's queue. In online mode each task trains a
+/// small linear model inside BPF on its own completed CPU bursts, and the
+/// prediction sets its next time slice. Whether a woken task preempts, and
+/// which queue a task waits on, is learned per program. Fairness always
 /// charges the CPU time actually used.
 ///
 /// The BPF part makes all the scheduling decisions (see src/bpf/main.bpf.c).
@@ -358,6 +360,8 @@ impl<'a> Scheduler<'a> {
             nr_adaptive_slices: self.stat(lertick_stat_LERTICK_STAT_ADAPTIVE_SLICES),
             nr_training_updates: self.stat(lertick_stat_LERTICK_STAT_TRAINING_UPDATES),
             nr_handovers: self.stat(lertick_stat_LERTICK_STAT_HANDOVERS),
+            nr_preempts: self.stat(lertick_stat_LERTICK_STAT_PREEMPTS),
+            nr_cpu_queued: self.stat(lertick_stat_LERTICK_STAT_CPU_QUEUED),
         }
     }
 

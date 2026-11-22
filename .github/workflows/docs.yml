@@ -30,7 +30,7 @@ jobs:
             !*.tar.xz
       - name: Check documents and local links
         run: python3 tests/check_docs.py
-      - name: Check the sched-ext/scx port copies of policy.h and model.h
+      - name: Check the sched-ext/scx port copy of model.h
         run: python3 scripts/export_scx.py --check
       - name: Test fixed-point arithmetic and learning
         run: make test-model
@@ -78,7 +78,7 @@ jobs:
           docker run --rm -v "$PWD:/source:ro" alpine:3.22 sh -ec '
             apk add --no-cache build-base linux-headers python3 bash util-linux
             mkdir /work
-            cp -R /source/Makefile /source/src /source/vendor /source/scripts /source/tests /source/templates /source/deploy.sh /work/
+            cp -R /source/Makefile /source/src /source/vendor /source/scripts /source/tests /source/deploy.sh /work/
             cd /work
             make test-deployment
           '

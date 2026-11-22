@@ -1,0 +1,15 @@
+pv4ck mp=0.352 mt=0.240 h16=0.911 ht=0.561 pipe=2.586890 q8=22176 w8=56 q4=49088 w4=3580 state=enabled
+pvm mp=0.354 mt=0.240 h16=0.909 ht=0.571 pipe=2.696960 q8=34368 w8=71 q4=107136 w4=16480 state=enabled
+pv4k mp=0.368 mt=0.244 h16=0.961 ht=0.568 pipe=1.293460 q8=21152 w8=57 q4=51520 w4=3372 state=enabled
+pv4 mp=0.340 mt=0.237 h16=0.912 ht=0.567 pipe=10.192630 q8=24032 w8=58 q4=47424 w4=3956 state=enabled
+default mp=0.390 mt=0.310 h16=1.060 ht=0.769 pipe=19.592580 q8=22944 w8=123 q4=41536 w4=3788 state=disabled
+default mp=0.413 mt=0.324 h16=1.129 ht=0.845 pipe=22.154590 q8=28256 w8=94 q4=39872 w4=3788 state=disabled
+pv4k mp=0.362 mt=0.238 h16=0.962 ht=0.562 pipe=2.491610 q8=21472 w8=53 q4=53440 w4=4184 state=enabled
+pv4ck mp=0.447 mt=0.262 h16=0.957 ht=0.565 pipe=1.145310 q8=22496 w8=62 q4=52544 w4=3636 state=enabled
+pvm mp=0.347 mt=0.234 h16=0.897 ht=0.571 pipe=1.208240 q8=21600 w8=58 q4=91264 w4=17312 state=enabled
+pv4 mp=0.375 mt=0.245 h16=0.943 ht=0.564 pipe=4.526830 q8=26528 w8=56 q4=46912 w4=3820 state=enabled
+pv4k mp=0.349 mt=0.227 h16=0.910 ht=0.551 pipe=1.203260 q8=21216 w8=54 q4=46912 w4=3612 state=enabled
+default mp=0.417 mt=0.299 h16=1.418 ht=0.807 pipe=19.149820 q8=21344 w8=71 q4=40256 w4=3788 state=disabled
+pv4ck mp=0.361 mt=0.236 h16=0.916 ht=0.573 pipe=4.698840 q8=22048 w8=67 q4=65088 w4=3668 state=enabled
+pv4 mp=0.373 mt=0.267 h16=0.912 ht=0.566 pipe=1.152990 q8=22112 w8=53 q4=48448 w4=3588 state=enabled
+pvm mp=0.350 mt=0.250 h16=1.067 ht=0.610 pipe=1.294330 q8=24352 w8=47 q4=82560 w4=15472 state=enabled

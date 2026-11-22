@@ -1,0 +1,15 @@
+default mq=2847185 msg1=0.850 f8=2031880 f1=558249 state=disabled
+pw3 mq=2847913 msg1=1.108 f8=228436 f1=517785 state=enabled
+pw4 mq=2685573 msg1=0.833 f8=910806 f1=535020 state=enabled
+pw5 mq=2694641 msg1=1.401 f8=515780 f1=539365 state=enabled
+pw1 mq=2724691 msg1=1.000 f8=645370 f1=533470 state=enabled
+pw4 mq=2548322 msg1=0.940 f8=890886 f1=526935 state=enabled
+pw1 mq=2702329 msg1=0.952 f8=699471 f1=531566 state=enabled
+default mq=2893249 msg1=0.836 f8=1913584 f1=559355 state=disabled
+pw3 mq=2908824 msg1=0.993 f8=503398 f1=532990 state=enabled
+pw5 mq=2603939 msg1=1.398 f8=623025 f1=536274 state=enabled
+pw4 mq=2499299 msg1=1.012 f8=845902 f1=526014 state=enabled
+pw3 mq=2787455 msg1=0.997 f8=458977 f1=532023 state=enabled
+pw1 mq=2613393 msg1=1.054 f8=823445 f1=484678 state=enabled
+default mq=2705502 msg1=0.972 f8=1824385 f1=550440 state=disabled
+pw5 mq=2498599 msg1=1.388 f8=588266 f1=536142 state=enabled

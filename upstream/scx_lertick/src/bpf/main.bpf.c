@@ -5,7 +5,8 @@
  * scx_lertick: weighted virtual-time scheduling with learned time slices.
  *
  * Tasks wait in one DSQ per LLC, ordered by a virtual deadline: the weighted
- * virtual time plus half the slice the task is given. An idle CPU steals
+ * virtual time plus half the slice the task is given, scaled by its weight
+ * like the virtual time. An idle CPU steals
  * from another LLC's DSQ. The virtual clock advances with the CPU
  * time actually delivered over the total runnable weight, so tasks that keep
  * waking cannot hold back tasks that have already run. A woken task is placed
@@ -18,6 +19,10 @@
  * thread whose bursts depend on who wakes it is told apart by its waker.
  * Fixed mode uses slice_fixed for every task. Fairness always charges the CPU
  * time actually used, never the prediction.
+ *
+ * Each CPU also has a DSQ of its own. Whether a woken task preempts the task
+ * running on its CPU, and whether a woken or preempted task waits on its
+ * CPU's DSQ or its LLC's, is learned for each program (see choose()).
  *
  * The queue policy (per-LLC queues, continuation, cgroup weights) is in
  * policy.h. Queues and CPU selection follow scx_simple; cgroup weights follow
@@ -130,6 +135,20 @@ struct task_ctx {
 	u32  waker_next;
 	u64  waker_err, avg_err; /* recent error of the two burst guesses */
 	u64  dl_off; /* deadline offset in dsq_vtime while queued */
+	bool wake_sync; /* the last wakeup was a sync one */
+	u64  queued_ts; /* queued instead of preempting */
+	u64  preempted_ts;
+	u32  queued_key, preempted_key;
+	u64  qrun_wait, qrun_ts; /* wait after not preempting, run start */
+	u32  qrun_key;
+	u64  prun_ts; /* run start of a task that preempted */
+	u32  prun_key;
+	bool qrun_on, prun_on, prun_pend;
+	u64  place_ts; /* when the queue choice queued it */
+	u32  place_key;
+	bool place_cpu; /* on its CPU's queue, not the LLC's */
+	u64  cpuq_ts, cpuq_wait; /* run start and wait, after a CPU queue */
+	u32  cpuq_key;
 };
 
 struct {
@@ -177,6 +196,12 @@ struct {
 	 ((tctx) && (tctx)->eff_weight ? (tctx)->eff_weight : 100))
 #define LERTICK_MOVE_TO_LOCAL(dsq) scx_bpf_dsq_move_to_local(dsq, 0)
 #define LERTICK_TASK_CGROUP(p) scx_bpf_task_cgroup(p)
+/* take_next() follows the CPU queue rules below (see own_first()). */
+static __always_inline bool own_first(s32 cpu);
+static __always_inline void took_shared(u32 home, u64 t0);
+#define LERTICK_OWN_FIRST(cpu) own_first(cpu)
+#define LERTICK_NOW() bpf_ktime_get_ns()
+#define LERTICK_TOOK_SHARED(home, t0) took_shared(home, t0)
 #include "policy.h"
 
 /*
@@ -543,9 +568,248 @@ static u64 task_slice(struct task_ctx *tctx, u64 consumed_ns)
 }
 
 /*
- * Pick a CPU for a waking task. An idle CPU, or the waker's CPU on a sync
- * wakeup that sync_local() accepts, gets the task on its local DSQ right
- * away; otherwise ops.enqueue() queues it.
+ * Learned choices, one cell per program and decision, each with the average
+ * cost of its two options and the average deviation of that cost. The
+ * decisions are whether a woken task preempts the task running on its CPU,
+ * and where a woken task that does not preempt, or a preempted task, waits:
+ * on its CPU's queue or on its LLC's queue. Each CPU keeps its own table,
+ * so that CPUs do not write each other's cache lines.
+ */
+#define CHOICE_CELLS 4096
+#define CHOICE_SHIFT 3
+#define CHOICE_MIN 4
+#define CHOICE_COST_MAX (50ULL * NSEC_PER_MSEC)
+#define CHOICE_RUN_MAX 0xffffffffULL
+#define CHOICE_N_MAX 0xffff
+
+/*
+ * Costs are capped at CHOICE_COST_MAX and runs at CHOICE_RUN_MAX, so a cell
+ * fits in 28 bytes, stored in 32, and the table takes 128 KiB per possible
+ * CPU.
+ */
+struct choice {
+	u32 cost[2], dev[2];
+	u32 run; /* run of a woken task after it preempted, average */
+	u16 n[2];
+	u16 nrun;
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__uint(max_entries, CHOICE_CELLS);
+	__type(key, u32);
+	__type(value, struct choice);
+} choices SEC(".maps");
+
+/* Average time a take from an LLC's queue costs on this CPU. */
+struct {
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__uint(max_entries, 1);
+	__type(key, u32);
+	__type(value, u64);
+} take_cost SEC(".maps");
+
+/* The decisions, mixed into the hash of the program's name. */
+#define CHOICE_PREEMPT 0
+#define CHOICE_WOKEN 0x6a09e667u
+#define CHOICE_PREEMPTED 0x27d4eb2fu
+
+/* The cell of @p's program for @decision. */
+static __always_inline u32 choice_key(struct task_struct *p, u32 decision)
+{
+	u32 h = 2166136261u;
+
+#pragma unroll
+	for (int i = 0; i < 16; i++) {
+		if (!p->comm[i])
+			break;
+		h = (h ^ (u8)p->comm[i]) * 16777619u;
+	}
+	return (h ^ decision) % CHOICE_CELLS;
+}
+
+/*
+ * Record @cost for option @opt of cell @key. A cost is capped at
+ * CHOICE_COST_MAX, so that one long stall does not outweigh many runs.
+ */
+static __always_inline void choice_cost(u32 key, u32 opt, u64 cost)
+{
+	struct choice *c = bpf_map_lookup_elem(&choices, &key);
+	u64	       dev;
+
+	if (!c)
+		return;
+	opt &= 1;
+	cost = MIN(cost, CHOICE_COST_MAX);
+	dev  = !c->n[opt]	      ? 0 :
+	       cost > c->cost[opt] ? cost - c->cost[opt] :
+				       c->cost[opt] - cost;
+	c->dev[opt] = c->dev[opt] - (c->dev[opt] >> CHOICE_SHIFT) +
+		      (dev >> CHOICE_SHIFT);
+	if (c->n[opt])
+		c->cost[opt] = c->cost[opt] - (c->cost[opt] >> CHOICE_SHIFT) +
+			       (cost >> CHOICE_SHIFT);
+	else
+		c->cost[opt] = cost;
+	if (c->n[opt] < CHOICE_N_MAX)
+		c->n[opt]++;
+}
+
+/*
+ * Pick option 1 of cell @key? Each option's cost is drawn from its average
+ * plus or minus its deviation, and the lower draw wins, so an option whose
+ * cost is close or uncertain is still tried now and then. Each option is
+ * tried CHOICE_MIN times first.
+ */
+static __always_inline bool choose(u32 key)
+{
+	struct choice *c = bpf_map_lookup_elem(&choices, &key);
+	s64	       r0, r1;
+
+	if (!c)
+		return true;
+	if (c->n[0] < CHOICE_MIN || c->n[1] < CHOICE_MIN)
+		return c->n[1] <= c->n[0];
+	r0 = (s64)(bpf_get_prandom_u32() % 2001) - 1000;
+	r1 = (s64)(bpf_get_prandom_u32() % 2001) - 1000;
+	return (s64)c->cost[1] + r1 * (s64)c->dev[1] / 1000 <
+	       (s64)c->cost[0] + r0 * (s64)c->dev[0] / 1000;
+}
+
+/*
+ * The head deadline of each LLC's queue, lowered on insertion and cleared on
+ * a take, each on its own cache line, so that a CPU can compare it with its
+ * own queue without taking the LLC queue's lock.
+ */
+struct llc_head {
+	u64 v;
+	u64 pad[7];
+};
+struct llc_head llc_heads[LERTICK_MAX_DOMAINS];
+
+static __always_inline struct llc_head *llc_head_of(u32 d)
+{
+	return &llc_heads[d & (LERTICK_MAX_DOMAINS - 1)];
+}
+
+/* The vtime of the head of @dsq, if it has one. */
+static __always_inline bool dsq_head_vtime(u64 dsq, u64 *vt)
+{
+	struct task_struct *q;
+
+	bpf_for_each(scx_dsq, q, dsq, 0) {
+		*vt = q->scx.dsq_vtime;
+		return true;
+	}
+	return false;
+}
+
+/*
+ * A CPU tries its own queue before its LLC queue while its own head deadline
+ * is at most CPUQ_WINDOW_NS after the LLC queue's head deadline, read from a
+ * cached copy. Otherwise it tries the LLC queue first and its own queue
+ * after it.
+ */
+#define CPUQ_WINDOW_NS (2ULL * NSEC_PER_MSEC)
+
+/* LERTICK_OWN_FIRST() for take_next(), see CPUQ_WINDOW_NS. */
+static __always_inline bool own_first(s32 cpu)
+{
+	u32  home = domain_of(cpu);
+	u64  own = 0, sh;
+
+	if (!dsq_head_vtime(CPU_DSQ(cpu), &own))
+		return false;
+	if (!scx_bpf_dsq_nr_queued(home))
+		return true;
+	sh = llc_head_of(home)->v;
+	if (!sh && dsq_head_vtime(home, &sh))
+		llc_head_of(home)->v = sh;
+	return !sh || !time_before(sh + CPUQ_WINDOW_NS, own);
+}
+
+/* A take from LLC queue @home started at @t0: time it, and drop the head. */
+static __always_inline void took_shared(u32 home, u64 t0)
+{
+	u64 d = bpf_ktime_get_ns() - t0, *tc;
+	u32 z = 0;
+
+	tc = bpf_map_lookup_elem(&take_cost, &z);
+	if (tc)
+		*tc = *tc ? *tc - *tc / 8 + d / 8 : d;
+	if (llc_head_of(home)->v)
+		llc_head_of(home)->v = 0;
+}
+
+/*
+ * Does the head of @cpu's own queue come before @prev, as keep_prev() asks
+ * of the LLC queue?
+ */
+static __always_inline bool cpu_head_before(struct task_struct *prev, s32 cpu)
+{
+	struct task_ctx *pt = task_ctx(prev);
+	u64		 pv = prev->scx.dsq_vtime, ran = 0, h = 0;
+	u32		 pw = pt && pt->eff_weight ? pt->eff_weight :
+			      prev->scx.weight	    ? prev->scx.weight :
+							1;
+
+	if (pt && pt->running &&
+	    prev->se.sum_exec_runtime > pt->runtime_start_ns)
+		ran = prev->se.sum_exec_runtime - pt->runtime_start_ns;
+	pv += ran * 100 / pw + LERTICK_PREV_DEADLINE(prev, pt);
+	return dsq_head_vtime(CPU_DSQ(cpu), &h) && time_before(h, pv);
+}
+
+/*
+ * Does woken task @p, at @vtime, preempt the task running on its CPU? It may
+ * when its vtime is before the running task's vtime plus the run not yet
+ * charged and a fixed slice, both scaled by the running task's weight, much
+ * as EEVDF checks a wakeup. Then it does as learned for its program. Not
+ * preempting costs the wait of @p over the run that follows it. Preempting
+ * costs the wait of the preempted task over the average run of @p after a
+ * preemption. A wakee that runs a few microseconds and sleeps again is then
+ * not worth the preemption that a long run would be.
+ */
+static __always_inline bool wake_preempt(struct task_struct *p,
+					 struct task_ctx *tctx, u64 vtime,
+					 u64 slice, u64 enq_flags)
+{
+	s32		    c	= scx_bpf_task_cpu(p);
+	struct task_struct *cur = __COMPAT_scx_bpf_cpu_curr(c);
+	struct task_ctx	   *ct	= cur && cur != p ? task_ctx(cur) : NULL;
+	u64		    ran = 0, dl;
+	u32		    cw, key;
+
+	if (!ct || !ct->running)
+		return false;
+	cw = ct->eff_weight ? ct->eff_weight : 100;
+	if (cur->se.sum_exec_runtime > ct->runtime_start_ns)
+		ran = cur->se.sum_exec_runtime - ct->runtime_start_ns;
+	dl = cur->scx.dsq_vtime + (ran + slice_fixed) * 100 / cw;
+	if (!time_before(vtime, dl))
+		return false;
+
+	key = choice_key(p, CHOICE_PREEMPT);
+	if (!choose(key)) {
+		tctx->queued_ts	 = bpf_ktime_get_ns();
+		tctx->queued_key = key;
+		return false;
+	}
+	ct->preempted_ts  = bpf_ktime_get_ns();
+	ct->preempted_key = key;
+	tctx->prun_key	  = key;
+	tctx->prun_pend	  = true;
+	p->scx.dsq_vtime  = vtime;
+	scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL_ON | c, slice,
+			   enq_flags | SCX_ENQ_PREEMPT);
+	stat_inc(LERTICK_STAT_PREEMPTS);
+	return true;
+}
+
+/*
+ * Pick a CPU for a waking task. An idle CPU gets the task on its local DSQ
+ * right away, and the waker's CPU on a sync wakeup that sync_local() accepts
+ * gets it on its CPU queue. Otherwise ops.enqueue() queues it.
  */
 s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		   u64 wake_flags)
@@ -568,6 +832,8 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		begin_episode(tctx, SCX_ENQ_WAKEUP);
 		tctx->started_in_select = true;
 	}
+	if (tctx)
+		tctx->wake_sync = wake_flags & SCX_WAKE_SYNC;
 	if (idle) {
 		scx_bpf_dsq_insert(p, SCX_DSQ_LOCAL,
 				   task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0),
@@ -577,21 +843,36 @@ s32 BPF_STRUCT_OPS(lertick_select_cpu, struct task_struct *p, s32 prev_cpu,
 		queue_on_cpu(p, cpu,
 			     task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0));
 		stat_inc(LERTICK_STAT_LOCAL_DISPATCHES);
+	} else if (tctx) {
+		/*
+		 * No CPU is idle: queue it on the waker's CPU, where enqueue()
+		 * may let it preempt the waker, as the kernel's wake_affine
+		 * does.
+		 */
+		s32		 this = bpf_get_smp_processor_id();
+		struct task_ctx *wt   = task_ctx(bpf_get_current_task_btf());
+
+		if (wt && wt->running &&
+		    bpf_cpumask_test_cpu(this, p->cpus_ptr))
+			cpu = this;
 	}
 
 	return cpu;
 }
 
 /*
- * Queue @p on its LLC's DSQ in deadline order, with its vtime held within the
- * lag bounds. The deadline offset is kept in dsq_vtime only while @p is
- * queued: running() takes it out, so the charge and the clock use the vtime.
+ * Queue @p in deadline order, with its vtime held within the lag bounds: on
+ * its CPU's queue or its LLC's queue, unless it preempts the running task.
+ * The deadline offset is kept in dsq_vtime only while @p is queued:
+ * running() takes it out, so the charge and the clock use the vtime.
  */
 void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 {
 	struct task_ctx *tctx  = task_ctx(p);
 	u64		 vtime = p->scx.dsq_vtime;
 	u64 slice = task_slice(tctx, tctx ? tctx->episode_runtime_ns : 0);
+	s32  cpu   = scx_bpf_task_cpu(p);
+	bool ahead;
 
 	/* A task dispatch() handed to a big CPU waits for that CPU only. */
 	if (tctx && tctx->rotate_to) {
@@ -630,6 +911,26 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 	vtime = clamp_ahead(p, vtime);
 
 	if (tctx) {
+		bool sync = tctx->wake_sync;
+
+		tctx->wake_sync = false;
+		/* a sync wakeup seen in select_cpu() does not preempt */
+		if ((enq_flags & SCX_ENQ_WAKEUP) && !sync &&
+		    wake_preempt(p, tctx, vtime, slice, enq_flags))
+			return;
+	}
+
+	/*
+	 * A task whose vtime is past the clock has had more than its share and
+	 * waits on the LLC queue. Any other task waits on its CPU's queue or
+	 * on the LLC queue, as learned for its program, separately for woken
+	 * and preempted tasks. The CPU queue avoids the LLC queue's lock,
+	 * which more CPUs contend for. So the LLC queue is charged the time a
+	 * take from it costs, and the CPU queue the wait it adds to the LLC
+	 * queue's head.
+	 */
+	ahead = time_before(vtime_now, vtime);
+	if (tctx) {
 		u32 w = tctx->eff_weight ? tctx->eff_weight :
 			p->scx.weight	 ? p->scx.weight :
 					   1;
@@ -637,8 +938,30 @@ void BPF_STRUCT_OPS(lertick_enqueue, struct task_struct *p, u64 enq_flags)
 		tctx->dl_off = slice * DEADLINE_PCT / w;
 		vtime += tctx->dl_off;
 	}
-	scx_bpf_dsq_insert_vtime(p, domain_of(scx_bpf_task_cpu(p)), slice,
-				 vtime, enq_flags);
+	if (tctx && !ahead) {
+		u32 key = choice_key(p, (enq_flags & SCX_ENQ_WAKEUP) ?
+						CHOICE_WOKEN :
+						CHOICE_PREEMPTED);
+
+		tctx->place_cpu = choose(key);
+		tctx->place_ts	= bpf_ktime_get_ns();
+		tctx->place_key = key;
+		if (tctx->place_cpu) {
+			scx_bpf_dsq_insert_vtime(p, CPU_DSQ(cpu), slice, vtime,
+						 enq_flags);
+			/*
+			 * No kick: its CPU is the one it ran on or the one
+			 * select_cpu() picked, and a kick on every such insert
+			 * cut futex throughput by more than half.
+			 */
+			stat_inc(LERTICK_STAT_CPU_QUEUED);
+			return;
+		}
+	}
+	scx_bpf_dsq_insert_vtime(p, domain_of(cpu), slice, vtime, enq_flags);
+	if (llc_head_of(domain_of(cpu))->v &&
+	    time_before(vtime, llc_head_of(domain_of(cpu))->v))
+		llc_head_of(domain_of(cpu))->v = vtime;
 	stat_inc(LERTICK_STAT_SHARED_DISPATCHES);
 }
 
@@ -699,7 +1022,8 @@ void BPF_STRUCT_OPS(lertick_dispatch, s32 cpu, struct task_struct *prev)
 		}
 	}
 
-	if (!((continuing && keep_prev(prev, task_ctx(prev), cpu)) ||
+	if (!((continuing && keep_prev(prev, task_ctx(prev), cpu) &&
+	       !cpu_head_before(prev, cpu)) ||
 	      (!take_next(cpu) && continuing)))
 		return;
 
@@ -749,6 +1073,86 @@ void BPF_STRUCT_OPS(lertick_runnable, struct task_struct *p, u64 enq_flags)
 }
 
 /*
+ * @p starts running after waiting: record the costs of the choices that made
+ * it wait. A cost that depends on the run that follows is recorded when it
+ * stops.
+ */
+static __always_inline void learn_on_run(struct task_struct *p,
+					 struct task_ctx *tctx)
+{
+	u64 now = bpf_ktime_get_ns(), r, *tc;
+	u32 z	= 0;
+
+	if (tctx->queued_ts && now > tctx->queued_ts) {
+		tctx->qrun_wait = now - tctx->queued_ts;
+		tctx->qrun_key	= tctx->queued_key;
+		tctx->qrun_ts	= now;
+		tctx->qrun_on	= true;
+	}
+	if (tctx->preempted_ts && now > tctx->preempted_ts) {
+		u32	       k = tctx->preempted_key;
+		struct choice *c = bpf_map_lookup_elem(&choices, &k);
+
+		r = c && c->nrun ? c->run : now - tctx->preempted_ts;
+		choice_cost(k, 1, (now - tctx->preempted_ts) * 1000 /
+					  MAX(r, NSEC_PER_USEC));
+	}
+	tctx->queued_ts	   = 0;
+	tctx->preempted_ts = 0;
+
+	if (tctx->place_ts && now > tctx->place_ts) {
+		if (!tctx->place_cpu) {
+			tc = bpf_map_lookup_elem(&take_cost, &z);
+			choice_cost(tctx->place_key, 0,
+				    now - tctx->place_ts + (tc ? *tc : 0));
+		} else if (scx_bpf_dsq_nr_queued(
+				   domain_of(scx_bpf_task_cpu(p)))) {
+			tctx->cpuq_ts	= now;
+			tctx->cpuq_wait = now - tctx->place_ts;
+			tctx->cpuq_key	= tctx->place_key;
+		} else {
+			choice_cost(tctx->place_key, 1, now - tctx->place_ts);
+		}
+	}
+	tctx->place_ts = 0;
+
+	if (tctx->prun_pend) {
+		tctx->prun_ts	= now;
+		tctx->prun_on	= true;
+		tctx->prun_pend = false;
+	}
+}
+
+/* @p stops: record the costs that depend on the run that just ended. */
+static __always_inline void learn_on_stop(struct task_ctx *tctx)
+{
+	u64 now = bpf_ktime_get_ns();
+
+	if (tctx->qrun_on && now > tctx->qrun_ts)
+		choice_cost(tctx->qrun_key, 0,
+			    tctx->qrun_wait * 1000 /
+				    MAX(now - tctx->qrun_ts, NSEC_PER_USEC));
+	if (tctx->prun_on && now > tctx->prun_ts) {
+		u32	       k = tctx->prun_key;
+		struct choice *c = bpf_map_lookup_elem(&choices, &k);
+		u64	       r = MIN(now - tctx->prun_ts, CHOICE_RUN_MAX);
+
+		if (c) {
+			c->run = c->nrun ? c->run - c->run / 8 + r / 8 : r;
+			if (c->nrun < CHOICE_N_MAX)
+				c->nrun++;
+		}
+	}
+	/* the LLC queue's head waited for this run too */
+	if (tctx->cpuq_ts && now > tctx->cpuq_ts)
+		choice_cost(tctx->cpuq_key, 1,
+			    tctx->cpuq_wait + now - tctx->cpuq_ts);
+	tctx->qrun_on = false;
+	tctx->prun_on = false;
+	tctx->cpuq_ts = 0;
+}
+
+/*
  * @p starts running: take its deadline offset out of its vtime, raise the
  * clock to that vtime if the clock is behind, and note where this run starts.
  */
@@ -764,6 +1168,7 @@ void BPF_STRUCT_OPS(lertick_running, struct task_struct *p)
 
 	if (!tctx)
 		return;
+	learn_on_run(p, tctx);
 	tctx->runtime_start_ns = p->se.sum_exec_runtime;
 	tctx->running	       = true;
 	tctx->run_cap	       = cap_of(scx_bpf_task_cpu(p));
@@ -779,6 +1184,8 @@ void BPF_STRUCT_OPS(lertick_stopping, struct task_struct *p, bool runnable)
 	u32		 weight = p->scx.weight ? p->scx.weight : 1;
 	u64		 delta, rw;
 
+	if (tctx)
+		learn_on_stop(tctx);
 	if (!tctx || !tctx->running)
 		return;
 	tctx->running = false;
@@ -859,8 +1266,8 @@ void BPF_STRUCT_OPS(lertick_quiescent, struct task_struct *p, u64 deq_flags)
 
 /*
  * Allocate and initialize the context of a new task. Sleepable, so that the
- * context is allocated with GFP_KERNEL: an atomic allocation can fail, and a
- * failed init_task disables the scheduler.
+ * context is allocated with GFP_KERNEL: an atomic allocation can fail, which
+ * keeps the scheduler from starting during attach and fails a fork after.
  */
 s32 BPF_STRUCT_OPS_SLEEPABLE(lertick_init_task, struct task_struct *p,
 			    struct scx_init_task_args *args)

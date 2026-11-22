@@ -2,20 +2,21 @@
 
 This folder holds the experiments behind the current scheduler: the time slice
 learned per task, the queue ordered by vtime plus half that slice, sync
-wakees queued where idle CPUs can take them, and the variants that were tried
-and dropped. The scx copy at sched-ext/scx#3994 commit `45d1fda` does not yet
-have the CPU queues.
+wakees queued where idle CPUs can take them, wakeup preemption and the choice
+of queue learned per program, and the variants that were tried and dropped.
 
 ## Status
 
-On 8 CPUs Lertick is better than EEVDF on 8 of the 11 benchmarks, the same on
-3 and worse on none. On 4 CPUs it is better on 7, the same on 3 and worse on
-1. These are medians of 6 runs in one session
-([numbers](RECORD.md#stealable-cpu-queues-2026-11-19)).
+On 8 CPUs the scx port (`upstream/scx_lertick`) is better than EEVDF on 7 of
+the 12 benchmarks, the same on 4 and worse on 1. On 4 CPUs it is better on 5, the same on 3 and worse on 4.
+These are medians of 6 runs in one session
+([numbers](RECORD.md#learned-wakeup-preemption-and-queue-choice-2026-11-22)).
 
-The 4-CPU loss is schbench -m 4 -t 2 request p99, 10% above EEVDF. The
-previous release measured the same in that session, and earlier sessions put
-it 1 to 4% above EEVDF, so it is not from the latest change.
+The losses: stress-ng futex at 62% (8 CPUs) and 71% (4 CPUs) of EEVDF's
+throughput, up from 0.2% before wakeup preemption; and on 4 CPUs, schbench
+-m 4 -t 2 with 7% fewer requests per second and request and wakeup p99 7%
+and 9% higher. The schbench loss comes with preemption itself. The product in
+`src/` does not have the learned preemption or queue choice.
 
 scx_bpfland, scx_lavd, scx_p2dq and scx_flash were compared with an earlier
 version only, in one session
@@ -28,6 +29,14 @@ than one LLC and CPU hotplug are untested.
 
 Newest first. The kept changes are in the current code.
 
+- 2026-11-22, kept: a woken task preempts the running one as learned per
+  program, and woken and preempted tasks wait on their CPU's queue or the
+  LLC queue as learned per program, within fairness rules
+  ([record](RECORD.md#learned-wakeup-preemption-and-queue-choice-2026-11-22)).
+- 2026-11-19 to 11-22, dropped: fixed preemption rules, a fixed rule for
+  preempted tasks, a learned number of LLC queues, taking several tasks per
+  lock, a wider tolerance for tasks ahead of the clock, and kicking the CPU
+  on every CPU-queue insert (same record).
 - 2026-11-19, kept: a running task moves off a core whose other thread is
   busy to a whole idle core, and whether a running task is worth moving
   follows its predicted burst. Checked only with SMT siblings declared on

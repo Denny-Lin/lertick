@@ -138,7 +138,7 @@ build/burst_workload --duration 8 --cpu 0 --burst-us 1000 --sleep-us 2000 \
   --phase-burst-us 6000 > results/local/workload.jsonl
 ```
 
-Scheduler telemetry records labels, model coefficients, predictions and selected slices. Keep it with the workload's independently measured CPU service. See the [terminal example](../examples/README.md) and [benchmark protocol](PHASE2_BENCHMARKS.md) for further experiments.
+Scheduler telemetry records labels, model coefficients, predictions and selected slices. Keep it with the workload's independently measured CPU service. See the [terminal example](TERMINAL_EXAMPLE.md) and [benchmark protocol](PHASE2_BENCHMARKS.md) for further experiments.
 
 Portable arithmetic and documentation checks also run on macOS:
 

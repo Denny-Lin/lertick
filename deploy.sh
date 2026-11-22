@@ -196,7 +196,7 @@ case $command in
                 if [ "$source_tree" = yes ] && [ "$(id -u)" -eq 0 ]; then
                     # Reject untrusted prebuilt bundles before executing even --help.
                     # Normal users still build first and pass exact bytes to sudo staging.
-                    for candidate_file in "$loader" "$script" "$manager" "$tool_dir/templates/lertick.service.in" "$report"; do
+                    for candidate_file in "$loader" "$script" "$manager" "$tool_dir/scripts/lertick.service.in" "$report"; do
                         [ -f "$candidate_file" ] && [ ! -L "$candidate_file" ] || fail "missing/non-regular candidate file: $candidate_file"
                         trusted_root_path "$candidate_file"
                     done

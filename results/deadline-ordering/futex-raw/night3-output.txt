@@ -1,0 +1,37 @@
+built ac1
+built ac3
+== night round 3 03:06:21
+ac1      mq=+44% msg1CPU=+4% futex8=79%ofLinux futex1=98%ofLinux n=5
+ac3      mq=-7% msg1CPU=-1% futex8=79%ofLinux futex1=99%ofLinux n=5
+default  mq=+0% msg1CPU=+0% futex8=100%ofLinux futex1=100%ofLinux n=5
+pv4ck    mq=+31% msg1CPU=+5% futex8=60%ofLinux futex1=95%ofLinux n=5
+== 4-CPU set
+base default f4=1788404 f1=559800 q1=8464 w1=54 q2=38976 w2=3788 rps=245 hb=1
+ac3    BAD f4=-15% f1=-2% q1=+3% w1=+13% q2=-17% w2=+1% rps=-7% hb=+37% worse:q2,rps
+ac1    BAD f4=-15% f1=-3% q1=+1% w1=+15% q2=-29% w2=-13% rps=-7% hb=+36% worse:q2,w2,rps
+pv4ck  BAD f4=-29% f1=-4% q1=+2% w1=+17% q2=-13% w2=+1% rps=-9% hb=+36% worse:q2,rps
+== 8-CPU switch loads
+arm           mp      mt     h16      ht    pipe      q8      w8      q4      w4   (% vs default, + is better)
+ac1        +9.1%  +22.0%  +15.1%  +28.3%  +30.2%   +0.3%  +28.0%  -45.0%  -15.5%  n=3
+ac3        +8.3%  +22.3%  +13.7%  +27.2%  +58.7%   -0.9%  +30.7%  -45.4%   -1.5%  n=3
+default    +0.0%   +0.0%   +0.0%   +0.0%   +0.0%   +0.0%   +0.0%   +0.0%   +0.0%  n=3
+pv4ck     +11.0%  +22.6%  +14.3%  +28.3%  +88.8%   +1.5%  +34.7%  -28.6%   +0.2%  n=3
+== nice gate
+pv4ck fairness (enabled): nice-5 104594 nice0 209337 nice19 2125
+pv4ck nice-mix passed 2/2
+ac1 fairness (enabled): nice-5 89108 nice0 206575 nice19 21468
+ac1 nice-mix passed 2/2
+ac3 fairness (enabled): nice-5 92290 nice0 163535 nice19 61015
+ac3 nice-mix passed 2/2
+== 3 hogs on 2 CPUs
+default cpu_s: 20.0 10.0 10.0  state=disabled
+ac1 cpu_s: 13.1 13.1 13.1  state=enabled
+ac3 cpu_s: 13.3 13.3 13.3  state=enabled
+== scaling
+ac1 futex % of Linux: 1cpu=98% 2cpu=91% 4cpu=85% 6cpu=80% 8cpu=80% | messaging vs Linux: 1cpu=+6% 2cpu=+4% 4cpu=+5% 6cpu=+13% 8cpu=+14%
+default futex % of Linux: 1cpu=100% 2cpu=100% 4cpu=100% 6cpu=100% 8cpu=100% | messaging vs Linux: 1cpu=+0% 2cpu=+0% 4cpu=+0% 6cpu=+0% 8cpu=+0%
+pv4ck futex % of Linux: 1cpu=97% 2cpu=77% 4cpu=66% 6cpu=54% 8cpu=59% | messaging vs Linux: 1cpu=+11% 2cpu=+4% 4cpu=+6% 6cpu=+10% 8cpu=+15%
+ac3 futex % of Linux: 1cpu=99% 2cpu=91% 4cpu=84% 6cpu=79% 8cpu=80% | messaging vs Linux: 1cpu=+1% 2cpu=+7% 4cpu=+7% 6cpu=+11% 8cpu=+12%
+== done 03:34:02
+
+[exited with code 0]

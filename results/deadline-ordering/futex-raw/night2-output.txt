@@ -1,0 +1,47 @@
+built nb1
+built nb2
+built nb3
+== night round 2 02:07:02
+default  mq=+0% msg1CPU=+0% futex8=100%ofLinux futex1=100%ofLinux n=5
+nb1      mq=+8% msg1CPU=+4% futex8=24%ofLinux futex1=96%ofLinux n=5
+nb2      mq=+29% msg1CPU=+7% futex8=53%ofLinux futex1=96%ofLinux n=5
+nb3      mq=+9% msg1CPU=+0% futex8=23%ofLinux futex1=97%ofLinux n=5
+pv4ck    mq=+33% msg1CPU=+4% futex8=77%ofLinux futex1=97%ofLinux n=5
+== 4-CPU set
+base default f4=1783275 f1=559024 q1=8272 w1=54 q2=40000 w2=3788 rps=243 hb=1
+pv4ck  BAD f4=-34% f1=-4% q1=+0% w1=+19% q2=-12% w2=+7% rps=-9% hb=+37% worse:q2,rps
+nb2    BAD f4=-35% f1=-7% q1=+0% w1=+17% q2=-119% w2=-307% rps=+6% hb=+37% worse:q2,w2
+nb1    BAD f4=-44% f1=-4% q1=+0% w1=+13% q2=-12% w2=+4% rps=-7% hb=+37% worse:q2,rps
+nb3    BAD f4=-80% f1=-7% q1=+0% w1=+20% q2=-122% w2=-347% rps=+3% hb=+37% worse:q2,w2
+== 8-CPU switch loads
+arm           mp      mt     h16      ht    pipe      q8      w8      q4      w4   (% vs default, + is better)
+default    +0.0%   +0.0%   +0.0%   +0.0%   +0.0%   +0.0%   +0.0%   +0.0%   +0.0%  n=3
+nb1       +15.7%  +23.5%   +5.7%  +29.9%  +68.5%   +0.6%  +43.6%  -12.9%   +4.9%  n=3
+nb2       +16.7%  +24.4%   +7.1%  +29.9%  +93.6%   +1.5%  +50.5% -116.5% -289.9%  n=3
+nb3       +15.9%  +24.4%   +7.1%  +30.5%  +92.9%   -1.5%  +47.5% -125.7% -341.8%  n=3
+pv4ck     +18.2%  +21.5%   +4.0%  +30.5%  +34.5%   -2.1%  +46.5%  -26.4%   +6.8%  n=3
+== nice gate
+pv4ck fairness (enabled): nice-5 104776 nice0 209566 nice19 2305
+pv4ck nice-mix passed 2/2
+nb1 fairness (enabled): nice-5 104793 nice0 209466 nice19 2373
+nb1 nice-mix passed 2/2
+nb2 fairness (enabled): nice-5 103839 nice0 206887 nice19 6369
+nb2 nice-mix passed 2/2
+nb3 fairness (enabled): nice-5 100229 nice0 192991 nice19 23430
+nb3 nice-mix passed 2/2
+== 3 hogs on 2 CPUs
+default cpu_s: 20.0 10.0 10.0  state=disabled
+nb1 cpu_s: 13.3 13.3 13.3  state=enabled
+nb2 cpu_s: 13.3 13.3 13.3  state=enabled
+nb3 cpu_s: 13.3 13.3 13.3  state=enabled
+== scaling
+pv4ck futex % of Linux: 1cpu=97% 2cpu=77% 4cpu=63% 6cpu=51% 8cpu=44% | messaging vs Linux: 1cpu=+5% 2cpu=+3% 4cpu=+7% 6cpu=+8% 8cpu=+14%
+default futex % of Linux: 1cpu=100% 2cpu=100% 4cpu=100% 6cpu=100% 8cpu=100% | messaging vs Linux: 1cpu=+0% 2cpu=+0% 4cpu=+0% 6cpu=+0% 8cpu=+0%
+nb1 futex % of Linux: 1cpu=95% 2cpu=75% 4cpu=55% 6cpu=24% 8cpu=1% | messaging vs Linux: 1cpu=+7% 2cpu=+3% 4cpu=+5% 6cpu=+10% 8cpu=+15%
+nb2 futex % of Linux: 1cpu=90% 2cpu=81% 4cpu=60% 6cpu=12% 8cpu=52% | messaging vs Linux: 1cpu=+5% 2cpu=+2% 4cpu=+9% 6cpu=+12% 8cpu=+16%
+Nov 22 09:54:53 lertick-vm kernel: sched_ext: lertick_1.1.4_aarch64_unknown_linux_gnu: stress-ng-cpu[1295191] failed to run for 7.493s
+Nov 22 09:55:25 lertick-vm kernel: sched_ext: lertick_1.1.4_aarch64_unknown_linux_gnu: stress-ng-cpu[1295245] failed to run for 7.543s
+Nov 22 09:55:57 lertick-vm kernel: sched_ext: lertick_1.1.4_aarch64_unknown_linux_gnu: stress-ng-cpu[1295362] failed to run for 7.554s
+== done 02:41:08
+
+[exited with code 0]

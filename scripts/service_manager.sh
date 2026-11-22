@@ -241,7 +241,7 @@ if [ -n "$destdir" ]; then
     [ ! -L "$stage_unit" ] || fail 'symlink staging unit'
     if [ -e "$stage_unit" ]; then grep -Fx "# Lertick managed unit; prefix=$prefix" "$stage_unit" >/dev/null || fail 'unknown staged unit; kept unchanged'; fi
     stage=$(mktemp -d "$destdir/.lertick-stage.XXXXXX")
-    sed "s|@PREFIX@|$prefix|g" "$bundle/templates/lertick.service.in" > "$stage/unit"
+    sed "s|@PREFIX@|$prefix|g" "$bundle/scripts/lertick.service.in" > "$stage/unit"
     atomic_copy "$stage/unit" "$stage_unit" 644
     if [ -f "$bundle/scripts/collect_report.py" ]; then atomic_copy "$bundle/scripts/collect_report.py" "$target/libexec/lertick/collect_report.py" 555; fi
     printf 'Staged files and service unit under %s; no service operation.\n' "$destdir"
@@ -348,7 +348,7 @@ else
         [ -f "$bundle/$from" ] && [ ! -L "$bundle/$from" ] || fail "missing/non-regular candidate file: $from"
         cp "$bundle/$from" "$stage/$to"; chmod 555 "$stage/$to"
     done
-    sed "s|@PREFIX@|$prefix|g" "$bundle/templates/lertick.service.in" > "$stage/lertick.service"; chmod 444 "$stage/lertick.service"
+    sed "s|@PREFIX@|$prefix|g" "$bundle/scripts/lertick.service.in" > "$stage/lertick.service"; chmod 444 "$stage/lertick.service"
     [ -f "$bundle/scripts/collect_report.py" ] && [ ! -L "$bundle/scripts/collect_report.py" ] || fail 'candidate report tool is missing/non-regular'
     cp "$bundle/scripts/collect_report.py" "$stage/collect_report.py"; chmod 555 "$stage/collect_report.py"
     (cd "$stage" && sha256sum scx_lertick lertick service_manager.sh lertick.service > manifest.sha256)
