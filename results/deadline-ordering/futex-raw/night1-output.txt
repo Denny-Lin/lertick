@@ -1,0 +1,61 @@
+built na1
+built na2
+built na3
+built na4
+== night round 1 01:22:24
+default  mq=+0% msg1CPU=+0% futex8=100%ofLinux futex1=100%ofLinux n=5
+na1      mq=+17% msg1CPU=-7% futex8=53%ofLinux futex1=97%ofLinux n=5
+na2      mq=+16% msg1CPU=+4% futex8=67%ofLinux futex1=96%ofLinux n=5
+na3      mq=+18% msg1CPU=+5% futex8=66%ofLinux futex1=97%ofLinux n=5
+na4      mq=+14% msg1CPU=+3% futex8=62%ofLinux futex1=98%ofLinux n=5
+pv4ck    mq=+16% msg1CPU=+7% futex8=65%ofLinux futex1=98%ofLinux n=5
+== 4-CPU set
+kill: (1260074): No such process
+kill: (1262189): No such process
+FALLBACK na4
+FALLBACK na4
+base default f4=725666 f1=555851 q1=8240 w1=47 q2=37568 w2=3796 rps=244 hb=1
+na3    BAD f4=+85% f1=-3% q1=+0% w1=+9% q2=-172% w2=-9% rps=-8% hb=+35% worse:q2,w2,rps
+na1    BAD f4=+80% f1=-3% q1=-1% w1=+4% q2=-29% w2=+20% rps=-8% hb=+35% worse:q2,rps
+na4    BAD f4=+74% f1=-5% q1=-2% w1=+6% q2=-176% w2=-346% rps=-1% hb=+34% worse:q2,w2
+pv4ck  BAD f4=+68% f1=-2% q1=-6% w1=-9% q2=-32% w2=+9% rps=-8% hb=+33% worse:q1,w1,q2,rps
+na2    BAD f4=+57% f1=-3% q1=-1% w1=+4% q2=-187% w2=-19% rps=-9% hb=+34% worse:q2,w2,rps
+== 8-CPU switch loads
+arm           mp      mt     h16      ht    pipe      q8      w8      q4      w4   (% vs default, + is better)
+default    +0.0%   +0.0%   +0.0%   +0.0%   +0.0%   +0.0%   +0.0%   +0.0%   +0.0%  n=3
+na1       +13.3%  +21.4%  +14.1%  +29.4%  +78.4%   +1.5%  +61.1%  -28.0%  +11.8%  n=3
+na2       +11.8%  +20.7%  +14.5%  +30.0%   +6.5%   -0.6%  +60.3% -191.6%  -22.3%  n=3
+na3       +13.8%  +23.1%  +13.5%  +30.8%  +57.4%   +1.2%  +57.1% -199.8%  -11.7%  n=3
+na4       +14.3%  +22.1%  +14.6%  +29.9%  +93.7%   +1.2%  +61.1% -160.2% -350.3%  n=3
+pv4ck     +14.5%  +19.4%  +14.6%  +31.2%  +71.4%   +0.6%  +60.3%  -18.5%   +4.2%  n=3
+== nice gate
+pv4ck fairness (enabled): nice-5 104871 nice0 209329 nice19 2299
+pv4ck nice-mix passed 2/2
+na1 fairness (enabled): nice-5 104035 nice0 207968 nice19 2241
+na1 nice-mix passed 2/2
+na2 fairness (enabled): nice-5 103938 nice0 207694 nice19 2231
+na2 nice-mix passed 2/2
+na3 fairness (enabled): nice-5 104862 nice0 209759 nice19 2120
+na3 nice-mix passed 2/2
+na4 fairness (disabled): nice-5 89830 nice0 144994 nice19 82256
+na4 nice-mix passed 0/2
+== 3 hogs on 2 CPUs
+default cpu_s: 10.0 20.0 10.0  state=disabled
+pv4ck cpu_s: 13.3 13.3 13.3  state=enabled
+na2 cpu_s: 13.3 13.3 13.3  state=enabled
+na3 cpu_s: 13.3 13.3 13.3  state=enabled
+na4 cpu_s: 13.2 13.2 13.2  state=enabled
+default cpu_s: 20.0 10.0 10.0  state=disabled
+pv4ck cpu_s: 13.3 13.3 13.3  state=enabled
+na2 cpu_s: 13.3 13.3 13.3  state=enabled
+na3 cpu_s: 13.3 13.3 13.3  state=enabled
+na4 cpu_s: 13.2 13.3 13.3  state=enabled
+== scaling
+default futex % of Linux: 1cpu=100% 2cpu=100% 4cpu=100% 6cpu=100% 8cpu=100% | messaging vs Linux: 1cpu=+0% 2cpu=+0% 4cpu=+0% 6cpu=+0% 8cpu=+0%
+pv4ck futex % of Linux: 1cpu=96% 2cpu=76% 4cpu=66% 6cpu=65% 8cpu=64% | messaging vs Linux: 1cpu=-1% 2cpu=+3% 4cpu=+4% 6cpu=+5% 8cpu=+11%
+na2 futex % of Linux: 1cpu=96% 2cpu=78% 4cpu=58% 6cpu=65% 8cpu=65% | messaging vs Linux: 1cpu=+8% 2cpu=+4% 4cpu=+4% 6cpu=+4% 8cpu=+12%
+na4 futex % of Linux: 1cpu=90% 2cpu=82% 4cpu=70% 6cpu=29% 8cpu=52% | messaging vs Linux: 1cpu=+0% 2cpu=+4% 4cpu=+3% 6cpu=+5% 8cpu=+12%
+na1 futex % of Linux: 1cpu=96% 2cpu=82% 4cpu=63% 6cpu=41% 8cpu=63% | messaging vs Linux: 1cpu=-4% 2cpu=+4% 4cpu=+2% 6cpu=+2% 8cpu=+11%
+== done 02:05:43
+
+[exited with code 0]

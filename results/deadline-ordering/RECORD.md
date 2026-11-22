@@ -1461,3 +1461,109 @@ cases with both declared. Logs in `smt-checks.tar.gz`.
 
 Not covered: real SMT hardware, cores with more than two threads (only one
 sibling is checked), and SMT when an idle CPU steals.
+
+## Learned wakeup preemption and queue choice, 2026-11-22
+
+stress-ng futex, one of the held-out exam's workloads, ran at 3,370 ops/s
+under the release against 1,979,000 under EEVDF. A waker keeps calling
+futex_wake while a waiter waits with a 5 us timeout. With both on one CPU,
+EEVDF lets the woken waiter preempt the waker at once, while the release
+left it queued until the waker's slice ended, about 2 ms.
+
+Fixed preemption rules, 2026-11-19 (on branch `learn-ab`:
+[two builds](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#why-futex-is-slow-and-two-waker-preemption-builds-2026-11-19),
+[EEVDF's check](https://github.com/Denny-Lin/lertick/blob/learn-ab/results/deadline-ordering/README.md#eevdf-style-wakeup-preemption-and-preempting-only-long-runners-2026-11-19)):
+preempting the waker when the wakee's deadline is earlier (`wk`),
+also bringing wakees to the waker's CPU (`wk2`), and EEVDF's own check
+against whatever runs on the wakee's CPU (`wk3`) fixed futex but lost
+elsewhere. `wk2` was worse than the release on 7 of 11 measures on 8 CPUs,
+all three were 7.5 to 9.6% behind EEVDF on 8-CPU schbench -m4 -t2
+request p99, and `wk3`
+lost half its 4-CPU schbench -m4 -t2 throughput lead. Gating preemption on
+the predicted remainder made the 4-CPU wakeup p99 70% worse.
+
+What is kept, all in `upstream/scx_lertick/src/bpf/main.bpf.c`:
+
+- Whether a woken task whose vtime is before the running task's vtime plus
+  its uncharged run and a fixed slice, both scaled by its weight, preempts
+  it is learned per program. Not preempting costs the wakee's wait over the
+  run that follows it; preempting costs the preempted task's wait over the
+  wakee's average run after a preemption. Delay alone missed throughput:
+  stress-ng mq was 45% behind EEVDF with it.
+- Each option keeps an average cost and deviation, and the option whose cost
+  drawn within its deviation is lower wins. Trying the other option 1 time
+  in 16 held 8-CPU futex near 44,000 ops/s; always taking the lower average,
+  or a lower confidence bound, locked into never preempting in some runs.
+- A wakeup with the sync hint, as seen in select_cpu(), does not preempt,
+  and the table is per CPU. Without these, learned preemption cost 8-CPU
+  perf messaging with threads 28% against the release; with them, 4 to 10%.
+- A woken or preempted task waits on its CPU's queue or the LLC queue, as
+  learned per program. The LLC queue is charged the measured time a take
+  from it costs, and the CPU queue the run that the LLC queue's head waits
+  for. With every handoff preempting, 8-CPU futex went from 480,000 ops/s to
+  1.45 million when the preempted task waited on its CPU's queue: the LLC
+  queue's lock was the limit.
+- Of those, a task ahead of the clock always waits on the LLC queue. Without
+  that rule the nice mix starved. A fixed rule that kept preempted tasks on
+  their CPU (`ac1`) gave nice 19 about ten times its share and missed 29 to
+  34% of the exam's gamesim frames.
+- A CPU tries its own queue before the LLC queue only while its head
+  deadline is at most 2 ms after the LLC queue's, read from a cached copy.
+  Without it, a task that could run only on one CPU waited 5.6 to 6.1 s on
+  the LLC queue (`pe2`).
+
+Dropped as well: splitting the LLC queue into a learned number of queues
+(4-CPU schbench up to 2.3 times slower, nice 19 up to ten times its share,
+and the version that adds a queue only on measured contention made 4-CPU
+schbench -m4 -t2 request and wakeup p99 2.3 and 4.5 times worse); taking
+several tasks per lock (sched_ext moves one task per lock, so a batch only
+adds locking); letting a task ahead of the clock by less than its slice stay
+on its CPU's queue (futex from 53 to 59% of EEVDF, but perf messaging with
+processes 4 points lower against EEVDF on 8 CPUs and on 1 CPU); and kicking
+the CPU whenever a task joins its queue without a CPU picked for it, as
+scx_beerland does (8-CPU futex from 1.27 million ops/s to 0.48-0.51
+million).
+
+The final build (`m3`, the port in `upstream/scx_lertick`) in one session
+of 6 runs per arm (`futex-raw/pr6-run.sh`, raw data in `pr6-sets.tar.gz`),
+against EEVDF, positive is better. `hs` is #3994's version with the big and
+little core, SMT and sleepable `init_task` commits; on the VM's alike CPUs
+without SMT only the `init_task` change is active.
+
+| Measure | 8 CPUs: `hs` | `m3` | 4 CPUs: `hs` | `m3` |
+|---|---|---|---|---|
+| perf messaging processes | +13.0% | +12.4% | +5.2% | +2.7% |
+| perf messaging threads | +21.7% | +20.6% | +17.1% | +18.0% |
+| perf pipe | +93.4% | +87.2% | +93.6% | +93.6% |
+| hackbench threads | +25.8% | +28.5% | +33.1% | +33.4% |
+| hackbench 16 groups | +15.7% | +11.6% | +10.3% | +6.3% |
+| schbench -m1 -t1 request p99 | -5.6% | +0.2% | -0.4% | -0.4% |
+| schbench -m1 -t1 wakeup p99 | +8.6% | +13.3% | +11.0% | +13.0% |
+| schbench -m4 -t2 request p99 | -0.1% | +1.9% | -5.4% | -6.6% |
+| schbench -m4 -t2 wakeup p99 | +32.1% | +38.8% | +20.1% | -9.2% |
+| schbench -m4 -t2 RPS | -0.8% | +0.6% | +0.6% | -7.4% |
+| kernel compile | +1.4% | +1.3% | +2.5% | -1.3% |
+| stress-ng futex | -99.8% | -37.7% | -99.9% | -29.1% |
+
+With 8 CPUs `m3` is ahead of EEVDF on 7 of the 12 measures, within 5% on 4
+and behind only on futex: 1.22 million ops/s against 1.96 million (62%),
+where `hs` did 3,355. With 4 CPUs it is ahead on 5, within 5% on 3, and
+behind on futex (1.28 million against 1.81 million, 71%) and on schbench
+-m4 -t2: 224.5 requests/s against 242.5, request p99 41.4 ms against 38.8
+ms and wakeup p99 4.1 ms against 3.8 ms. That loss comes with preemption
+itself: removing the learned preemption from `pv4ck` removed it.
+
+Safety checks of the same build (`m3-checks.tar.gz`): the nice mix 3 of 3,
+cgroup weights 2.00, 1.00 and 3.04, the CI scheduler test 3 of 3, 20
+attach/detach cycles and the edge cases without a stall, the stress battery
+and a 30-minute long run (18 cycles) without an exit.
+
+Where the remaining 8-CPU futex time goes, from BPF's run-time statistics
+under `pv4ck` (the same choices): ops.dispatch(), which takes from the LLC
+queue, went from 138 ns per call with 2 CPUs to 894 ns with 8, about 60% of
+the added time. The other callbacks doubled, from writes to data every CPU
+shares. With one CPU, futex runs at 96% of EEVDF, so the cost of running
+the policy in BPF is about 4%.
+
+Raw outputs and scripts are in `futex-raw/`, and the 100 ideas behind the
+methods in [FUTEX_IDEAS.md](FUTEX_IDEAS.md).
