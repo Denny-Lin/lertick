@@ -14,13 +14,23 @@
  *   LERTICK_TASK_CGROUP(p), its kernel's scx_bpf_task_cgroup().
  * It may define LERTICK_PREV_DEADLINE(p, tctx), the amount by which queued
  * tasks' vtimes include a deadline offset, to compare a running task on the
- * same terms (0 when not defined).
+ * same terms (0 when not defined). It may also define LERTICK_OWN_FIRST(cpu),
+ * whether take_next() takes from the CPU's own queue before the domain queue
+ * (always when not defined), and LERTICK_TOOK_SHARED(home, t0), run after a
+ * take from a domain queue that started at LERTICK_NOW().
  */
 #ifndef __LERTICK_POLICY_H
 #define __LERTICK_POLICY_H
 
 #ifndef LERTICK_PREV_DEADLINE
 #define LERTICK_PREV_DEADLINE(p, tctx) 0
+#endif
+#ifndef LERTICK_OWN_FIRST
+#define LERTICK_OWN_FIRST(cpu) true
+#endif
+#ifndef LERTICK_TOOK_SHARED
+#define LERTICK_NOW() 0
+#define LERTICK_TOOK_SHARED(home, t0) ((void)(t0))
 #endif
 
 static u64 vtime_now;
@@ -501,10 +511,11 @@ static __always_inline bool steal(u32 home)
 
 /*
  * A sync wakee waits in a queue of the waker's CPU, which takes from it
- * before its domain queue, as it did from its local DSQ. Unlike the local
- * DSQ, other CPUs can take it:
- * one that has nothing else to run takes from the CPU queue holding the most
- * tasks, as an idle CPU pulls from a busy one in the kernel's load balancing.
+ * before its domain queue, as it did from its local DSQ, unless
+ * LERTICK_OWN_FIRST() says otherwise. Unlike the local DSQ, other CPUs can
+ * take it: one that has nothing else to run takes from the CPU queue holding
+ * the most tasks, as an idle CPU pulls from a busy one in the kernel's load
+ * balancing.
  * A waker that keeps running while it wakes many tasks, as a sender does
  * when it writes to many receivers, would otherwise leave them stacked
  * behind it while other CPUs idle.
@@ -576,22 +587,23 @@ static __always_inline bool steal_from_cpu(s32 cpu)
 }
 
 /*
- * Take the next task for this CPU: a sync wakee queued on it first. Then,
- * among the first few tasks of the domain queue whose vtime is within a
- * small window of the head, prefer one that last ran here and may still
- * have a warm cache; vtime order moves by at most the window. With the own
- * domain empty, steal from the next domain that has work, and then from
- * another CPU's queue.
+ * Take the next task for this CPU: one queued on it first, as
+ * LERTICK_OWN_FIRST() allows. Then, among the first few tasks of the domain
+ * queue whose vtime is within a small window of the head, prefer one that
+ * last ran here and may still have a warm cache; vtime order moves by at most
+ * the window. With the own domain empty, steal from the next domain that has
+ * work, and then from this CPU's queue and another CPU's.
  */
 static __always_inline bool take_next(s32 cpu)
 {
 	struct task_struct *q;
 	u32		    home = domain_of(cpu);
-	u64		    head = 0;
+	u64		    head = 0, t0;
 	int		    n	 = 0;
 
-	if (LERTICK_MOVE_TO_LOCAL(CPU_DSQ(cpu)))
+	if (LERTICK_OWN_FIRST(cpu) && LERTICK_MOVE_TO_LOCAL(CPU_DSQ(cpu)))
 		return true;
+	t0 = LERTICK_NOW();
 	bpf_for_each(scx_dsq, q, home, 0) {
 		if (!n)
 			head = q->scx.dsq_vtime;
@@ -599,12 +611,17 @@ static __always_inline bool take_next(s32 cpu)
 		    time_before(head + AFFINE_WINDOW_NS, q->scx.dsq_vtime))
 			break;
 		if (scx_bpf_task_cpu(q) == cpu &&
-		    scx_bpf_dsq_move(BPF_FOR_EACH_ITER, q, SCX_DSQ_LOCAL, 0))
+		    scx_bpf_dsq_move(BPF_FOR_EACH_ITER, q, SCX_DSQ_LOCAL, 0)) {
+			LERTICK_TOOK_SHARED(home, t0);
 			return true;
+		}
 		n++;
 	}
-	return LERTICK_MOVE_TO_LOCAL(home) || steal(home) ||
-	       steal_from_cpu(cpu);
+	if (LERTICK_MOVE_TO_LOCAL(home) || steal(home)) {
+		LERTICK_TOOK_SHARED(home, t0);
+		return true;
+	}
+	return LERTICK_MOVE_TO_LOCAL(CPU_DSQ(cpu)) || steal_from_cpu(cpu);
 }
 
 #endif /* __LERTICK_POLICY_H */

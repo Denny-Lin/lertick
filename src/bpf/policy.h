@@ -18,9 +18,9 @@
  */
 #ifndef LERTICK_UPSTREAM
 /*
- * Lertick keeps one copy of this policy: the product scheduler
- * (src/bpf/scx_lertick.bpf.c) includes it and scripts/export_scx.py copies it,
- * without this note, to upstream/scx_lertick. Change the policy here only.
+ * The product's copy of the policy. Scheduling work is developed and tested
+ * in the sched-ext/scx port (upstream/scx_lertick/src/bpf/policy.h) and
+ * brought here only when the product takes it.
  */
 #endif /* !LERTICK_UPSTREAM */
 #ifndef __LERTICK_POLICY_H

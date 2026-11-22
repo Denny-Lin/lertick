@@ -4,7 +4,7 @@ version = "1.1.4"
 authors = ["Hungyu Lin <dennylin0707@gmail.com>"]
 edition = "2024"
 rust-version = "1.91"
-description = "A weighted virtual-time sched_ext scheduler that learns each task's time slice in BPF. https://github.com/sched-ext/scx/tree/main"
+description = "A weighted virtual-time sched_ext scheduler that learns time slices, wakeup preemption and queue placement in BPF. https://github.com/sched-ext/scx/tree/main"
 license = "GPL-2.0-only"
 
 [dependencies]

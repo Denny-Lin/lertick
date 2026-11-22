@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Copy the shared scheduler sources into the sched-ext/scx port.
+"""Copy the shared in-kernel model into the sched-ext/scx port.
 
-The policy (src/bpf/policy.h) and the in-kernel model (src/shared/model.h)
-have one source. This script writes their upstream copies under
-upstream/scx_lertick/src/bpf, dropping product-only regions of model.h
-and policy.h (between "#ifndef LERTICK_UPSTREAM" and
-"#endif /* !LERTICK_UPSTREAM */") and giving model.h the GPL-2.0 licence every scx scheduler uses.
+The in-kernel model (src/shared/model.h) has one source. This script writes
+its upstream copy to upstream/scx_lertick/src/bpf/model.h, dropping
+product-only regions (between "#ifndef LERTICK_UPSTREAM" and
+"#endif /* !LERTICK_UPSTREAM */") and giving it the GPL-2.0 licence every scx
+scheduler uses. The scheduling policy is developed and tested in the port
+(upstream/scx_lertick/src/bpf/policy.h); the product keeps its own copy in
+src/bpf/policy.h.
 
   scripts/export_scx.py            update the upstream copies
   scripts/export_scx.py --check    fail if they are out of date (CI)
@@ -51,11 +53,7 @@ def model_h():
     return "/* SPDX-License-Identifier: GPL-2.0 */\n" + text[len(head):]
 
 
-def policy_h():
-    return strip_product((ROOT / "src/bpf/policy.h").read_text())
-
-
-FILES = {"src/bpf/model.h": model_h, "src/bpf/policy.h": policy_h}
+FILES = {"src/bpf/model.h": model_h}
 
 
 def main():
