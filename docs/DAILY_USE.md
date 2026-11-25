@@ -160,19 +160,7 @@ Fallbacks, failures, missing data and recovery result:
 Local report and benchmark artifacts reviewed before sharing:
 ```
 
-For a Codex improvement task, give a bounded request such as:
-
-```text
-Investigate this reproduced Lertick regression using the attached reviewed
-report and benchmark artifacts. Keep a frozen baseline and a separate candidate.
-Identify the bottleneck before changing the model or scheduling policy. Implement
-one focused change, run the relevant portable tests and verifier/runtime checks
-in the designated test environment, and compare repeated workload measurements.
-Report regressions, uncertainty and failures as well as improvements. Do not
-deploy to my daily service or change defaults solely because prediction MAE fell.
-```
-
-That is a repeatable improvement workflow, not an automatic guarantee that each revision is faster. A report is not uploaded to Codex or converted into a scheduled task by Lertick; you choose what to share and which update to activate.
+Lertick never uploads a report or turns it into a scheduled task; you choose what to share and which update to activate.
 
 ## Without systemd
 
